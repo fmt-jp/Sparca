@@ -149,6 +149,16 @@ export function moveObjectToLayer(doc: SparcaDocument, id: Id, layerId: Id, inde
   target.children.splice(at, 0, obj);
 }
 
+/** Move an object directly above a sibling-level target object (possibly in another layer). */
+export function moveObjectAbove(doc: SparcaDocument, id: Id, targetId: Id): void {
+  if (id === targetId) return;
+  const loc = findObject(doc, id);
+  if (!loc || !findObject(doc, targetId)) return;
+  const [obj] = loc.siblings.splice(loc.index, 1);
+  const target = findObject(doc, targetId)!;
+  target.siblings.splice(target.index + 1, 0, obj);
+}
+
 // ---- Layers ----
 
 export function addLayer(doc: SparcaDocument, aboveLayerId?: Id): Layer {

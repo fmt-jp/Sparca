@@ -18,6 +18,8 @@ export interface RenderOptions {
   imageHref: (o: ImageObject) => string | undefined;
   /** Hide this object (e.g. while editing text in place). */
   hiddenId?: string | null;
+  /** Add invisible hit areas (text boxes, thin lines) for on-screen pointer interaction. */
+  hitAreas?: boolean;
   /** Prefix for filter ids, so several SVGs on one page do not collide. */
   idPrefix?: string;
 }
@@ -95,6 +97,7 @@ function renderObject(o: SceneObject, opts: RenderOptions, prefix: string): Reac
     <g key={o.id} data-object-id={o.id} transform={transform} opacity={o.opacity}>
       {filterId && effectsFilter(filterId, o.effects, w, h, rotation, strokeWidth)}
       <g filter={filterId ? `url(#${filterId})` : undefined}>{body}</g>
+      {opts.hitAreas && hitArea(o)}
     </g>
   );
 }
@@ -166,6 +169,25 @@ function renderImage(o: ImageObject, opts: RenderOptions): ReactElement | null {
     return <rect width={w} height={h} fill="#cccccc" opacity={0.5} />;
   }
   return <image href={href} width={w} height={h} preserveAspectRatio="none" />;
+}
+
+function hitArea(o: SceneObject): ReactElement | null {
+  if (o.type === 'text') return <rect width={o.box.width} height={o.box.height} fill="transparent" />;
+  if (o.type === 'shape' && (o.shape.kind === 'line' || o.shape.kind === 'arrow')) {
+    const p = shapePaths(o.shape, o.box.width, o.box.height, o.strokeWidth);
+    return <path d={p.d} fill="none" stroke="transparent" strokeWidth={Math.max(10, o.strokeWidth)} />;
+  }
+  if (o.type === 'path' && !o.closed) {
+    return (
+      <path
+        d={pathNodesD(o.nodes, false, o.box.width, o.box.height)}
+        fill="none"
+        stroke="transparent"
+        strokeWidth={Math.max(10, o.strokeWidth)}
+      />
+    );
+  }
+  return null;
 }
 
 export function hasEffects(e: Effects): boolean {
