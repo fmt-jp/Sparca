@@ -22,6 +22,8 @@ import { measureText } from '../render/text';
 import { placeImageFiles, writableLayer } from '../store/actions';
 import type { PixelSelection, ToolId } from '../store/editor';
 import { pickColorAt } from '../store/colorActions';
+import { docToPath, isSmooth, moveAnchors, moveHandle, nearestOnPath, pathToDoc, type DocNode } from '../model/pathEdit';
+import { deleteSelectedNodes, editablePath, insertNode, nudgeNodes, selectedNodes, toggleNodeType } from '../store/pathActions';
 import { cancelCrop, commitCrop, startCrop } from '../store/imageActions';
 import { hasImageExtension } from '../io/imageFormats';
 import { isTextEntry } from './keyboard';
@@ -52,7 +54,10 @@ type Gesture =
   | { kind: 'crop-resize'; handle: Handle; orig: Rect }
   | { kind: 'select-area'; shape: 'rect' | 'ellipse'; start: Point }
   | { kind: 'lasso'; points: Point[] }
-  | { kind: 'pen-handle'; index: number };
+  | { kind: 'pen-handle'; index: number }
+  | { kind: 'node-move'; pathId: Id; start: Point; orig: DocNode[]; indices: number[]; moved: boolean }
+  | { kind: 'handle-move'; pathId: Id; orig: DocNode[]; index: number; which: 'in' | 'out' }
+  | { kind: 'node-marquee'; start: Point; base: number[] };
 
 export function CanvasView() {
   const doc = useEditor((s) => s.doc);
@@ -153,6 +158,22 @@ export function CanvasView() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (isTyping(e)) return;
+      if (editor.getState().tool === 'subselect' && editor.getState().nodeSelection.length && !e.ctrlKey && !e.metaKey) {
+        const step = e.shiftKey ? 10 : 1;
+        const arrows: Record<string, [number, number]> = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] };
+        let handled = false;
+        if (e.key === 'Delete' || e.key === 'Backspace') handled = deleteSelectedNodes(editor);
+        else if (arrows[e.key]) handled = nudgeNodes(editor, ...arrows[e.key]);
+        else if (e.key === 'Escape') {
+          editor.set({ nodeSelection: [] });
+          handled = true;
+        }
+        if (handled) {
+          e.preventDefault();
+          e.stopImmediatePropagation();
+          return;
+        }
+      }
       if (penNodes && (e.key === 'Enter' || e.key === 'Escape')) {
         e.preventDefault();
         e.stopImmediatePropagation();
@@ -344,6 +365,41 @@ export function CanvasView() {
       return;
     }
 
+    if (effectiveTool === 'subselect') {
+      const path = editablePath(editor);
+      const nodeAttr = target.getAttribute('data-node');
+      const handleAttr = target.getAttribute('data-node-handle');
+      if (path && handleAttr) {
+        const [i, which] = handleAttr.split(':');
+        editor.beginGesture();
+        gesture.current = { kind: 'handle-move', pathId: path.id, orig: pathToDoc(path), index: Number(i), which: which as 'in' | 'out' };
+        return;
+      }
+      if (path && nodeAttr) {
+        const i = Number(nodeAttr);
+        const sel = selectedNodes(editor, path);
+        let next = sel;
+        if (e.shiftKey) next = sel.includes(i) ? sel.filter((k) => k !== i) : [...sel, i];
+        else if (!sel.includes(i)) next = [i];
+        editor.set({ nodeSelection: next });
+        if (!next.includes(i)) return;
+        editor.beginGesture();
+        gesture.current = { kind: 'node-move', pathId: path.id, start: p, orig: pathToDoc(path), indices: next, moved: false };
+        return;
+      }
+      const hit = hitObject(target);
+      if (hit) {
+        // Selecting another object; paths show their anchors for editing.
+        if (editor.getState().selection[0] !== hit || editor.getState().selection.length !== 1) editor.select([hit]);
+        return;
+      }
+      if (path) {
+        gesture.current = { kind: 'node-marquee', start: p, base: e.shiftKey ? selectedNodes(editor, path) : [] };
+        if (!e.shiftKey) editor.set({ nodeSelection: [] });
+      } else editor.select([]);
+      return;
+    }
+
     if (effectiveTool === 'select') {
       const handle = target.getAttribute('data-handle');
       if (handle) {
@@ -437,6 +493,35 @@ export function CanvasView() {
     const g = gesture.current;
     if (!g) return;
     switch (g.kind) {
+      case 'node-move': {
+        let dx = p.x - g.start.x;
+        let dy = p.y - g.start.y;
+        if (e.shiftKey) {
+          if (Math.abs(dx) > Math.abs(dy)) dy = 0;
+          else dx = 0;
+        }
+        if (!g.moved && Math.hypot(dx, dy) * zoom < 2) break;
+        g.moved = true;
+        previewPath(g.pathId, moveAnchors(g.orig, g.indices, dx, dy));
+        break;
+      }
+      case 'handle-move': {
+        const anchor = g.orig[g.index].anchor;
+        const q = e.shiftKey ? snap45(anchor, p) : p;
+        previewPath(g.pathId, moveHandle(g.orig, g.index, g.which, q, e.altKey));
+        break;
+      }
+      case 'node-marquee': {
+        const r = dragRect(g.start, p, false, false);
+        setMarquee(r);
+        const path = editablePath(editor);
+        if (!path) break;
+        const inside = pathToDoc(path)
+          .map((n, i) => (pointInRect(n.anchor, r) ? i : -1))
+          .filter((i) => i >= 0);
+        editor.set({ nodeSelection: [...new Set([...g.base, ...inside])] });
+        break;
+      }
       case 'pen-handle': {
         const nodes = penRef.current;
         if (!nodes) break;
@@ -572,7 +657,26 @@ export function CanvasView() {
       case 'lasso':
         if (g.points.length < 3) editor.set({ pixelSelection: null });
         break;
+      case 'node-move':
+        editor.endGesture('アンカーの移動');
+        break;
+      case 'handle-move':
+        editor.endGesture('ハンドルの移動');
+        break;
+      case 'node-marquee':
+        setMarquee(null);
+        break;
     }
+  }
+
+  /** Preview edited document-space nodes on a path during a drag. */
+  function previewPath(id: Id, nodes: DocNode[]) {
+    editor.preview((d) => {
+      const loc = findObject(d, id);
+      if (!loc || loc.object.type !== 'path') return;
+      const fit = docToPath(loc.object.box, nodes);
+      updateObject(d, id, { box: fit.box, nodes: fit.nodes } as Partial<SceneObject>);
+    });
   }
 
   function updateCreate(g: Extract<Gesture, { kind: 'create' }>, shift: boolean, alt: boolean) {
@@ -619,11 +723,35 @@ export function CanvasView() {
   }
 
   function onDoubleClick(e: React.MouseEvent) {
+    // Pointer capture (set on pointerdown) retargets click events to the stage,
+    // so look up what is actually under the pointer.
+    const under = document.elementFromPoint(e.clientX, e.clientY) ?? e.target;
+    if (effectiveTool === 'subselect') {
+      const path = editablePath(editor);
+      if (!path) return;
+      const nodeAttr = (under as Element).getAttribute('data-node');
+      if (nodeAttr) {
+        toggleNodeType(editor, Number(nodeAttr));
+        return;
+      }
+      // Double-click on the path's outline adds an anchor there.
+      const hitPos = nearestOnPath(pathToDoc(path), path.closed, toDoc(e.clientX, e.clientY));
+      if (hitPos && hitPos.dist * zoom <= 8) insertNode(editor, hitPos.segment, hitPos.t);
+      return;
+    }
     if (effectiveTool !== 'select') return;
-    const hit = hitObject(e.target);
+    // On thin paths the outline lies under the selection handles; treat those as the path.
+    const sel = editor.getState().selection;
+    const onHandle = (under as Element).hasAttribute?.('data-handle') && sel.length === 1;
+    const hit = onHandle ? sel[0] : hitObject(under);
     if (!hit) return;
     const loc = findObject(editor.getState().doc, hit);
     if (loc?.object.type === 'text') setEditingText({ id: hit, isNew: false });
+    // Double-clicking a path switches to anchor editing.
+    if (loc?.object.type === 'path' && !isEffectivelyLocked(loc)) {
+      editor.select([hit]);
+      editor.setTool('subselect');
+    }
   }
 
   function onDrop(e: React.DragEvent) {
@@ -642,7 +770,7 @@ export function CanvasView() {
         ? 'zoom-in'
         : effectiveTool === 'text'
           ? 'text'
-          : effectiveTool === 'select'
+          : effectiveTool === 'select' || effectiveTool === 'subselect'
             ? 'default'
             : 'crosshair';
 
@@ -699,6 +827,7 @@ export function CanvasView() {
           )}
           {tool === 'crop' && crop && <CropOverlay crop={crop} doc={doc} zoom={zoom} />}
           {penNodes && <PenPreview nodes={penNodes} cursor={cursorPos} zoom={zoom} />}
+          {tool === 'subselect' && <PathNodeOverlay zoom={zoom} />}
           {marquee && (
             <rect
               x={marquee.x}
@@ -723,6 +852,52 @@ export function CanvasView() {
     </div>
     <StatusBar cursor={cursorPos} />
     </div>
+  );
+}
+
+/** Anchors and handles of the selected path for the subselect tool. */
+function PathNodeOverlay({ zoom }: { zoom: number }) {
+  useEditor((s) => s.doc);
+  useEditor((s) => s.selection);
+  const nodeSel = useEditor((s) => s.nodeSelection);
+  const path = editablePath(editor);
+  if (!path) return null;
+  const k = 1 / zoom;
+  const nodes = pathToDoc(path);
+  const sel = new Set(nodeSel.filter((i) => i < nodes.length));
+  // Handles are shown for selected anchors and for the neighbors' handles facing them.
+  const showHandle = (i: number, which: 'in' | 'out') => {
+    if (sel.has(i)) return true;
+    const n = nodes.length;
+    const neighbor = which === 'out' ? (i + 1) % n : (i - 1 + n) % n;
+    const wraps = which === 'out' ? i === n - 1 : i === 0;
+    return sel.has(neighbor) && (!wraps || path.closed);
+  };
+  return (
+    <g data-testid="path-nodes">
+      {nodes.map((n, i) =>
+        (['in', 'out'] as const).map((which) => {
+          const h = n[which];
+          if (!h || !showHandle(i, which)) return null;
+          return (
+            <g key={`${i}-${which}`}>
+              <line x1={n.anchor.x} y1={n.anchor.y} x2={h.x} y2={h.y} className="pen-handle-line" strokeWidth={k} />
+              <circle data-node-handle={`${i}:${which}`} cx={h.x} cy={h.y} r={4 * k} className="handle node-handle" strokeWidth={k} />
+            </g>
+          );
+        }),
+      )}
+      {nodes.map((n, i) => {
+        const smooth = isSmooth(n);
+        const s = 8 * k;
+        const cls = `handle node-anchor${sel.has(i) ? ' selected' : ''}`;
+        return smooth ? (
+          <circle key={i} data-node={i} cx={n.anchor.x} cy={n.anchor.y} r={s / 2} className={cls} strokeWidth={k} />
+        ) : (
+          <rect key={i} data-node={i} x={n.anchor.x - s / 2} y={n.anchor.y - s / 2} width={s} height={s} className={cls} strokeWidth={k} />
+        );
+      })}
+    </g>
   );
 }
 

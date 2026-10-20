@@ -7,6 +7,8 @@ import { pipelineOutputSize } from '../engine/pipeline';
 import { METHOD_LABELS } from '../engine/resample';
 import { autoColor, cancelCrop, commitCrop, pixelTargetImage, resetAdjust, setAdjust, setCropTarget, setImageBlur } from '../store/imageActions';
 import { openDialog } from './dialogs';
+import { moveAnchors, pathToDoc } from '../model/pathEdit';
+import { convertSelectedNodes, deleteSelectedNodes, setPathClosed, setPathNodes } from '../store/pathActions';
 import { measureText } from '../render/text';
 import { alignSelection, groupSelection, ungroupSelection, type AlignOp } from '../store/actions';
 import { ColorInput, Field, NumberInput, SliderInput, Toggle } from './controls';
@@ -73,6 +75,7 @@ export function PropertiesPanel() {
         {locked && <div className="hint">ロック中のため編集できません。</div>}
         <TransformSection o={o} />
         {o.type === 'shape' && <ShapeSection o={o} />}
+        {o.type === 'path' && tool === 'subselect' && <PathNodeSection o={o} />}
         {o.type === 'path' && <PaintSection o={o} />}
         {o.type === 'text' && <TextSection o={o} />}
         {o.type === 'image' && <ImageSection o={o} />}
@@ -106,6 +109,8 @@ const TOOL_HINT: Partial<Record<string, string>> = {
   'marquee-ellipse': 'ドラッグで楕円の範囲を選択（Shift で正円）。',
   lasso: 'ドラッグで自由な形の範囲を選択。',
   'polygon-lasso': 'クリックで頂点を追加。始点をクリック、ダブルクリック、または Enter で閉じる。Esc で取消。',
+  subselect:
+    'パスをクリックしてアンカーを表示。アンカーをドラッグで移動（Shift で追加選択、空き部分のドラッグで範囲選択）、ハンドルのドラッグで曲線を調整（Alt で左右を独立）。アンカーをダブルクリックで角／曲線の切り替え、輪郭をダブルクリックでアンカー追加、Delete で削除。',
   pen: 'クリックで角のアンカー、ドラッグで曲線のアンカー（Shift で 45° 単位）。始点クリックで閉じたパス、Enter・Esc・ダブルクリックで開いたパスとして終了。',
   eyedropper: 'クリックした位置の色を取得します。',
   text: 'クリックでテキストを追加。既存テキストをクリックで編集。Esc または Ctrl+Enter で確定。',
@@ -369,6 +374,45 @@ function ImageSection({ o }: { o: ImageObject }) {
         )}
       </div>
     </>
+  );
+}
+
+function PathNodeSection({ o }: { o: PathObject }) {
+  const nodeSel = useEditor((s) => s.nodeSelection).filter((i) => i < o.nodes.length);
+  const nodes = pathToDoc(o);
+  const single = nodeSel.length === 1 ? nodes[nodeSel[0]] : null;
+  const moveTo = (x: number, y: number) => {
+    const i = nodeSel[0];
+    setPathNodes(editor, o.id, moveAnchors(nodes, [i], x - nodes[i].anchor.x, y - nodes[i].anchor.y), 'アンカーの移動');
+  };
+  return (
+    <div className="prop-section" data-testid="path-node-panel">
+      <span className="hint">
+        アンカー {o.nodes.length} 個{nodeSel.length ? `（${nodeSel.length} 個選択中）` : ''}
+      </span>
+      {single && (
+        <>
+          <Field label="アンカー X">
+            <NumberInput label="アンカー X" value={single.anchor.x} precision={1} onCommit={(x) => moveTo(x, single.anchor.y)} />
+          </Field>
+          <Field label="アンカー Y">
+            <NumberInput label="アンカー Y" value={single.anchor.y} precision={1} onCommit={(y) => moveTo(single.anchor.x, y)} />
+          </Field>
+        </>
+      )}
+      <button type="button" disabled={!nodeSel.length} onClick={() => convertSelectedNodes(editor, 'corner')}>
+        角に変換
+      </button>
+      <button type="button" disabled={!nodeSel.length} onClick={() => convertSelectedNodes(editor, 'smooth')}>
+        曲線に変換
+      </button>
+      <button type="button" disabled={!nodeSel.length} onClick={() => deleteSelectedNodes(editor)}>
+        アンカーを削除
+      </button>
+      <Toggle checked={o.closed} onChange={(c) => setPathClosed(editor, c)}>
+        パスを閉じる
+      </Toggle>
+    </div>
   );
 }
 

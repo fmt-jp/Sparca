@@ -18,7 +18,14 @@ export interface ToolGroup {
  * tools still to be built must not appear (spec §17).
  */
 export const TOOL_GROUPS: ToolGroup[] = [
-  { id: 'select', label: '選択', tools: [{ id: 'select', label: '選択ツール', key: 'V' }] },
+  {
+    id: 'select',
+    label: '選択',
+    tools: [
+      { id: 'select', label: '選択ツール', key: 'V' },
+      { id: 'subselect', label: '部分選択ツール（パスのアンカー・ハンドルを編集）', key: 'A' },
+    ],
+  },
   { id: 'crop', label: 'トリミング', tools: [{ id: 'crop', label: 'トリミングツール（Enter で確定、Esc で取消）', key: 'C' }] },
   {
     id: 'marquee',
