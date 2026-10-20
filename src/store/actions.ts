@@ -15,6 +15,7 @@ import { createDocument, createImage } from '../model/factory';
 import { IDENTITY_TRANSFORM, unionBounds } from '../model/geometry';
 import { findObject, isEffectivelyLocked, walkObjects } from '../model/tree';
 import type { Background, SceneObject, SparcaDocument } from '../model/types';
+import { IMAGE_ACCEPT, stripImageExtension } from '../io/imageFormats';
 import { isAbort, pickFiles, saveBlob, type FileSystemFileHandleLike } from '../io/files';
 import { PROJECT_EXTENSION, PROJECT_MIME, ProjectError, readProject, writeProject } from '../io/project';
 import { assets, ImageLoadError, importImageFile, validateDimensions } from './assets';
@@ -26,7 +27,6 @@ let clipboard: SceneObject[] = [];
 let clipboardAssets: SparcaDocument['assets'] = {};
 let pasteCount = 0;
 
-const IMAGE_ACCEPT = 'image/png,image/jpeg,image/webp,image/gif,image/bmp,image/avif';
 
 export function newDocument(ed: EditorStore, width: number, height: number, background: Background): boolean {
   const problem = validateDimensions(width, height);
@@ -145,10 +145,43 @@ export async function openProjectFile(ed: EditorStore, file: File): Promise<void
   }
 }
 
+/**
+ * Open an image file as a new document the size of the image (like Fireworks).
+ * The image becomes an image object at (0, 0) on a transparent canvas, so PNG/GIF
+ * transparency is preserved.
+ */
+export async function openImageFile(ed: EditorStore, file: File): Promise<void> {
+  try {
+    ed.set({ busy: `「${file.name}」を読み込み中…` });
+    const meta = await importImageFile(file, file.name);
+    const doc = { ...createDocument(meta.width, meta.height), background: { kind: 'transparent' } as const };
+    const img = createImage(meta, { x: 0, y: 0, width: meta.width, height: meta.height, rotation: 0 });
+    doc.assets = { [meta.id]: meta };
+    doc.layers[0].children.push(img);
+    projectHandle = null;
+    ed.loadDocument(doc, stripImageExtension(file.name));
+    ed.select([img.id]);
+  } catch (e) {
+    ed.notify('error', e instanceof ImageLoadError ? e.message : `「${file.name}」を開けませんでした: ${describeError(e)}`);
+  } finally {
+    ed.set({ busy: null });
+  }
+}
+
+/** Projects are ZIP files: decide by content ("PK" signature), falling back to the extension. */
+async function isProjectFile(file: File): Promise<boolean> {
+  const head = new Uint8Array(await file.slice(0, 2).arrayBuffer());
+  if (head[0] === 0x50 && head[1] === 0x4b) return true;
+  return file.name.toLowerCase().endsWith(PROJECT_EXTENSION);
+}
+
+/** File → 開く: a .sparca project, or a PNG / JPEG / GIF / BMP image as a new document. */
 export async function chooseAndOpenProject(ed: EditorStore): Promise<void> {
-  if (ed.dirty && !window.confirm('保存していない変更は失われます。別のプロジェクトを開きますか？')) return;
-  const [file] = await pickFiles(`${PROJECT_EXTENSION},${PROJECT_MIME}`);
-  if (file) await openProjectFile(ed, file);
+  if (ed.dirty && !window.confirm('保存していない変更は失われます。別のファイルを開きますか？')) return;
+  const [file] = await pickFiles(`${PROJECT_EXTENSION},${PROJECT_MIME},${IMAGE_ACCEPT}`);
+  if (!file) return;
+  if (await isProjectFile(file)) await openProjectFile(ed, file);
+  else await openImageFile(ed, file);
 }
 
 export function describeError(e: unknown): string {

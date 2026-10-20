@@ -23,6 +23,7 @@ import { placeImageFiles, writableLayer } from '../store/actions';
 import type { PixelSelection, ToolId } from '../store/editor';
 import { pickColorAt } from '../store/colorActions';
 import { cancelCrop, commitCrop, startCrop } from '../store/imageActions';
+import { hasImageExtension } from '../io/imageFormats';
 import { isTextEntry } from './keyboard';
 import { editor, useEditor } from './useEditor';
 
@@ -627,7 +628,7 @@ export function CanvasView() {
 
   function onDrop(e: React.DragEvent) {
     e.preventDefault();
-    const files = [...e.dataTransfer.files].filter((f) => f.type.startsWith('image/'));
+    const files = [...e.dataTransfer.files].filter((f) => f.type.startsWith('image/') || hasImageExtension(f.name));
     if (files.length) void placeImageFiles(editor, files);
     else if (e.dataTransfer.files.length) editor.notify('error', 'ドロップされたファイルは画像ではありません。');
   }
