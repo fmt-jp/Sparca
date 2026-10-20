@@ -65,7 +65,14 @@ export type ShapeGeometry =
   | { kind: 'star'; points: number; innerRatio: number }
   /** Endpoints in box-normalized coordinates (0..1). */
   | { kind: 'line'; from: Point; to: Point }
-  | { kind: 'arrow'; from: Point; to: Point; headSize: number };
+  /** Line with an arrow head (older documents; still rendered and editable). */
+  | { kind: 'arrow'; from: Point; to: Point; headSize: number }
+  /**
+   * Filled block arrow pointing to +x in its box (direction comes from the box rotation).
+   * shaft: shaft thickness as a fraction of the box height; head: head length as a
+   * fraction of the box width. The head spans the full box height.
+   */
+  | { kind: 'block-arrow'; shaft: number; head: number };
 
 export type ShapeKind = ShapeGeometry['kind'];
 

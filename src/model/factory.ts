@@ -62,10 +62,10 @@ const SHAPE_NAMES: Record<ShapeGeometry['kind'], string> = {
   star: '星',
   line: '直線',
   arrow: '矢印',
+  'block-arrow': '矢印',
 };
 
 export function createShape(shape: ShapeGeometry, box: Box): ShapeObject {
-  const isLine = shape.kind === 'line' || shape.kind === 'arrow';
   return {
     id: newId(),
     name: SHAPE_NAMES[shape.kind],
@@ -76,10 +76,15 @@ export function createShape(shape: ShapeGeometry, box: Box): ShapeObject {
     box,
     effects: defaultEffects(),
     shape,
-    fill: isLine ? null : '#4a90e2',
-    stroke: isLine ? '#222222' : null,
-    strokeWidth: isLine ? 3 : 0,
+    ...shapePaint(shape.kind),
   };
+}
+
+function shapePaint(kind: ShapeGeometry['kind']): Pick<ShapeObject, 'fill' | 'stroke' | 'strokeWidth'> {
+  if (kind === 'line' || kind === 'arrow') return { fill: null, stroke: '#222222', strokeWidth: 3 };
+  // Annotation-style arrow: yellow with a black outline.
+  if (kind === 'block-arrow') return { fill: '#ffe100', stroke: '#000000', strokeWidth: 4 };
+  return { fill: '#4a90e2', stroke: null, strokeWidth: 0 };
 }
 
 export function defaultGeometry(kind: ShapeGeometry['kind']): ShapeGeometry {
@@ -96,6 +101,8 @@ export function defaultGeometry(kind: ShapeGeometry['kind']): ShapeGeometry {
       return { kind: 'line', from: { x: 0, y: 0 }, to: { x: 1, y: 1 } };
     case 'arrow':
       return { kind: 'arrow', from: { x: 0, y: 0 }, to: { x: 1, y: 1 }, headSize: 14 };
+    case 'block-arrow':
+      return { kind: 'block-arrow', shaft: 0.5, head: 0.45 };
   }
 }
 
