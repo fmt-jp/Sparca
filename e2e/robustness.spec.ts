@@ -29,19 +29,6 @@ test('an image copied into a new document can be saved and reopened there', asyn
   await expect(page.locator('[data-testid=canvas] image')).toHaveCount(1);
 });
 
-test('opening a project with unsaved changes asks first', async ({ page }) => {
-  await placePng(page, 'x.png', makePng(4, 4, () => [0, 0, 0, 255]));
-  let asked = '';
-  page.once('dialog', (d) => {
-    asked = d.message();
-    void d.dismiss();
-  });
-  await page.getByRole('button', { name: 'ファイル' }).click();
-  await page.getByRole('menuitem', { name: /開く/ }).click();
-  await expect.poll(() => asked).toContain('保存していない変更');
-  expect(await state<number>(page, 's => s.doc.layers[0].children.length')).toBe(1);
-});
-
 test('an image-processing failure is reported to the user', async ({ page }) => {
   await placePng(page, 'x.png', makePng(10, 10, () => [0, 0, 0, 255]));
   // Corrupt the pipeline directly: an output size the engine cannot allocate.

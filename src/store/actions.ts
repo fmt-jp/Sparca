@@ -16,12 +16,11 @@ import { IDENTITY_TRANSFORM, unionBounds } from '../model/geometry';
 import { findObject, isEffectivelyLocked, walkObjects } from '../model/tree';
 import type { Background, SceneObject, SparcaDocument } from '../model/types';
 import { IMAGE_ACCEPT, stripImageExtension } from '../io/imageFormats';
-import { isAbort, pickFiles, saveBlob, type FileSystemFileHandleLike } from '../io/files';
+import { isAbort, pickFiles, saveBlob } from '../io/files';
 import { PROJECT_EXTENSION, PROJECT_MIME, ProjectError, readProject, writeProject } from '../io/project';
 import { assets, ImageLoadError, importImageFile, validateDimensions } from './assets';
-import type { EditorStore } from './editor';
+import { UNTITLED, type EditorStore } from './editor';
 
-let projectHandle: FileSystemFileHandleLike | null = null;
 let clipboard: SceneObject[] = [];
 /** Metadata of images referenced by the clipboard, so pasting into another document works. */
 let clipboardAssets: SparcaDocument['assets'] = {};
@@ -36,8 +35,7 @@ export function newDocument(ed: EditorStore, width: number, height: number, back
   }
   const doc = { ...createDocument(Math.round(width), Math.round(height)), background };
   // Assets are immutable and uniquely keyed, so they are kept: the clipboard may still use them.
-  projectHandle = null;
-  ed.loadDocument(doc, UNTITLED);
+  ed.openDocument(doc, UNTITLED);
   return true;
 }
 
@@ -98,7 +96,6 @@ export function writableLayer(ed: EditorStore, preferredId: string): string | nu
 
 // ---- Project save / open ----
 
-export const UNTITLED = '名称未設定';
 
 /** File name suggested when saving. Untitled documents get an ASCII name, which every browser keeps. */
 function projectName(fileName: string): string {
@@ -107,7 +104,7 @@ function projectName(fileName: string): string {
 }
 
 export async function saveProject(ed: EditorStore, saveAs = false): Promise<boolean> {
-  const { doc, fileName } = ed.getState();
+  const { doc, fileName, fileHandle } = ed.getState();
   try {
     ed.set({ busy: '保存中…' });
     const data = await writeProject(doc, (id) => assets.get(id)?.blob);
@@ -116,11 +113,12 @@ export async function saveProject(ed: EditorStore, saveAs = false): Promise<bool
       blob,
       projectName(fileName),
       { description: 'Sparca プロジェクト', accept: { [PROJECT_MIME]: [PROJECT_EXTENSION] } },
-      saveAs ? null : projectHandle,
+      saveAs ? null : fileHandle,
     );
     if (handle === undefined) return false;
-    projectHandle = handle;
-    ed.markSaved(handle ? handle.name : projectName(fileName));
+    // The user may have switched tabs while saving: only mark the saved document.
+    if (ed.getState().doc === doc) ed.markSaved(handle ? handle.name : projectName(fileName), handle);
+    else ed.notify('info', `「${fileName}」を保存しました。保存後の変更は未保存です。`);
     ed.notify('info', '保存しました。');
     return true;
   } catch (e) {
@@ -136,8 +134,7 @@ export async function openProjectFile(ed: EditorStore, file: File): Promise<void
     ed.set({ busy: '読み込み中…' });
     const { doc, assets: blobs } = await readProject(await file.arrayBuffer());
     for (const [id, blob] of blobs) assets.put(doc.assets[id], blob);
-    projectHandle = null;
-    ed.loadDocument(doc, file.name);
+    ed.openDocument(doc, file.name);
   } catch (e) {
     ed.notify('error', e instanceof ProjectError ? e.message : `「${file.name}」を開けませんでした: ${describeError(e)}`);
   } finally {
@@ -158,8 +155,7 @@ export async function openImageFile(ed: EditorStore, file: File): Promise<void> 
     const img = createImage(meta, { x: 0, y: 0, width: meta.width, height: meta.height, rotation: 0 });
     doc.assets = { [meta.id]: meta };
     doc.layers[0].children.push(img);
-    projectHandle = null;
-    ed.loadDocument(doc, stripImageExtension(file.name));
+    ed.openDocument(doc, stripImageExtension(file.name));
     ed.select([img.id]);
   } catch (e) {
     ed.notify('error', e instanceof ImageLoadError ? e.message : `「${file.name}」を開けませんでした: ${describeError(e)}`);
@@ -175,13 +171,16 @@ async function isProjectFile(file: File): Promise<boolean> {
   return file.name.toLowerCase().endsWith(PROJECT_EXTENSION);
 }
 
-/** File → 開く: a .sparca project, or a PNG / JPEG / GIF / BMP image as a new document. */
-export async function chooseAndOpenProject(ed: EditorStore): Promise<void> {
-  if (ed.dirty && !window.confirm('保存していない変更は失われます。別のファイルを開きますか？')) return;
-  const [file] = await pickFiles(`${PROJECT_EXTENSION},${PROJECT_MIME},${IMAGE_ACCEPT}`);
-  if (!file) return;
+/** Open one file in a new tab: a .sparca project, or a PNG / JPEG / GIF / BMP image. */
+export async function openFile(ed: EditorStore, file: File): Promise<void> {
   if (await isProjectFile(file)) await openProjectFile(ed, file);
   else await openImageFile(ed, file);
+}
+
+/** File → 開く: one or more files, each in its own tab. */
+export async function chooseAndOpenProject(ed: EditorStore): Promise<void> {
+  const files = await pickFiles(`${PROJECT_EXTENSION},${PROJECT_MIME},${IMAGE_ACCEPT}`, true);
+  for (const file of files) await openFile(ed, file);
 }
 
 export function describeError(e: unknown): string {

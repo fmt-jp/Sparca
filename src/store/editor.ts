@@ -1,6 +1,8 @@
 import { produce, type Draft } from 'immer';
 import { emptyHistory, record, redo as historyRedo, undo as historyUndo, type HistoryState } from '../history/history';
 import { createDocument } from '../model/factory';
+import type { FileSystemFileHandleLike } from '../io/files';
+import { newId } from '../model/factory';
 import type { Id, Point, SparcaDocument } from '../model/types';
 
 export type ToolId =
@@ -44,12 +46,44 @@ export interface Notice {
   message: string;
 }
 
+export const UNTITLED = '名称未設定';
+
+/** A tab as shown in the tab bar. */
+export interface TabInfo {
+  id: string;
+  fileName: string;
+  dirty: boolean;
+}
+
+/** Fields that belong to one open document (one tab). */
+const SESSION_KEYS = [
+  'doc',
+  'history',
+  'savedDoc',
+  'fileName',
+  'fileHandle',
+  'selection',
+  'nodeSelection',
+  'activeLayerId',
+  'pixelSelection',
+  'crop',
+  'compareImageId',
+  'zoom',
+] as const;
+type SessionKey = (typeof SESSION_KEYS)[number];
+type Session = Pick<EditorState, SessionKey>;
+
 export interface EditorState {
+  /** Open documents in tab order; the active one's fields are the ones below. */
+  tabs: TabInfo[];
+  activeTabId: string;
   doc: SparcaDocument;
   history: HistoryState<SparcaDocument>;
   /** Document as last saved; dirty = doc !== savedDoc. */
   savedDoc: SparcaDocument;
   fileName: string;
+  /** Where the document was saved (File System Access API), for plain "save". */
+  fileHandle: FileSystemFileHandleLike | null;
   selection: Id[];
   /** Selected anchors (indices) of the selected path while editing it with the subselect tool. */
   nodeSelection: number[];
@@ -77,26 +111,22 @@ export class EditorStore {
   /** Document snapshot taken at the start of a drag/slider gesture. */
   private gestureStart: SparcaDocument | null = null;
   private noticeSeq = 0;
+  /** Sessions of the tabs that are not active. */
+  private inactive = new Map<string, Session>();
 
   constructor(doc: SparcaDocument = createDocument()) {
+    const id = newId('t');
     this.state = {
-      doc,
-      history: emptyHistory(),
-      savedDoc: doc,
-      fileName: '名称未設定',
-      selection: [],
-      nodeSelection: [],
-      activeLayerId: doc.layers[doc.layers.length - 1].id,
+      tabs: [],
+      activeTabId: id,
+      ...freshSession(doc, UNTITLED, null),
       tool: 'select',
-      pixelSelection: null,
-      crop: null,
-      compareImageId: null,
       eyedropperTarget: 'fill',
       pickedColor: null,
-      zoom: 1,
       notices: [],
       busy: null,
     };
+    this.state.tabs = this.computeTabs(this.state, [id]);
   }
 
   getState = (): EditorState => this.state;
@@ -107,12 +137,99 @@ export class EditorStore {
   };
 
   set(patch: Partial<EditorState>): void {
-    this.state = { ...this.state, ...patch };
+    const next = { ...this.state, ...patch };
+    const prev = this.state;
+    if (next.doc !== prev.doc || next.savedDoc !== prev.savedDoc || next.fileName !== prev.fileName) {
+      next.tabs = this.computeTabs(next, next.tabs.map((t) => t.id));
+    }
+    this.state = next;
     this.listeners.forEach((l) => l());
   }
 
   get dirty(): boolean {
     return this.state.doc !== this.state.savedDoc;
+  }
+
+  /** Whether any open document has unsaved changes. */
+  get anyDirty(): boolean {
+    return this.state.tabs.some((t) => t.dirty);
+  }
+
+  private computeTabs(st: EditorState, order: string[]): TabInfo[] {
+    return order.map((id) => {
+      const s = id === st.activeTabId ? st : this.inactive.get(id)!;
+      return { id, fileName: s.fileName, dirty: s.doc !== s.savedDoc };
+    });
+  }
+
+  private snapshot(): Session {
+    const s = {} as Record<SessionKey, unknown>;
+    for (const k of SESSION_KEYS) s[k] = this.state[k];
+    return s as Session;
+  }
+
+  /**
+   * Open a document in a new tab and switch to it. An untouched, empty untitled
+   * document in the current tab is replaced instead of being kept around.
+   */
+  openDocument(doc: SparcaDocument, fileName: string, fileHandle: FileSystemFileHandleLike | null = null): void {
+    this.gestureStart = null;
+    const st = this.state;
+    const pristine =
+      st.fileName === UNTITLED &&
+      st.history.past.length === 0 &&
+      st.doc === st.savedDoc &&
+      st.doc.layers.every((l) => l.children.length === 0);
+    if (pristine) {
+      this.loadDocument(doc, fileName, fileHandle);
+      return;
+    }
+    this.inactive.set(st.activeTabId, this.snapshot());
+    const id = newId('t');
+    const order = [...st.tabs.map((t) => t.id), id];
+    const next: EditorState = { ...st, ...freshSession(doc, fileName, fileHandle), activeTabId: id };
+    next.tabs = this.computeTabs(next, order);
+    this.state = next;
+    this.listeners.forEach((l) => l());
+  }
+
+  switchTab(id: string): void {
+    const target = this.inactive.get(id);
+    if (!target || id === this.state.activeTabId) return;
+    this.gestureStart = null;
+    this.inactive.set(this.state.activeTabId, this.snapshot());
+    this.inactive.delete(id);
+    const order = this.state.tabs.map((t) => t.id);
+    const next: EditorState = { ...this.state, ...target, activeTabId: id };
+    next.tabs = this.computeTabs(next, order);
+    this.state = next;
+    this.listeners.forEach((l) => l());
+  }
+
+  /** Close a tab (no confirmation here). The last tab is replaced by a new empty document. */
+  closeTab(id: string): void {
+    const order = this.state.tabs.map((t) => t.id);
+    if (!order.includes(id)) return;
+    if (order.length === 1) {
+      this.loadDocument(createDocument(), UNTITLED, null);
+      return;
+    }
+    if (id !== this.state.activeTabId) {
+      this.inactive.delete(id);
+      this.set({ tabs: this.computeTabs(this.state, order.filter((t) => t !== id)) });
+      return;
+    }
+    // Activate the neighbor (right, else left), then drop the closed one.
+    const i = order.indexOf(id);
+    const neighbor = order[i + 1] ?? order[i - 1];
+    this.switchTab(neighbor);
+    this.inactive.delete(id);
+    this.set({ tabs: this.computeTabs(this.state, order.filter((t) => t !== id)) });
+  }
+
+  /** Whether a tab has unsaved changes. */
+  isTabDirty(id: string): boolean {
+    return this.state.tabs.find((t) => t.id === id)?.dirty ?? false;
   }
 
   /** Apply an undoable edit to the document. */
@@ -171,24 +288,18 @@ export class EditorStore {
     this.fixupSelection();
   }
 
-  /** Replace the whole document (new / open). Clears history. */
-  loadDocument(doc: SparcaDocument, fileName: string): void {
-    this.set({
-      doc,
-      savedDoc: doc,
-      history: emptyHistory(),
-      fileName,
-      selection: [],
-      nodeSelection: [],
-      pixelSelection: null,
-      crop: null,
-      compareImageId: null,
-      activeLayerId: doc.layers[doc.layers.length - 1]?.id ?? '',
-    });
+  /** Replace the document in the current tab. Clears its history. */
+  loadDocument(doc: SparcaDocument, fileName: string, fileHandle: FileSystemFileHandleLike | null = null): void {
+    this.gestureStart = null;
+    this.set(freshSession(doc, fileName, fileHandle));
   }
 
-  markSaved(fileName?: string): void {
-    this.set({ savedDoc: this.state.doc, fileName: fileName ?? this.state.fileName });
+  markSaved(fileName?: string, fileHandle?: FileSystemFileHandleLike | null): void {
+    this.set({
+      savedDoc: this.state.doc,
+      fileName: fileName ?? this.state.fileName,
+      fileHandle: fileHandle === undefined ? this.state.fileHandle : fileHandle,
+    });
   }
 
   select(ids: Id[]): void {
@@ -231,4 +342,21 @@ export class EditorStore {
       });
     }
   }
+}
+
+function freshSession(doc: SparcaDocument, fileName: string, fileHandle: FileSystemFileHandleLike | null): Session {
+  return {
+    doc,
+    history: emptyHistory(),
+    savedDoc: doc,
+    fileName,
+    fileHandle,
+    selection: [],
+    nodeSelection: [],
+    activeLayerId: doc.layers[doc.layers.length - 1]?.id ?? '',
+    pixelSelection: null,
+    crop: null,
+    compareImageId: null,
+    zoom: 1,
+  };
 }
