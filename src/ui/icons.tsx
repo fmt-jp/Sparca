@@ -4,7 +4,8 @@ import type { ReactElement } from 'react';
 const S = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.6, strokeLinecap: 'round', strokeLinejoin: 'round' } as const;
 
 const paths: Record<string, ReactElement> = {
-  select: <path {...S} d="M5 3 L5 16 L8.5 12.5 L11 17.5 L13 16.5 L10.6 11.6 L15.5 11.5 Z" />,
+  select: <path {...S} fill="currentColor" d="M5 3 L5 16 L8.5 12.5 L11 17.5 L13 16.5 L10.6 11.6 L15.5 11.5 Z" />,
+  subselect: <path {...S} d="M5 3 L5 16 L8.5 12.5 L11 17.5 L13 16.5 L10.6 11.6 L15.5 11.5 Z" />,
   crop: <path {...S} d="M6 2 V14 H18 M2 6 H14 V18" />,
   'marquee-rect': <rect {...S} x="3" y="4" width="14" height="12" strokeDasharray="2.2 2" />,
   'marquee-ellipse': <ellipse {...S} cx="10" cy="10" rx="7.5" ry="6" strokeDasharray="2.2 2" />,

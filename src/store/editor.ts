@@ -5,6 +5,7 @@ import type { Id, Point, SparcaDocument } from '../model/types';
 
 export type ToolId =
   | 'select'
+  | 'subselect'
   | 'crop'
   | 'marquee-rect'
   | 'marquee-ellipse'
@@ -50,6 +51,8 @@ export interface EditorState {
   savedDoc: SparcaDocument;
   fileName: string;
   selection: Id[];
+  /** Selected anchors (indices) of the selected path while editing it with the subselect tool. */
+  nodeSelection: number[];
   activeLayerId: Id;
   tool: ToolId;
   pixelSelection: PixelSelection | null;
@@ -82,6 +85,7 @@ export class EditorStore {
       savedDoc: doc,
       fileName: '名称未設定',
       selection: [],
+      nodeSelection: [],
       activeLayerId: doc.layers[doc.layers.length - 1].id,
       tool: 'select',
       pixelSelection: null,
@@ -175,6 +179,7 @@ export class EditorStore {
       history: emptyHistory(),
       fileName,
       selection: [],
+      nodeSelection: [],
       pixelSelection: null,
       crop: null,
       compareImageId: null,
@@ -187,7 +192,8 @@ export class EditorStore {
   }
 
   select(ids: Id[]): void {
-    this.set({ selection: ids });
+    const same = ids.length === this.state.selection.length && ids.every((id, i) => id === this.state.selection[i]);
+    this.set(same ? { selection: ids } : { selection: ids, nodeSelection: [] });
   }
 
   setTool(tool: ToolId): void {

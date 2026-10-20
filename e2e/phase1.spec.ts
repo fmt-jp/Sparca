@@ -155,3 +155,19 @@ test('saves a project and reopens it for further editing', async ({ page }) => {
   await page.keyboard.press('Delete');
   expect(await objects(page)).toHaveLength(1);
 });
+
+test('double-clicking a text object with the select tool edits it in place', async ({ page }) => {
+  const c = await canvasBox(page);
+  await page.keyboard.press('t');
+  await page.mouse.click(c.x + 100, c.y + 100);
+  await page.keyboard.type('Before');
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('v');
+  const t = (await page.locator('[data-testid=canvas] text').boundingBox())!;
+  await page.mouse.dblclick(t.x + t.width / 2, t.y + t.height / 2);
+  await expect(page.locator('textarea.text-editor')).toBeVisible();
+  await page.keyboard.press('Control+a');
+  await page.keyboard.type('After');
+  await page.keyboard.press('Escape');
+  await expect(page.locator('[data-testid=canvas] text')).toHaveText('After');
+});

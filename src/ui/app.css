@@ -779,3 +779,14 @@ kbd {
 .splitter:hover {
   background: rgba(76, 155, 245, 0.35);
 }
+.overlay .node-anchor {
+  cursor: move;
+}
+.overlay .node-anchor.selected {
+  fill: var(--accent);
+  stroke: #fff;
+}
+.overlay .node-handle {
+  fill: #fff;
+  cursor: pointer;
+}
