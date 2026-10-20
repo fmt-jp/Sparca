@@ -2,7 +2,11 @@
 import { transformObjects, updateObject } from '../model/commands';
 import { boxCenter, unionBounds } from '../model/geometry';
 import { findObject, isEffectivelyLocked } from '../model/tree';
-import type { Effects, SceneObject, ShapeObject, TextObject, ImageObject, PathObject, Id, Box } from '../model/types';
+import type { ColorAdjust, Effects, SceneObject, ShapeObject, TextObject, ImageObject, PathObject, Id, Box } from '../model/types';
+import { pipelineOutputSize } from '../engine/pipeline';
+import { METHOD_LABELS } from '../engine/resample';
+import { autoColor, cancelCrop, commitCrop, pixelTargetImage, resetAdjust, setAdjust, setCropTarget, setImageBlur } from '../store/imageActions';
+import { openDialog } from './dialogs';
 import { measureText } from '../render/text';
 import { alignSelection, groupSelection, ungroupSelection, type AlignOp } from '../store/actions';
 import { ColorInput, Field, NumberInput, SliderInput, Toggle } from './controls';
@@ -48,7 +52,9 @@ export function PropertiesPanel() {
   const locs = selection.map((id) => findObject(doc, id)).filter((l): l is NonNullable<typeof l> => !!l);
 
   let content: React.ReactNode;
-  if (locs.length === 0) {
+  if (tool === 'crop') {
+    content = <CropSection />;
+  } else if (locs.length === 0) {
     content = (
       <div className="prop-section">
         <span className="hint">
@@ -76,6 +82,7 @@ export function PropertiesPanel() {
 
   return (
     <section className="properties" aria-label="プロパティ">
+      {tool !== 'crop' && <PixelSelectionSection />}
       {content}
     </section>
   );
@@ -90,6 +97,11 @@ const TOOL_HINT: Partial<Record<string, string>> = {
   star: 'ドラッグで星を描画。頂点数と内径比は作成後に変更できます。',
   line: 'ドラッグで直線を描画（Shift で 45° 単位）。',
   arrow: 'ドラッグで矢印を描画（Shift で 45° 単位）。',
+  crop: 'ドラッグで範囲を指定し Enter で確定。',
+  'marquee-rect': 'ドラッグで矩形の範囲を選択（Shift で正方形）。',
+  'marquee-ellipse': 'ドラッグで楕円の範囲を選択（Shift で正円）。',
+  lasso: 'ドラッグで自由な形の範囲を選択。',
+  'polygon-lasso': 'クリックで頂点を追加。始点をクリック、ダブルクリック、または Enter で閉じる。Esc で取消。',
   text: 'クリックでテキストを追加。既存テキストをクリックで編集。Esc または Ctrl+Enter で確定。',
   hand: 'ドラッグで表示位置を移動。',
   zoom: 'クリックで拡大、Alt+クリックで縮小。Ctrl+ホイールでも拡大縮小できます。',
@@ -279,12 +291,141 @@ function TextSection({ o }: { o: TextObject }) {
 
 function ImageSection({ o }: { o: ImageObject }) {
   const meta = useEditor((s) => s.doc.assets[o.assetId]);
+  const comparing = useEditor((s) => s.compareImageId === o.id);
+  const a = o.pipeline.adjust;
+  const adj = (key: keyof Omit<ColorAdjust, 'auto'>, label: string) => (
+    <Field label={label}>
+      <SliderInput label={label} value={a[key]} min={-100} max={100} onChange={(v) => setAdjust(editor, o.id, { [key]: v }, `${label}の変更`, key)} />
+    </Field>
+  );
+  const out = meta ? pipelineOutputSize(o.pipeline, meta.width, meta.height) : null;
+  const stopCompare = () => editor.set({ compareImageId: null });
   return (
-    <div className="prop-section">
-      <span className="hint">
-        元画像: {meta ? `${meta.width} × ${meta.height} px` : '不明'}
-        {meta?.fileName ? `（${meta.fileName}）` : ''}
-      </span>
+    <>
+      <div className="prop-section">
+        <span className="hint">
+          元画像: {meta ? `${meta.width} × ${meta.height} px` : '不明'}
+          {out && (o.pipeline.crop || o.pipeline.resize) ? ` → 現在 ${out.width} × ${out.height} px` : ''}
+          {o.pipeline.resize ? `（${METHOD_LABELS[o.pipeline.resize.method].label}）` : ''}
+        </span>
+        <button type="button" onClick={() => openDialog({ kind: 'image-size', imageId: o.id })}>
+          画像サイズ…
+        </button>
+      </div>
+      <div className="prop-section adjust-grid">
+        {adj('brightness', '明るさ')}
+        {adj('contrast', 'コントラスト')}
+        {adj('saturation', '彩度')}
+        {adj('temperature', '色温度')}
+        {adj('tint', '色かぶり補正')}
+        <Field label="ぼかし">
+          <SliderInput label="ぼかし" value={o.pipeline.blur} min={0} max={100} step={0.5} precision={1} suffix="px" onChange={(v) => setImageBlur(editor, o.id, v)} />
+        </Field>
+      </div>
+      <div className="prop-section">
+        <button type="button" onClick={() => void autoColor(editor, o.id)}>
+          自動カラー調整
+        </button>
+        {a.auto && (
+          <button type="button" onClick={() => setAdjust(editor, o.id, { auto: null }, '自動カラー調整の解除')}>
+            自動調整を解除
+          </button>
+        )}
+        <button
+          type="button"
+          className={comparing ? 'on' : ''}
+          title="押している間、加工前の画像を表示します"
+          onPointerDown={() => editor.set({ compareImageId: o.id })}
+          onPointerUp={stopCompare}
+          onPointerLeave={stopCompare}
+        >
+          加工前と比較（押下中）
+        </button>
+        <button type="button" onClick={() => resetAdjust(editor, o.id)}>
+          調整をリセット
+        </button>
+        {o.pipeline.localEdits.length > 0 && (
+          <span className="hint">
+            部分ぼかし {o.pipeline.localEdits.length} 件
+            <button
+              type="button"
+              className="link-btn"
+              onClick={() =>
+                editor.edit('部分ぼかしの削除', (d) => {
+                  const loc = findObject(d, o.id);
+                  if (loc?.object.type === 'image') loc.object.pipeline.localEdits.pop();
+                })
+              }
+            >
+              最後の1件を削除
+            </button>
+          </span>
+        )}
+      </div>
+    </>
+  );
+}
+
+function CropSection() {
+  const crop = useEditor((s) => s.crop);
+  if (!crop) return null;
+  const r = crop.rect;
+  const setRect = (patch: Partial<NonNullable<typeof r>>) => r && editor.set({ crop: { ...crop, rect: { ...r, ...patch } } });
+  return (
+    <div className="prop-section" data-testid="crop-panel">
+      <div className="radio-row" role="radiogroup" aria-label="トリミング対象">
+        <label>
+          <input type="radio" checked={crop.target === 'document'} onChange={() => setCropTarget(editor, 'document')} /> キャンバス全体
+        </label>
+        <label>
+          <input type="radio" checked={crop.target === 'image'} onChange={() => setCropTarget(editor, 'image')} /> 選択中の画像のみ
+        </label>
+      </div>
+      {r ? (
+        <>
+          <Field label="X">
+            <NumberInput label="トリミング X" value={r.x} onCommit={(x) => setRect({ x })} />
+          </Field>
+          <Field label="Y">
+            <NumberInput label="トリミング Y" value={r.y} onCommit={(y) => setRect({ y })} />
+          </Field>
+          <Field label="幅">
+            <NumberInput label="トリミング幅" value={r.width} min={1} suffix="px" onCommit={(width) => setRect({ width })} />
+          </Field>
+          <Field label="高さ">
+            <NumberInput label="トリミング高さ" value={r.height} min={1} suffix="px" onCommit={(height) => setRect({ height })} />
+          </Field>
+          <button type="button" className="primary" onClick={() => commitCrop(editor)}>
+            確定（Enter）
+          </button>
+          <button type="button" onClick={() => cancelCrop(editor)}>
+            キャンセル（Esc）
+          </button>
+        </>
+      ) : (
+        <span className="hint">
+          {crop.target === 'document'
+            ? 'ドラッグでキャンバスの切り抜き範囲を指定します。'
+            : 'ドラッグで画像の切り抜き範囲を指定します（他のオブジェクトやキャンバスは変わりません）。'}
+        </span>
+      )}
+    </div>
+  );
+}
+
+function PixelSelectionSection() {
+  const sel = useEditor((s) => s.pixelSelection);
+  if (!sel) return null;
+  const target = pixelTargetImage(editor);
+  return (
+    <div className="prop-section" data-testid="selection-panel">
+      <span className="hint">範囲選択：{target ? `対象画像「${target.name}」` : '対象画像なし'}</span>
+      <button type="button" disabled={!target} onClick={() => openDialog({ kind: 'blur-selection' })}>
+        選択範囲にぼかし…
+      </button>
+      <button type="button" onClick={() => editor.set({ pixelSelection: null })}>
+        選択解除
+      </button>
     </div>
   );
 }

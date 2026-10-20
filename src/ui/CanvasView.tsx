@@ -20,7 +20,8 @@ import { DocumentSvg } from '../render/DocumentSvg';
 import { imageCache } from '../render/imageCache';
 import { measureText } from '../render/text';
 import { placeImageFiles, writableLayer } from '../store/actions';
-import type { ToolId } from '../store/editor';
+import type { PixelSelection, ToolId } from '../store/editor';
+import { cancelCrop, commitCrop, startCrop } from '../store/imageActions';
 import { editor, useEditor } from './useEditor';
 
 const PAD = 400; // workspace margin around the canvas, in screen px
@@ -42,13 +43,22 @@ type Gesture =
   | { kind: 'rotate'; center: Point; startAngle: number; originals: Map<Id, SceneObject> }
   | { kind: 'marquee'; start: Point; current: Point; additive: boolean; base: Id[] }
   | { kind: 'create'; tool: ToolId; start: Point; current: Point; id: Id | null }
-  | { kind: 'pan'; startClient: Point; startScroll: Point };
+  | { kind: 'pan'; startClient: Point; startScroll: Point }
+  | { kind: 'crop-new'; start: Point }
+  | { kind: 'crop-move'; start: Point; orig: Rect }
+  | { kind: 'crop-resize'; handle: Handle; orig: Rect }
+  | { kind: 'select-area'; shape: 'rect' | 'ellipse'; start: Point }
+  | { kind: 'lasso'; points: Point[] };
 
 export function CanvasView() {
   const doc = useEditor((s) => s.doc);
   const zoom = useEditor((s) => s.zoom);
   const tool = useEditor((s) => s.tool);
   const selection = useEditor((s) => s.selection);
+  const crop = useEditor((s) => s.crop);
+  const pixelSelection = useEditor((s) => s.pixelSelection);
+  const compareImageId = useEditor((s) => s.compareImageId);
+  const [polyPoints, setPolyPoints] = useState<Point[] | null>(null);
   const [, forceRender] = useState(0);
   useEffect(() => imageCache.subscribe(() => forceRender((n) => n + 1)), []);
 
@@ -122,6 +132,51 @@ export function CanvasView() {
     };
   }, []);
 
+  // Entering the crop tool picks the target (selected image or the document).
+  useEffect(() => {
+    if (tool === 'crop' && !editor.getState().crop) startCrop(editor);
+    if (tool !== 'polygon-lasso') setPolyPoints(null);
+  }, [tool]);
+
+  // Enter / Escape for the crop tool and the polygon lasso.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (isTyping(e)) return;
+      if (polyPoints) {
+        // The last point follows the pointer; it is not a placed vertex.
+        if (e.key === 'Enter') finishPolygon(polyPoints.slice(0, -1));
+        if (e.key === 'Escape') setPolyPoints(null);
+        if (e.key === 'Enter' || e.key === 'Escape') {
+          e.preventDefault();
+          e.stopImmediatePropagation();
+        }
+        return;
+      }
+      const c = editor.getState().crop;
+      if (editor.getState().tool === 'crop' && c?.rect) {
+        if (e.key === 'Enter') commitCrop(editor);
+        if (e.key === 'Escape') cancelCrop(editor);
+        if (e.key === 'Enter' || e.key === 'Escape') {
+          e.preventDefault();
+          e.stopImmediatePropagation();
+        }
+      }
+    };
+    // Capture phase so these keys don't also reach the global shortcuts.
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  });
+
+  function setCrop(rect: Rect | null) {
+    const c = editor.getState().crop;
+    if (c) editor.set({ crop: { ...c, rect } });
+  }
+
+  function finishPolygon(points: Point[]) {
+    setPolyPoints(null);
+    if (points.length >= 3) editor.set({ pixelSelection: { kind: 'polygon', points } });
+  }
+
   // Ctrl/Cmd + wheel zooms around the cursor.
   useEffect(() => {
     const el = scrollRef.current;
@@ -180,6 +235,44 @@ export function CanvasView() {
       const z = editor.getState().zoom;
       const next = e.altKey ? [...ZOOM_STEPS].reverse().find((s) => s < z - 1e-6) : ZOOM_STEPS.find((s) => s > z + 1e-6);
       if (next) setZoomAt(next, e.clientX, e.clientY);
+      return;
+    }
+
+    if (effectiveTool === 'crop') {
+      const c = editor.getState().crop;
+      const ch = target.getAttribute('data-crop-handle');
+      if (c?.rect && ch) {
+        gesture.current = { kind: 'crop-resize', handle: ch as Handle, orig: c.rect };
+      } else if (c?.rect && pointInRect(p, c.rect)) {
+        gesture.current = { kind: 'crop-move', start: p, orig: c.rect };
+      } else {
+        gesture.current = { kind: 'crop-new', start: p };
+        setCrop({ x: p.x, y: p.y, width: 0, height: 0 });
+      }
+      return;
+    }
+
+    if (effectiveTool === 'marquee-rect' || effectiveTool === 'marquee-ellipse') {
+      editor.set({ pixelSelection: null });
+      gesture.current = { kind: 'select-area', shape: effectiveTool === 'marquee-rect' ? 'rect' : 'ellipse', start: p };
+      return;
+    }
+    if (effectiveTool === 'lasso') {
+      editor.set({ pixelSelection: null });
+      gesture.current = { kind: 'lasso', points: [p] };
+      return;
+    }
+    if (effectiveTool === 'polygon-lasso') {
+      if (!polyPoints) {
+        setPolyPoints([p, p]);
+        return;
+      }
+      const first = polyPoints[0];
+      const closeEnough = Math.hypot(first.x - p.x, first.y - p.y) * zoom < 8;
+      // Closing click on the start point, or the second click of a double-click
+      // (whose first click already placed this vertex).
+      if (closeEnough || e.detail >= 2) finishPolygon(polyPoints.slice(0, -1));
+      else setPolyPoints([...polyPoints.slice(0, -1), p, p]);
       return;
     }
 
@@ -272,9 +365,32 @@ export function CanvasView() {
   function onPointerMove(e: React.PointerEvent) {
     const p = toDoc(e.clientX, e.clientY);
     setCursorPos(p);
+    if (polyPoints) setPolyPoints([...polyPoints.slice(0, -1), p]);
     const g = gesture.current;
     if (!g) return;
     switch (g.kind) {
+      case 'crop-new':
+        setCrop(dragRect(g.start, p, e.shiftKey, e.altKey));
+        break;
+      case 'crop-move':
+        setCrop({ ...g.orig, x: g.orig.x + p.x - g.start.x, y: g.orig.y + p.y - g.start.y });
+        break;
+      case 'crop-resize': {
+        const b = resizeBox({ ...g.orig, rotation: 0 }, g.handle, p, { keepAspect: e.shiftKey, fromCenter: e.altKey });
+        setCrop({ x: b.x, y: b.y, width: b.width, height: b.height });
+        break;
+      }
+      case 'select-area': {
+        const r = dragRect(g.start, p, e.shiftKey, e.altKey);
+        editor.set({ pixelSelection: r.width > 0 && r.height > 0 ? { kind: g.shape, ...r } : null });
+        break;
+      }
+      case 'lasso': {
+        const last = g.points[g.points.length - 1];
+        if (Math.hypot(last.x - p.x, last.y - p.y) * zoom >= 2) g.points.push(p);
+        editor.set({ pixelSelection: g.points.length >= 3 ? { kind: 'polygon', points: [...g.points] } : null });
+        break;
+      }
       case 'pan': {
         const el = scrollRef.current!;
         el.scrollLeft = g.startScroll.x - (e.clientX - g.startClient.x);
@@ -330,7 +446,7 @@ export function CanvasView() {
     }
   }
 
-  function onPointerUp(e: React.PointerEvent) {
+  function onPointerUp() {
     const g = gesture.current;
     gesture.current = null;
     if (!g) return;
@@ -363,8 +479,21 @@ export function CanvasView() {
       }
       case 'pan':
         break;
+      case 'crop-new': {
+        const r = editor.getState().crop?.rect;
+        if (r && (r.width * zoom < 3 || r.height * zoom < 3)) setCrop(null);
+        break;
+      }
+      case 'select-area': {
+        // A click without a real drag leaves no selection.
+        const sel = editor.getState().pixelSelection;
+        if (sel && sel.kind !== 'polygon' && (sel.width * zoom < 2 || sel.height * zoom < 2)) editor.set({ pixelSelection: null });
+        break;
+      }
+      case 'lasso':
+        if (g.points.length < 3) editor.set({ pixelSelection: null });
+        break;
     }
-    void e;
   }
 
   function updateCreate(g: Extract<Gesture, { kind: 'create' }>, shift: boolean, alt: boolean) {
@@ -473,7 +602,7 @@ export function CanvasView() {
             doc={doc}
             width={doc.width * zoom}
             height={doc.height * zoom}
-            options={{ imageHref: (o) => imageCache.href(o), hitAreas: true, hiddenId: editingText?.id, idPrefix: 'screen' }}
+            options={{ imageHref: (o) => imageCache.href(o, o.id === compareImageId), hitAreas: true, hiddenId: editingText?.id, idPrefix: 'screen' }}
           />
         </div>
         <svg
@@ -485,6 +614,11 @@ export function CanvasView() {
           overflow="visible"
         >
           <SelectionOverlay locs={selectedObjects} zoom={zoom} showHandles={tool === 'select' && !editingText} />
+          {pixelSelection && <PixelSelectionOutline sel={pixelSelection} zoom={zoom} />}
+          {polyPoints && (
+            <polyline points={polyPoints.map((q) => `${q.x},${q.y}`).join(' ')} className="ants-a" strokeWidth={1 / zoom} />
+          )}
+          {tool === 'crop' && crop && <CropOverlay crop={crop} doc={doc} zoom={zoom} />}
           {marquee && (
             <rect
               x={marquee.x}
@@ -509,6 +643,71 @@ export function CanvasView() {
     </div>
     <StatusBar cursor={cursorPos} />
     </div>
+  );
+}
+
+function pointInRect(p: Point, r: Rect): boolean {
+  return p.x >= r.x && p.y >= r.y && p.x <= r.x + r.width && p.y <= r.y + r.height;
+}
+
+function PixelSelectionOutline({ sel, zoom }: { sel: PixelSelection; zoom: number }) {
+  const k = 1 / zoom;
+  const shape = (cls: string) =>
+    sel.kind === 'rect' ? (
+      <rect className={cls} x={sel.x} y={sel.y} width={sel.width} height={sel.height} strokeWidth={k} />
+    ) : sel.kind === 'ellipse' ? (
+      <ellipse className={cls} cx={sel.x + sel.width / 2} cy={sel.y + sel.height / 2} rx={sel.width / 2} ry={sel.height / 2} strokeWidth={k} />
+    ) : (
+      <polygon className={cls} points={sel.points.map((q) => `${q.x},${q.y}`).join(' ')} strokeWidth={k} />
+    );
+  // Two dashed strokes offset against each other = "marching ants" visible on any background.
+  return (
+    <g data-testid="pixel-selection">
+      {shape('ants-a')}
+      {shape('ants-b')}
+    </g>
+  );
+}
+
+function CropOverlay({ crop, doc, zoom }: { crop: NonNullable<ReturnType<typeof editor.getState>['crop']>; doc: SparcaDocument; zoom: number }) {
+  const k = 1 / zoom;
+  const target = crop.target === 'image' && crop.imageId ? findObject(doc, crop.imageId)?.object : null;
+  const r = crop.rect;
+  const hs = 8 * k;
+  // Outer area to dim: canvas (document crop) or the image bounds (image crop).
+  const outer = target && target.type !== 'group' ? objectBounds(target)! : { x: 0, y: 0, width: doc.width, height: doc.height };
+  return (
+    <g data-testid="crop-overlay">
+      {target && target.type !== 'group' && (
+        <polygon points={boxCorners(target.box).map((q) => `${q.x},${q.y}`).join(' ')} className="crop-target" strokeWidth={k} />
+      )}
+      {r && (
+        <>
+          <path
+            className="crop-shade"
+            fillRule="evenodd"
+            d={`M${outer.x} ${outer.y} h${outer.width} v${outer.height} h${-outer.width} Z M${r.x} ${r.y} v${r.height} h${r.width} v${-r.height} Z`}
+          />
+          <rect className="crop-rect" x={r.x} y={r.y} width={r.width} height={r.height} strokeWidth={k} />
+          {HANDLES.map((h) => {
+            const q = handlePoint({ ...r, rotation: 0 }, h);
+            return (
+              <rect
+                key={h}
+                data-crop-handle={h}
+                className="handle"
+                x={q.x - hs / 2}
+                y={q.y - hs / 2}
+                width={hs}
+                height={hs}
+                strokeWidth={k}
+                style={{ cursor: handleCursor(h, 0) }}
+              />
+            );
+          })}
+        </>
+      )}
+    </g>
   );
 }
 
@@ -693,8 +892,17 @@ function TextEditor({ obj, zoom, isNew, onDone }: { obj: TextObject; zoom: numbe
 function StatusBar({ cursor }: { cursor: Point | null }) {
   const doc = useEditor((s) => s.doc);
   const zoom = useEditor((s) => s.zoom);
+  const sel = useEditor((s) => s.pixelSelection);
+  const [progress, setProgress] = useState<number | null>(null);
+  useEffect(() => imageCache.subscribe(() => setProgress(imageCache.progress)), []);
   return (
     <div className="statusbar">
+      {progress !== null && (
+        <span className="progress" data-testid="processing">
+          画像処理中 {Math.round(progress * 100)}%
+        </span>
+      )}
+      {sel && <span>範囲選択あり（Esc で解除）</span>}
       <span>
         キャンバス {doc.width} × {doc.height} px
       </span>

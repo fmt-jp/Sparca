@@ -29,6 +29,14 @@ export type PixelSelection =
   | { kind: 'ellipse'; x: number; y: number; width: number; height: number }
   | { kind: 'polygon'; points: Point[] };
 
+export interface CropState {
+  /** 'document' crops the canvas; 'image' crops only the given image object. */
+  target: 'document' | 'image';
+  imageId: Id | null;
+  /** Crop rectangle in document coordinates. */
+  rect: { x: number; y: number; width: number; height: number } | null;
+}
+
 export interface Notice {
   id: number;
   kind: 'info' | 'error';
@@ -45,6 +53,9 @@ export interface EditorState {
   activeLayerId: Id;
   tool: ToolId;
   pixelSelection: PixelSelection | null;
+  crop: CropState | null;
+  /** Image object currently shown without its pipeline (before/after comparison). */
+  compareImageId: Id | null;
   zoom: number;
   notices: Notice[];
   /** Non-null while a long-running task is in progress. */
@@ -70,6 +81,8 @@ export class EditorStore {
       activeLayerId: doc.layers[doc.layers.length - 1].id,
       tool: 'select',
       pixelSelection: null,
+      crop: null,
+      compareImageId: null,
       zoom: 1,
       notices: [],
       busy: null,
@@ -157,6 +170,8 @@ export class EditorStore {
       fileName,
       selection: [],
       pixelSelection: null,
+      crop: null,
+      compareImageId: null,
       activeLayerId: doc.layers[doc.layers.length - 1]?.id ?? '',
     });
   }
@@ -170,7 +185,8 @@ export class EditorStore {
   }
 
   setTool(tool: ToolId): void {
-    this.set({ tool });
+    if (tool === this.state.tool) return;
+    this.set({ tool, crop: tool === 'crop' ? this.state.crop : null });
   }
 
   notify(kind: Notice['kind'], message: string): void {

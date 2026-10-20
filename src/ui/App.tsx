@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import {
   arrangeSelection,
   chooseAndOpenProject,
@@ -15,7 +15,11 @@ import {
   ungroupSelection,
 } from '../store/actions';
 import type { ToolId } from '../store/editor';
+import { CanvasSizeDialog } from './CanvasSizeDialog';
 import { CanvasView } from './CanvasView';
+import { BlurSelectionDialog } from './BlurSelectionDialog';
+import { closeDialog, openDialog, useDialog } from './dialogs';
+import { ImageSizeDialog } from './ImageSizeDialog';
 import { LayersPanel } from './LayersPanel';
 import { MenuBar, zoomIn, zoomOut, zoomToFit } from './MenuBar';
 import { NewDocumentDialog } from './NewDocumentDialog';
@@ -25,7 +29,7 @@ import { TOOL_GROUPS } from './tools';
 import { editor, useEditor } from './useEditor';
 
 export function App() {
-  const [dialog, setDialog] = useState<'new' | null>(null);
+  const dialog = useDialog();
   const notices = useEditor((s) => s.notices);
   const busy = useEditor((s) => s.busy);
   const fileName = useEditor((s) => s.fileName);
@@ -52,7 +56,7 @@ export function App() {
       if (dialog) return;
       const t = e.target as HTMLElement;
       if (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable) return;
-      if (handleShortcut(e, () => setDialog('new'))) e.preventDefault();
+      if (handleShortcut(e, () => openDialog({ kind: 'new' }))) e.preventDefault();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -60,12 +64,15 @@ export function App() {
 
   return (
     <div className="app">
-      <MenuBar onNew={() => setDialog('new')} />
+      <MenuBar onNew={() => openDialog({ kind: 'new' })} />
       <Toolbar />
       <CanvasView />
       <LayersPanel />
       <PropertiesPanel />
-      {dialog === 'new' && <NewDocumentDialog onClose={() => setDialog(null)} />}
+      {dialog?.kind === 'new' && <NewDocumentDialog onClose={closeDialog} />}
+      {dialog?.kind === 'canvas-size' && <CanvasSizeDialog onClose={closeDialog} />}
+      {dialog?.kind === 'image-size' && <ImageSizeDialog imageId={dialog.imageId} onClose={closeDialog} />}
+      {dialog?.kind === 'blur-selection' && <BlurSelectionDialog onClose={closeDialog} />}
       <div className="notices" role="status" aria-live="polite">
         {notices.map((n) => (
           <div key={n.id} className={`notice ${n.kind}`} onClick={() => editor.dismiss(n.id)}>
@@ -111,7 +118,10 @@ function handleShortcut(e: KeyboardEvent, openNew: () => void): boolean {
   }
   if (e.altKey) return false;
   if (k === 'delete' || k === 'backspace') deleteSelection(editor);
-  else if (k === 'escape') editor.select([]);
+  else if (k === 'escape') {
+    if (editor.getState().pixelSelection) editor.set({ pixelSelection: null });
+    else editor.select([]);
+  }
   else if (k.startsWith('arrow')) {
     const step = e.shiftKey ? 10 : 1;
     const dx = k === 'arrowleft' ? -step : k === 'arrowright' ? step : 0;
@@ -119,11 +129,11 @@ function handleShortcut(e: KeyboardEvent, openNew: () => void): boolean {
     nudgeSelection(editor, dx, dy);
   } else if (k.length === 1) {
     // Tool keys: pressing the key of the current group cycles through it.
-    const group = TOOL_GROUPS.find((g) => g.tools.some((t) => t.key?.toLowerCase() === k));
-    if (!group) return false;
+    const tools = TOOL_GROUPS.flatMap((g) => g.tools).filter((t) => t.key?.toLowerCase() === k);
+    if (!tools.length) return false;
     const cur = editor.getState().tool;
-    const idx = group.tools.findIndex((t) => t.id === cur);
-    const next: ToolId = idx >= 0 ? group.tools[(idx + 1) % group.tools.length].id : group.tools[0].id;
+    const idx = tools.findIndex((t) => t.id === cur);
+    const next: ToolId = tools[(idx + 1) % tools.length].id;
     editor.setTool(next);
   } else return false;
   return true;

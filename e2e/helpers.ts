@@ -62,3 +62,43 @@ export async function drag(page: Page, from: { x: number; y: number }, to: { x: 
 export function state<T>(page: Page, fn: string): Promise<T> {
   return page.evaluate(`(() => { const s = window.__sparca.getState(); return (${fn})(s); })()`) as Promise<T>;
 }
+
+/** Place a generated PNG through the File menu. */
+export async function placePng(page: Page, name: string, png: Buffer) {
+  const chooser = page.waitForEvent('filechooser');
+  await page.getByRole('button', { name: 'ファイル' }).click();
+  await page.getByRole('menuitem', { name: /画像を配置/ }).click();
+  await (await chooser).setFiles({ name, mimeType: 'image/png', buffer: png });
+  await page.waitForFunction(() => {
+    const s = (window as unknown as { __sparca: { getState(): { selection: string[] } } }).__sparca.getState();
+    return s.selection.length === 1;
+  });
+}
+
+/**
+ * Full-resolution processed pixels of an image object, rendered by the real engine (worker).
+ * Returns width, height and an accessor for RGBA at (x, y).
+ */
+export async function processedPixels(page: Page, id: string, points: [number, number][]) {
+  return page.evaluate(
+    async ({ id, points }) => {
+      const w = window as unknown as {
+        __sparca: { getState(): { doc: { layers: { children: { id: string }[] }[] } } };
+        __sparcaImages: { fullBlob(o: unknown): Promise<Blob> };
+      };
+      const o = w.__sparca.getState().doc.layers.flatMap((l) => l.children).find((c) => c.id === id);
+      const blob = await w.__sparcaImages.fullBlob(o);
+      const bmp = await createImageBitmap(blob);
+      const c = new OffscreenCanvas(bmp.width, bmp.height);
+      const ctx = c.getContext('2d')!;
+      ctx.drawImage(bmp, 0, 0);
+      const px = points.map(([x, y]) => Array.from(ctx.getImageData(x, y, 1, 1).data));
+      return { width: bmp.width, height: bmp.height, px };
+    },
+    { id, points },
+  );
+}
+
+export async function waitImagesIdle(page: Page) {
+  await page.waitForFunction(() => (window as unknown as { __sparcaImages: { idle: boolean } }).__sparcaImages.idle);
+}

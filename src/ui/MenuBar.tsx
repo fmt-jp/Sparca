@@ -14,7 +14,9 @@ import {
   selectAll,
   ungroupSelection,
 } from '../store/actions';
+import { autoColor, pixelTargetImage, selectedImage } from '../store/imageActions';
 import { ZOOM_STEPS } from './CanvasView';
+import { openDialog } from './dialogs';
 import { editor, useEditor } from './useEditor';
 
 export interface MenuItem {
@@ -62,6 +64,8 @@ export function MenuBar({ onNew }: { onNew: () => void }) {
   }, [open]);
 
   const hasSel = selection.length > 0;
+  const pixelSel = useEditor((s) => s.pixelSelection);
+  const image = selectedImage(editor);
   const undoLabel = history.past[history.past.length - 1]?.label;
   const redoLabel = history.future[0]?.label;
 
@@ -107,6 +111,19 @@ export function MenuBar({ onNew }: { onNew: () => void }) {
         { separator: true, label: '' },
         { label: 'グループ化', shortcut: `${mod}G`, action: () => groupSelection(editor), disabled: selection.length < 2 },
         { label: 'グループ解除', shortcut: `${mod}Shift+G`, action: () => ungroupSelection(editor), disabled: !hasSel },
+        { separator: true, label: '' },
+        { label: 'キャンバスサイズ…', action: () => openDialog({ kind: 'canvas-size' }) },
+        { label: '画像サイズ…（選択中の画像）', action: () => image && openDialog({ kind: 'image-size', imageId: image.id }), disabled: !image },
+        { label: 'トリミング', shortcut: 'C', action: () => editor.setTool('crop') },
+      ],
+    },
+    {
+      id: 'image',
+      label: '画像',
+      items: [
+        { label: '自動カラー調整', action: () => image && void autoColor(editor, image.id), disabled: !image },
+        { label: '選択範囲にぼかし…', action: () => openDialog({ kind: 'blur-selection' }), disabled: !pixelSel || !pixelTargetImage(editor) },
+        { label: '範囲選択を解除', shortcut: 'Esc', action: () => editor.set({ pixelSelection: null }), disabled: !pixelSel },
       ],
     },
     {

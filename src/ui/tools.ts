@@ -19,6 +19,17 @@ export interface ToolGroup {
  */
 export const TOOL_GROUPS: ToolGroup[] = [
   { id: 'select', label: '選択', tools: [{ id: 'select', label: '選択ツール', key: 'V' }] },
+  { id: 'crop', label: 'トリミング', tools: [{ id: 'crop', label: 'トリミングツール（Enter で確定、Esc で取消）', key: 'C' }] },
+  {
+    id: 'marquee',
+    label: '範囲選択',
+    tools: [
+      { id: 'marquee-rect', label: '矩形選択ツール', key: 'M' },
+      { id: 'marquee-ellipse', label: '楕円選択ツール', key: 'M' },
+      { id: 'lasso', label: '投げ縄ツール', key: 'L' },
+      { id: 'polygon-lasso', label: '多角形選択ツール（クリックで頂点、始点クリック／ダブルクリック／Enter で閉じる）', key: 'L' },
+    ],
+  },
   {
     id: 'line',
     label: 'ライン',

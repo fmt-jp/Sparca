@@ -1,5 +1,5 @@
 // Small form controls shared by the property panel and dialogs.
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { editor } from './useEditor';
 
 export function Field({ label, children, wide }: { label: string; children: ReactNode; wide?: boolean }) {
@@ -39,6 +39,8 @@ export function NumberInput({
   const fmt = (v: number) => (Number.isFinite(v) ? String(Number(v.toFixed(precision))) : '');
   const [text, setText] = useState(fmt(value));
   const [invalid, setInvalid] = useState(false);
+  /** Set when Enter already committed, so the blur that follows doesn't commit again. */
+  const skipBlur = useRef(false);
   useEffect(() => {
     setText(fmt(value));
     setInvalid(false);
@@ -69,9 +71,17 @@ export function NumberInput({
         aria-label={label}
         disabled={disabled}
         onChange={(e) => setText(e.target.value)}
-        onBlur={(e) => commit(e.target.value)}
+        onBlur={(e) => {
+          if (skipBlur.current) skipBlur.current = false;
+          else commit(e.target.value);
+        }}
         onKeyDown={(e) => {
-          if (e.key === 'Enter') commit((e.target as HTMLInputElement).value);
+          if (e.key === 'Enter') {
+            commit((e.target as HTMLInputElement).value);
+            skipBlur.current = true;
+            // Hand keyboard focus back to the editor so shortcuts (Ctrl+Z etc.) work right away.
+            (e.target as HTMLInputElement).blur();
+          }
           if (e.key === 'Escape') setText(fmt(value));
           if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
             e.preventDefault();
