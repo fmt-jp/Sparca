@@ -38,6 +38,7 @@ export const TOOL_GROUPS: ToolGroup[] = [
       { id: 'arrow', label: '矢印ツール', key: 'N' },
     ],
   },
+  { id: 'pen', label: 'ペン', tools: [{ id: 'pen', label: 'ペンツール（クリックで角、ドラッグで曲線、始点クリックで閉じる、Enter で終了）', key: 'P' }] },
   {
     id: 'shape',
     label: '図形',
@@ -50,6 +51,7 @@ export const TOOL_GROUPS: ToolGroup[] = [
     ],
   },
   { id: 'text', label: 'テキスト', tools: [{ id: 'text', label: 'テキストツール', key: 'T' }] },
+  { id: 'eyedropper', label: 'スポイト', tools: [{ id: 'eyedropper', label: 'スポイトツール', key: 'I' }] },
   { id: 'hand', label: '手のひら', tools: [{ id: 'hand', label: '手のひらツール（Space 押下中も可）', key: 'H' }] },
   { id: 'zoom', label: 'ズーム', tools: [{ id: 'zoom', label: 'ズームツール（Alt+クリックで縮小）', key: 'Z' }] },
 ];

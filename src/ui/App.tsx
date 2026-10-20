@@ -19,6 +19,7 @@ import { CanvasSizeDialog } from './CanvasSizeDialog';
 import { CanvasView } from './CanvasView';
 import { BlurSelectionDialog } from './BlurSelectionDialog';
 import { closeDialog, openDialog, useDialog } from './dialogs';
+import { ExportDialog } from './ExportDialog';
 import { ImageSizeDialog } from './ImageSizeDialog';
 import { LayersPanel } from './LayersPanel';
 import { MenuBar, zoomIn, zoomOut, zoomToFit } from './MenuBar';
@@ -56,7 +57,7 @@ export function App() {
       if (dialog) return;
       const t = e.target as HTMLElement;
       if (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable) return;
-      if (handleShortcut(e, () => openDialog({ kind: 'new' }))) e.preventDefault();
+      if (handleShortcut(e)) e.preventDefault();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -73,6 +74,7 @@ export function App() {
       {dialog?.kind === 'canvas-size' && <CanvasSizeDialog onClose={closeDialog} />}
       {dialog?.kind === 'image-size' && <ImageSizeDialog imageId={dialog.imageId} onClose={closeDialog} />}
       {dialog?.kind === 'blur-selection' && <BlurSelectionDialog onClose={closeDialog} />}
+      {dialog?.kind === 'export' && <ExportDialog onClose={closeDialog} />}
       <div className="notices" role="status" aria-live="polite">
         {notices.map((n) => (
           <div key={n.id} className={`notice ${n.kind}`} onClick={() => editor.dismiss(n.id)}>
@@ -90,7 +92,7 @@ export function App() {
   );
 }
 
-function handleShortcut(e: KeyboardEvent, openNew: () => void): boolean {
+function handleShortcut(e: KeyboardEvent): boolean {
   const mod = e.ctrlKey || e.metaKey;
   const k = e.key.toLowerCase();
   if (mod) {
@@ -98,8 +100,8 @@ function handleShortcut(e: KeyboardEvent, openNew: () => void): boolean {
     else if ((k === 'z' && e.shiftKey) || k === 'y') editor.redo();
     else if (k === 's') void saveProject(editor, e.shiftKey);
     else if (k === 'o') void chooseAndOpenProject(editor);
-    else if (k === 'n') openNew();
     else if (k === 'i' && e.shiftKey) void chooseAndPlaceImage(editor);
+    else if (k === 'e' && e.shiftKey) openDialog({ kind: 'export' });
     else if (k === 'c') copySelection(editor);
     else if (k === 'x') cutSelection(editor);
     else if (k === 'v') paste(editor);

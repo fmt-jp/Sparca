@@ -56,6 +56,10 @@ export interface EditorState {
   crop: CropState | null;
   /** Image object currently shown without its pipeline (before/after comparison). */
   compareImageId: Id | null;
+  /** Where the eyedropper applies a picked color on selected shapes. */
+  eyedropperTarget: 'fill' | 'stroke';
+  /** Last color picked with the eyedropper. */
+  pickedColor: string | null;
   zoom: number;
   notices: Notice[];
   /** Non-null while a long-running task is in progress. */
@@ -83,6 +87,8 @@ export class EditorStore {
       pixelSelection: null,
       crop: null,
       compareImageId: null,
+      eyedropperTarget: 'fill',
+      pickedColor: null,
       zoom: 1,
       notices: [],
       busy: null,

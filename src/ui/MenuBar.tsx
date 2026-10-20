@@ -74,13 +74,16 @@ export function MenuBar({ onNew }: { onNew: () => void }) {
       id: 'file',
       label: 'ファイル',
       items: [
-        { label: '新規…', shortcut: `${mod}N`, action: onNew },
+        // No shortcut: browsers reserve Ctrl+N for a new window.
+        { label: '新規…', action: onNew },
         { label: '開く…', shortcut: `${mod}O`, action: () => void chooseAndOpenProject(editor) },
         { separator: true, label: '' },
         { label: '保存', shortcut: `${mod}S`, action: () => void saveProject(editor) },
         { label: '名前を付けて保存…', shortcut: `${mod}Shift+S`, action: () => void saveProject(editor, true) },
         { separator: true, label: '' },
         { label: '画像を配置…', shortcut: `${mod}Shift+I`, action: () => void chooseAndPlaceImage(editor) },
+        { separator: true, label: '' },
+        { label: '画像として書き出し…（PNG / JPEG / WebP）', shortcut: `${mod}Shift+E`, action: () => openDialog({ kind: 'export' }) },
       ],
     },
     {

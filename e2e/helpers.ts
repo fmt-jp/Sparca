@@ -102,3 +102,18 @@ export async function processedPixels(page: Page, id: string, points: [number, n
 export async function waitImagesIdle(page: Page) {
   await page.waitForFunction(() => (window as unknown as { __sparcaImages: { idle: boolean } }).__sparcaImages.idle);
 }
+
+/** Decode image bytes in the browser and read pixels at the given points. */
+export async function decodePixels(page: Page, bytes: Buffer, mime: string, points: [number, number][]) {
+  return page.evaluate(
+    async ({ b64, mime, points }) => {
+      const bin = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+      const bmp = await createImageBitmap(new Blob([bin], { type: mime }));
+      const c = new OffscreenCanvas(bmp.width, bmp.height);
+      const ctx = c.getContext('2d')!;
+      ctx.drawImage(bmp, 0, 0);
+      return { width: bmp.width, height: bmp.height, px: points.map(([x, y]) => Array.from(ctx.getImageData(x, y, 1, 1).data)) };
+    },
+    { b64: bytes.toString('base64'), mime, points },
+  );
+}

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { addObject, removeObjects, updateObject } from '../model/commands';
-import { createShape, createText, defaultGeometry } from '../model/factory';
+import { createPath, createShape, createText, defaultGeometry } from '../model/factory';
 import { boxCenter, boxCorners, unionBounds, transformObject, rectsIntersect, objectBounds, type Rect } from '../model/geometry';
 import {
   angleTo,
@@ -15,12 +15,13 @@ import {
   type Handle,
 } from '../model/handles';
 import { findObject, isEffectivelyLocked } from '../model/tree';
-import type { Box, Id, Point, SceneObject, ShapeGeometry, SparcaDocument, TextObject } from '../model/types';
+import type { Box, Id, PathNode, Point, SceneObject, ShapeGeometry, SparcaDocument, TextObject } from '../model/types';
 import { DocumentSvg } from '../render/DocumentSvg';
 import { imageCache } from '../render/imageCache';
 import { measureText } from '../render/text';
 import { placeImageFiles, writableLayer } from '../store/actions';
 import type { PixelSelection, ToolId } from '../store/editor';
+import { pickColorAt } from '../store/colorActions';
 import { cancelCrop, commitCrop, startCrop } from '../store/imageActions';
 import { editor, useEditor } from './useEditor';
 
@@ -48,7 +49,8 @@ type Gesture =
   | { kind: 'crop-move'; start: Point; orig: Rect }
   | { kind: 'crop-resize'; handle: Handle; orig: Rect }
   | { kind: 'select-area'; shape: 'rect' | 'ellipse'; start: Point }
-  | { kind: 'lasso'; points: Point[] };
+  | { kind: 'lasso'; points: Point[] }
+  | { kind: 'pen-handle'; index: number };
 
 export function CanvasView() {
   const doc = useEditor((s) => s.doc);
@@ -59,6 +61,10 @@ export function CanvasView() {
   const pixelSelection = useEditor((s) => s.pixelSelection);
   const compareImageId = useEditor((s) => s.compareImageId);
   const [polyPoints, setPolyPoints] = useState<Point[] | null>(null);
+  /** Pen tool path under construction, in document coordinates. */
+  const [penNodes, setPenNodes] = useState<PathNode[] | null>(null);
+  const penRef = useRef<PathNode[] | null>(null);
+  penRef.current = penNodes;
   const [, forceRender] = useState(0);
   useEffect(() => imageCache.subscribe(() => forceRender((n) => n + 1)), []);
 
@@ -136,12 +142,20 @@ export function CanvasView() {
   useEffect(() => {
     if (tool === 'crop' && !editor.getState().crop) startCrop(editor);
     if (tool !== 'polygon-lasso') setPolyPoints(null);
+    if (tool !== 'pen' && penRef.current) finishPen(penRef.current, false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tool]);
 
   // Enter / Escape for the crop tool and the polygon lasso.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (isTyping(e)) return;
+      if (penNodes && (e.key === 'Enter' || e.key === 'Escape')) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        finishPen(penNodes, false);
+        return;
+      }
       if (polyPoints) {
         // The last point follows the pointer; it is not a placed vertex.
         if (e.key === 'Enter') finishPolygon(polyPoints.slice(0, -1));
@@ -166,6 +180,31 @@ export function CanvasView() {
     window.addEventListener('keydown', onKey, true);
     return () => window.removeEventListener('keydown', onKey, true);
   });
+
+  /** Turn the pen nodes into a path object (box-normalized nodes). */
+  function finishPen(nodes: PathNode[], closed: boolean) {
+    setPenNodes(null);
+    // A double-click places the same anchor twice; drop consecutive duplicates.
+    const clean = nodes.filter((n, i) => i === 0 || Math.hypot(n.anchor.x - nodes[i - 1].anchor.x, n.anchor.y - nodes[i - 1].anchor.y) > 0.5);
+    if (clean.length < 2) return;
+    const pts = clean.flatMap((n) => [n.anchor, ...(n.in ? [n.in] : []), ...(n.out ? [n.out] : [])]);
+    const xs = pts.map((q) => q.x);
+    const ys = pts.map((q) => q.y);
+    const x0 = Math.min(...xs);
+    const y0 = Math.min(...ys);
+    const w = Math.max(1, Math.max(...xs) - x0);
+    const h = Math.max(1, Math.max(...ys) - y0);
+    const norm = (q: Point | null) => (q ? { x: (q.x - x0) / w, y: (q.y - y0) / h } : null);
+    const path = createPath(
+      clean.map((n) => ({ anchor: norm(n.anchor)!, in: norm(n.in), out: norm(n.out) })),
+      closed,
+      { x: x0, y: y0, width: w, height: h, rotation: 0 },
+    );
+    const layerId = writableLayer(editor, editor.getState().activeLayerId);
+    if (!layerId) return;
+    editor.edit('パスの作成', (d) => addObject(d, layerId, path));
+    editor.select([path.id]);
+  }
 
   function setCrop(rect: Rect | null) {
     const c = editor.getState().crop;
@@ -235,6 +274,32 @@ export function CanvasView() {
       const z = editor.getState().zoom;
       const next = e.altKey ? [...ZOOM_STEPS].reverse().find((s) => s < z - 1e-6) : ZOOM_STEPS.find((s) => s > z + 1e-6);
       if (next) setZoomAt(next, e.clientX, e.clientY);
+      return;
+    }
+
+    if (effectiveTool === 'eyedropper') {
+      void pickColorAt(editor, p.x, p.y);
+      return;
+    }
+
+    if (effectiveTool === 'pen') {
+      if (!penNodes) {
+        if (!writableLayer(editor, editor.getState().activeLayerId)) return;
+        setPenNodes([{ anchor: p, in: null, out: null }]);
+        gesture.current = { kind: 'pen-handle', index: 0 };
+        return;
+      }
+      const first = penNodes[0].anchor;
+      if (penNodes.length >= 2 && Math.hypot(first.x - p.x, first.y - p.y) * zoom < 8) {
+        finishPen(penNodes, true);
+        return;
+      }
+      if (e.detail >= 2) {
+        finishPen(penNodes, false);
+        return;
+      }
+      setPenNodes([...penNodes, { anchor: p, in: null, out: null }]);
+      gesture.current = { kind: 'pen-handle', index: penNodes.length };
       return;
     }
 
@@ -369,6 +434,17 @@ export function CanvasView() {
     const g = gesture.current;
     if (!g) return;
     switch (g.kind) {
+      case 'pen-handle': {
+        const nodes = penRef.current;
+        if (!nodes) break;
+        const n = nodes[g.index];
+        if (Math.hypot(p.x - n.anchor.x, p.y - n.anchor.y) * zoom < 3) break;
+        // Dragging pulls out symmetric handles: a smooth bezier anchor.
+        const out = e.shiftKey ? snap45(n.anchor, p) : p;
+        const updated = { ...n, out, in: { x: 2 * n.anchor.x - out.x, y: 2 * n.anchor.y - out.y } };
+        setPenNodes(nodes.map((m, i) => (i === g.index ? updated : m)));
+        break;
+      }
       case 'crop-new':
         setCrop(dragRect(g.start, p, e.shiftKey, e.altKey));
         break;
@@ -619,6 +695,7 @@ export function CanvasView() {
             <polyline points={polyPoints.map((q) => `${q.x},${q.y}`).join(' ')} className="ants-a" strokeWidth={1 / zoom} />
           )}
           {tool === 'crop' && crop && <CropOverlay crop={crop} doc={doc} zoom={zoom} />}
+          {penNodes && <PenPreview nodes={penNodes} cursor={cursorPos} zoom={zoom} />}
           {marquee && (
             <rect
               x={marquee.x}
@@ -643,6 +720,33 @@ export function CanvasView() {
     </div>
     <StatusBar cursor={cursorPos} />
     </div>
+  );
+}
+
+function PenPreview({ nodes, cursor, zoom }: { nodes: PathNode[]; cursor: Point | null; zoom: number }) {
+  const k = 1 / zoom;
+  const P = (q: Point) => `${q.x} ${q.y}`;
+  let d = `M${P(nodes[0].anchor)}`;
+  for (let i = 1; i < nodes.length; i++) {
+    const a = nodes[i - 1];
+    const b = nodes[i];
+    d += a.out || b.in ? ` C${P(a.out ?? a.anchor)} ${P(b.in ?? b.anchor)} ${P(b.anchor)}` : ` L${P(b.anchor)}`;
+  }
+  const last = nodes[nodes.length - 1];
+  return (
+    <g data-testid="pen-preview">
+      <path d={d} className="pen-path" strokeWidth={k} />
+      {cursor && <line x1={last.anchor.x} y1={last.anchor.y} x2={cursor.x} y2={cursor.y} className="pen-rubber" strokeWidth={k} />}
+      {nodes.map((n, i) => (
+        <g key={i}>
+          {n.in && <line x1={n.anchor.x} y1={n.anchor.y} x2={n.in.x} y2={n.in.y} className="pen-handle-line" strokeWidth={k} />}
+          {n.out && <line x1={n.anchor.x} y1={n.anchor.y} x2={n.out.x} y2={n.out.y} className="pen-handle-line" strokeWidth={k} />}
+          {n.in && <circle cx={n.in.x} cy={n.in.y} r={3 * k} className="pen-handle" strokeWidth={k} />}
+          {n.out && <circle cx={n.out.x} cy={n.out.y} r={3 * k} className="pen-handle" strokeWidth={k} />}
+          <rect x={n.anchor.x - 3.5 * k} y={n.anchor.y - 3.5 * k} width={7 * k} height={7 * k} className={i === 0 ? 'pen-anchor first' : 'pen-anchor'} strokeWidth={k} />
+        </g>
+      ))}
+    </g>
   );
 }
 

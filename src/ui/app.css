@@ -716,3 +716,47 @@ kbd {
   flex-wrap: wrap;
   gap: 6px 18px;
 }
+.notice-inline {
+  background: #3d3420;
+  border: 1px solid #8a6d2a;
+  border-radius: 4px;
+  padding: 8px 10px;
+  line-height: 1.5;
+}
+.pen-path {
+  fill: none;
+  stroke: var(--accent);
+  vector-effect: non-scaling-stroke;
+}
+.pen-rubber {
+  stroke: var(--accent);
+  stroke-dasharray: 3 3;
+  vector-effect: non-scaling-stroke;
+}
+.pen-handle-line {
+  stroke: #9ab;
+  vector-effect: non-scaling-stroke;
+}
+.pen-handle {
+  fill: #fff;
+  stroke: var(--accent);
+}
+.pen-anchor {
+  fill: #fff;
+  stroke: var(--accent);
+}
+.pen-anchor.first {
+  fill: var(--accent);
+}
+.picked {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.swatch {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  border: 1px solid #000;
+  border-radius: 3px;
+}

@@ -56,11 +56,14 @@ export function PropertiesPanel() {
     content = <CropSection />;
   } else if (locs.length === 0) {
     content = (
-      <div className="prop-section">
-        <span className="hint">
-          {toolDef(tool)?.label ?? ''}：{TOOL_HINT[tool] ?? 'オブジェクトを選択するとプロパティを編集できます。'}
-        </span>
-      </div>
+      <>
+        <div className="prop-section">
+          <span className="hint">
+            {toolDef(tool)?.label ?? ''}：{TOOL_HINT[tool] ?? 'オブジェクトを選択するとプロパティを編集できます。'}
+          </span>
+        </div>
+        {tool === 'select' && <DocumentSection />}
+      </>
     );
   } else if (locs.length === 1 && locs[0].object.type !== 'group') {
     const o = locs[0].object;
@@ -83,6 +86,7 @@ export function PropertiesPanel() {
   return (
     <section className="properties" aria-label="プロパティ">
       {tool !== 'crop' && <PixelSelectionSection />}
+      {tool === 'eyedropper' && <EyedropperSection />}
       {content}
     </section>
   );
@@ -102,6 +106,8 @@ const TOOL_HINT: Partial<Record<string, string>> = {
   'marquee-ellipse': 'ドラッグで楕円の範囲を選択（Shift で正円）。',
   lasso: 'ドラッグで自由な形の範囲を選択。',
   'polygon-lasso': 'クリックで頂点を追加。始点をクリック、ダブルクリック、または Enter で閉じる。Esc で取消。',
+  pen: 'クリックで角のアンカー、ドラッグで曲線のアンカー（Shift で 45° 単位）。始点クリックで閉じたパス、Enter・Esc・ダブルクリックで開いたパスとして終了。',
+  eyedropper: 'クリックした位置の色を取得します。',
   text: 'クリックでテキストを追加。既存テキストをクリックで編集。Esc または Ctrl+Enter で確定。',
   hand: 'ドラッグで表示位置を移動。',
   zoom: 'クリックで拡大、Alt+クリックで縮小。Ctrl+ホイールでも拡大縮小できます。',
@@ -260,7 +266,7 @@ function TextSection({ o }: { o: TextObject }) {
         <Field label="サイズ">
           <NumberInput label="フォントサイズ" value={o.fontSize} min={1} max={2000} precision={1} suffix="px" onCommit={(fontSize) => setText(o, { fontSize }, 'フォントサイズの変更')} />
         </Field>
-        <Field label="スタイル">
+        <Field label="スタイル" group>
           <span className="button-row">
             <button type="button" className={`style-btn${o.bold ? ' on' : ''}`} aria-pressed={o.bold} title="太字" onClick={() => setText(o, { bold: !o.bold }, '太字の切り替え')}>
               <b>B</b>
@@ -363,6 +369,71 @@ function ImageSection({ o }: { o: ImageObject }) {
         )}
       </div>
     </>
+  );
+}
+
+function EyedropperSection() {
+  const target = useEditor((s) => s.eyedropperTarget);
+  const picked = useEditor((s) => s.pickedColor);
+  return (
+    <div className="prop-section" data-testid="eyedropper-panel">
+      <span className="hint">キャンバス上をクリックして色を取得し、選択中の図形・テキストに適用します。</span>
+      <div className="radio-row" role="radiogroup" aria-label="図形への適用先">
+        <label>
+          <input type="radio" checked={target === 'fill'} onChange={() => editor.set({ eyedropperTarget: 'fill' })} /> 塗り
+        </label>
+        <label>
+          <input type="radio" checked={target === 'stroke'} onChange={() => editor.set({ eyedropperTarget: 'stroke' })} /> 線
+        </label>
+      </div>
+      {picked && (
+        <span className="picked">
+          取得した色 <span className="swatch" style={{ background: picked }} /> <code data-testid="picked-color">{picked}</code>
+        </span>
+      )}
+    </div>
+  );
+}
+
+function DocumentSection() {
+  const doc = useEditor((s) => s.doc);
+  const bg = doc.background;
+  return (
+    <div className="prop-section">
+      <span className="hint">
+        キャンバス {doc.width} × {doc.height} px
+      </span>
+      <button type="button" onClick={() => openDialog({ kind: 'canvas-size' })}>
+        キャンバスサイズ…
+      </button>
+      <Toggle
+        checked={bg.kind === 'transparent'}
+        onChange={(t) =>
+          editor.edit('背景の変更', (d) => {
+            d.background = t ? { kind: 'transparent' } : { kind: 'color', color: '#ffffff' };
+          })
+        }
+      >
+        透明な背景
+      </Toggle>
+      {bg.kind === 'color' && (
+        <Field label="背景色">
+          <ColorInput
+            label="背景色"
+            value={bg.color}
+            onChange={(c) =>
+              editor.edit(
+                '背景色の変更',
+                (d) => {
+                  d.background = { kind: 'color', color: c ?? '#ffffff' };
+                },
+                'background',
+              )
+            }
+          />
+        </Field>
+      )}
+    </div>
   );
 }
 
@@ -530,7 +601,7 @@ function MultiSection({ ids, objects }: { ids: Id[]; objects: SceneObject[] }) {
           </span>
         </>
       )}
-      <Field label="整列">
+      <Field label="整列" group>
         <AlignButtons single={objects.length === 1} />
       </Field>
       {objects.length > 1 && (

@@ -2,9 +2,22 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { editor } from './useEditor';
 
-export function Field({ label, children, wide }: { label: string; children: ReactNode; wide?: boolean }) {
+/**
+ * Labelled form row. Use `group` for rows of buttons: a <label> would make the first
+ * button take the whole row's text as its name and react to clicks on the label text.
+ */
+export function Field({ label, children, wide, group }: { label: string; children: ReactNode; wide?: boolean; group?: boolean }) {
+  const cls = `field${wide ? ' wide' : ''}`;
+  if (group) {
+    return (
+      <div className={cls} role="group" aria-label={label}>
+        <span className="field-label">{label}</span>
+        {children}
+      </div>
+    );
+  }
   return (
-    <label className={`field${wide ? ' wide' : ''}`}>
+    <label className={cls}>
       <span className="field-label">{label}</span>
       {children}
     </label>
