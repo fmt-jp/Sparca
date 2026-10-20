@@ -63,6 +63,27 @@ E2E は `@playwright/test` 1.56.1 に固定しています（クラウド環境�
 
 macOS では Ctrl の代わりに ⌘ も使えます。
 
+## 受け入れ基準とテスト
+
+仕様書 §16 の各項目は、実際の動作（状態・描画結果・書き出し画素）を確認するテストで検証しています。
+
+| # | 受け入れ基準 | テスト |
+|---|---|---|
+| 1 | 画像を読み込みキャンバスに配置 | `e2e/phase1.spec.ts` places an image… |
+| 2 | ベクター図形とテキストの作成 | `e2e/phase1.spec.ts` draws shapes and text…、`e2e/phase3.spec.ts` pen tool / polygon, star and arrow |
+| 3 | ベクターとラスターの重ね編集 | `e2e/phase1.spec.ts` places an image and stacks vector objects over it |
+| 4 | レイヤーの順序・表示・ロック | `e2e/phase1.spec.ts` layers: add, hide, lock and reorder、`src/model/commands.test.ts` |
+| 5 | ピクセル指定・比率指定のリサイズ | `e2e/phase2.spec.ts` image size: pixel and percent modes… |
+| 6 | バイキュービックを含む補間方式の選択 | 同上（最近傍で画素を検証）、`src/engine/engine.test.ts` resample（6方式すべて） |
+| 7 | キャンバス寸法変更と9点基準 | `e2e/phase2.spec.ts` canvas size…、`src/model/imageOps.test.ts`（仕様書の3例） |
+| 8 | 明るさ・コントラスト・彩度などの反映 | `e2e/phase2.spec.ts` manual color adjustments… / auto color…、`src/engine/engine.test.ts` color |
+| 9 | 画像全体・選択範囲へのぼかし | `e2e/phase2.spec.ts` range selection + blur… / whole-image blur… |
+| 10 | テキスト・図形のグロー・ドロップシャドウ | `e2e/phase3.spec.ts` glow and drop shadow…、`e2e/phase4.spec.ts` PNG export（影の画素を確認） |
+| 11 | 主要操作の Undo／Redo | `e2e/phase1.spec.ts`、`e2e/phase2.spec.ts`（色調整・トリミング）、`src/history/history.test.ts` |
+| 12 | プロジェクトの保存と再編集 | `e2e/phase1.spec.ts` saves a project and reopens it…、`e2e/robustness.spec.ts`、`src/io/project.test.ts` |
+| 13 | PNG・JPEG・WebP 書き出し | `e2e/phase4.spec.ts`（透明・塗りつぶし・品質・画素） |
+| 14 | 失敗時のエラー通知 | `e2e/phase1.spec.ts` rejects non-image files、`e2e/phase4.spec.ts` export failure、`e2e/robustness.spec.ts`（画像処理失敗・壊れたプロジェクト） |
+
 ## 主要な設計判断
 
 詳細は [`docs/design.md`](docs/design.md)。
@@ -81,7 +102,6 @@ macOS では Ctrl の代わりに ⌘ も使えます。
 - 画像の部分ぼかし（選択範囲へのぼかし）を後から個別に編集する UI はなく、「最後の1件を削除」または Undo で取り消す。
 - 画像トリミング後に既存の部分ぼかしの範囲は追従するが、トリミング範囲外になった部分は失われる。
 - 回転済みオブジェクトを含むグループを非等倍で拡大縮小すると、子の形は外接矩形ベースの近似になる。
-- パネル幅の変更は未対応。
 - ペンツールで作成したパスのアンカー／ハンドルを後から編集する UI は未実装（データはアンカーとハンドルを保持しているため、後から追加できる）。
 - 書き出しでは Web フォントを埋め込まないため、OS にインストールされたフォントで描画される。
 - SVG 書き出しは未実装（仕様上の拡張候補）。
