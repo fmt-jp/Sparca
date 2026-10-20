@@ -103,18 +103,32 @@ export function CanvasView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [doc.width, doc.height]);
 
-  // Keep the point under the cursor fixed when zooming via setZoomAt.
+  // Zooming at the pointer (zoom tool, Ctrl+wheel) keeps the point under the cursor fixed.
+  // Other zooming (buttons, menu, shortcuts) keeps the view centered: the whole canvas is
+  // centered when it fits, otherwise the document point at the middle of the view stays there.
   const zoomAnchor = useRef<{ doc: Point; client: Point } | null>(null);
+  const prevZoom = useRef(zoom);
   useLayoutEffect(() => {
-    const a = zoomAnchor.current;
     const el = scrollRef.current;
-    if (!a || !el || !stageRef.current) return;
-    zoomAnchor.current = null;
-    const r = stageRef.current.getBoundingClientRect();
-    const sx = r.left + PAD + a.doc.x * zoom;
-    const sy = r.top + PAD + a.doc.y * zoom;
-    el.scrollLeft += sx - a.client.x;
-    el.scrollTop += sy - a.client.y;
+    const before = prevZoom.current;
+    prevZoom.current = zoom;
+    if (!el || !stageRef.current) return;
+    const a = zoomAnchor.current;
+    if (a) {
+      zoomAnchor.current = null;
+      const r = stageRef.current.getBoundingClientRect();
+      el.scrollLeft += r.left + PAD + a.doc.x * zoom - a.client.x;
+      el.scrollTop += r.top + PAD + a.doc.y * zoom - a.client.y;
+      return;
+    }
+    if (before === zoom) return;
+    const { width: dw, height: dh } = editor.getState().doc;
+    const center = (scroll: number, view: number, size: number) =>
+      size * zoom <= view ? size / 2 : Math.min(size, Math.max(0, (scroll + view / 2 - PAD) / before));
+    const cx = center(el.scrollLeft, el.clientWidth, dw);
+    const cy = center(el.scrollTop, el.clientHeight, dh);
+    el.scrollLeft = PAD + cx * zoom - el.clientWidth / 2;
+    el.scrollTop = PAD + cy * zoom - el.clientHeight / 2;
   }, [zoom]);
 
   const setZoomAt = useCallback(

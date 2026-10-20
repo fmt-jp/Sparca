@@ -1,7 +1,7 @@
 // Image size dialog (spec §7.1, §7.2): pixel or percentage mode, aspect lock,
 // interpolation method, and a 1:1 before/after preview of the center of the image.
 import { useEffect, useState } from 'react';
-import { croppedSourceSize } from '../model/imageOps';
+import { coversCanvas, croppedSourceSize } from '../model/imageOps';
 import { findObject } from '../model/tree';
 import type { ImageObject, ResampleMethod } from '../model/types';
 import { METHOD_LABELS } from '../engine/resample';
@@ -26,6 +26,8 @@ export function ImageSizeDialog({ imageId, onClose }: { imageId: string; onClose
   const [width, setWidth] = useState(current.width);
   const [height, setHeight] = useState(current.height);
   const [method, setMethod] = useState<ResampleMethod>(current.method);
+  // On by default when the image fills the canvas exactly (e.g. a photo opened as a document).
+  const [fitCanvas, setFitCanvas] = useState(() => coversCanvas(doc, imageId));
 
   const pctW = (width / base.width) * 100;
   const pctH = (height / base.height) * 100;
@@ -56,7 +58,7 @@ export function ImageSizeDialog({ imageId, onClose }: { imageId: string; onClose
             className="primary"
             disabled={!!problem}
             onClick={() => {
-              if (resizeImage(editor, imageId, width, height, method)) onClose();
+              if (resizeImage(editor, imageId, width, height, method, fitCanvas)) onClose();
             }}
           >
             適用
@@ -111,6 +113,14 @@ export function ImageSizeDialog({ imageId, onClose }: { imageId: string; onClose
         </select>
       </Field>
       <div className="hint">{METHOD_LABELS[method].use}</div>
+      <Toggle checked={fitCanvas} onChange={setFitCanvas}>
+        キャンバスサイズも画像に合わせる
+      </Toggle>
+      <div className="hint">
+        {fitCanvas
+          ? `キャンバスを ${width} × ${height} px にし、画像を左上に合わせます（他のオブジェクトも画像と一緒に移動、拡大縮小はしません）。`
+          : `キャンバスは ${doc.width} × ${doc.height} px のままです。`}
+      </div>
       <div className={problem ? 'error-text' : 'result-size'} data-testid="result-size">
         {problem ?? `処理後: ${width} × ${height} px（${pctW.toFixed(1)}% × ${pctH.toFixed(1)}%）`}
       </div>

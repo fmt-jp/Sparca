@@ -1,6 +1,6 @@
 // Canvas and raster-object operations (spec §7). Document-level operations (canvas size,
 // document crop) and per-image operations (image crop, image resize) are kept separate.
-import { boxCenter, rotatePoint, toLocal, transformObject, IDENTITY_TRANSFORM, type Rect } from './geometry';
+import { boxCenter, objectBounds, rotatePoint, toLocal, transformObject, IDENTITY_TRANSFORM, type Rect } from './geometry';
 import { findObject } from './tree';
 import type { Id, ImageObject, MaskShape, Point, ResampleMethod, SparcaDocument } from './types';
 
@@ -166,4 +166,28 @@ export function addLocalBlur(doc: SparcaDocument, id: Id, mask: MaskShape, radiu
   const loc = findObject(doc, id);
   if (!loc || loc.object.type !== 'image') return;
   loc.object.pipeline.localEdits.push({ kind: 'blur', radius, mask });
+}
+
+/** Whether an object exactly covers the canvas (e.g. an image opened as a document). */
+export function coversCanvas(doc: SparcaDocument, id: Id): boolean {
+  const loc = findObject(doc, id);
+  if (!loc || loc.object.type === 'group') return false;
+  const b = loc.object.box;
+  const near = (a: number, c: number) => Math.abs(a - c) < 0.5;
+  return b.rotation === 0 && near(b.x, 0) && near(b.y, 0) && near(b.width, doc.width) && near(b.height, doc.height);
+}
+
+/**
+ * Make the canvas exactly the object's bounds: the object ends up at (0, 0) and every
+ * other object moves with it, keeping their positions relative to it. Nothing is scaled.
+ */
+export function fitCanvasToObject(doc: SparcaDocument, id: Id): void {
+  const loc = findObject(doc, id);
+  if (!loc) return;
+  const b = objectBounds(loc.object);
+  if (!b) return;
+  // Exact offset (not rounded) so the object lands precisely at (0, 0).
+  translateAll(doc, -b.x, -b.y);
+  doc.width = Math.max(1, Math.round(b.width));
+  doc.height = Math.max(1, Math.round(b.height));
 }

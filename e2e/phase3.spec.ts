@@ -61,8 +61,14 @@ test('polygon, star and arrow shapes with editable parameters', async ({ page })
   await drag(page, { x: c.x + 200, y: c.y + 50 }, { x: c.x + 300, y: c.y + 150 });
   await setNumber(page, '頂点数', '6');
   expect((await objects(page))[1].shape).toMatchObject({ kind: 'star', points: 6 });
-  await page.keyboard.press('n');
-  await page.keyboard.press('n');
+  // The arrow tool sits in the shape group next to the star: R cycles to it.
+  await page.keyboard.press('r');
+  expect(await state<string>(page, 's => s.tool')).toBe('arrow');
+  // It is also listed in the shape group's flyout.
+  await page.locator('[data-tool="arrow"]').click({ button: 'right' });
+  await expect(page.getByRole('menuitem', { name: '矢印ツール' })).toBeVisible();
+  await expect(page.getByRole('menuitem', { name: '角丸矩形ツール' })).toBeVisible();
+  await page.getByRole('menuitem', { name: '矢印ツール' }).click();
   expect(await state<string>(page, 's => s.tool')).toBe('arrow');
   await drag(page, { x: c.x + 50, y: c.y + 300 }, { x: c.x + 300, y: c.y + 300 });
   expect((await objects(page))[2].shape!.kind).toBe('arrow');
