@@ -19,6 +19,12 @@ npm run build      # 本番ビルド（dist/）
 npm run preview    # ビルド結果の確認
 ```
 
+## 公開（GitHub Pages）
+
+`main` ブランチに push すると `.github/workflows/deploy-pages.yml` が型チェック・単体テスト・ビルドを実行し、GitHub Pages に公開します（Actions タブから手動実行も可能）。
+初回のみ、リポジトリの Settings → Pages → Build and deployment → Source を「GitHub Actions」に設定してください。
+ビルドは相対パス（`base: './'`）なので、`https://<owner>.github.io/<repo>/` のようなサブパスでも動作します。
+
 ## テスト
 
 ```sh
