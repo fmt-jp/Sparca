@@ -1,0 +1,73 @@
+import JSZip from 'jszip';
+import { produce } from 'immer';
+import { describe, expect, it } from 'vitest';
+import { addLayer, addObject, groupObjects } from '../model/commands';
+import { createDocument, createImage, createShape, createText, defaultGeometry } from '../model/factory';
+import type { AssetMeta, SparcaDocument } from '../model/types';
+import { ProjectError, readProject, writeProject } from './project';
+
+const asset: AssetMeta = { id: 'a_1', mimeType: 'image/png', width: 2, height: 2, fileName: 'x.png' };
+const bytes = new Uint8Array([137, 80, 78, 71, 1, 2, 3]);
+
+function sampleDoc(): SparcaDocument {
+  return produce(createDocument(640, 480), (d) => {
+    d.assets[asset.id] = asset;
+    const l2 = addLayer(d);
+    l2.locked = true;
+    const img = createImage(asset, { x: 1, y: 2, width: 20, height: 20, rotation: 15 });
+    img.pipeline.adjust.brightness = 30;
+    addObject(d, d.layers[0].id, img);
+    const star = createShape({ kind: 'star', points: 7, innerRatio: 0.3 }, { x: 5, y: 5, width: 50, height: 50, rotation: 0 });
+    star.effects.dropShadow.enabled = true;
+    addObject(d, l2.id, star);
+    const t = createText('こんにちは\n2行目', { x: 0, y: 0, width: 100, height: 40, rotation: 0 });
+    t.effects.glow.enabled = true;
+    addObject(d, l2.id, t);
+    addObject(d, l2.id, createShape(defaultGeometry('arrow'), { x: 0, y: 0, width: 10, height: 10, rotation: 0 }));
+    groupObjects(d, [t.id, l2.children[2].id]);
+    d.background = { kind: 'transparent' };
+  });
+}
+
+describe('project format', () => {
+  it('round-trips a document with layers, groups, effects and images', async () => {
+    const doc = sampleDoc();
+    const data = await writeProject(doc, (id) => (id === asset.id ? new Blob([bytes]) : undefined));
+    const loaded = await readProject(data);
+    expect(loaded.doc).toEqual(doc);
+    const blob = loaded.assets.get(asset.id)!;
+    expect(new Uint8Array(await blob.arrayBuffer())).toEqual(bytes);
+    expect(blob.type).toBe('image/png');
+  });
+
+  it('drops metadata of assets no longer referenced', async () => {
+    const doc = produce(sampleDoc(), (d) => {
+      d.assets.unused = { id: 'unused', mimeType: 'image/png', width: 1, height: 1, fileName: '' };
+    });
+    const data = await writeProject(doc, () => new Blob([bytes]));
+    const loaded = await readProject(data);
+    expect(Object.keys(loaded.doc.assets)).toEqual([asset.id]);
+  });
+
+  it('rejects files that are not projects', async () => {
+    await expect(readProject(new Uint8Array([1, 2, 3]))).rejects.toThrow(ProjectError);
+  });
+
+  it('rejects projects with missing image data', async () => {
+    const data = await writeProject(sampleDoc(), () => new Blob([bytes]));
+    const zip = await JSZip.loadAsync(data);
+    zip.remove('assets/a_1.png');
+    const broken = await zip.generateAsync({ type: 'uint8array' });
+    await expect(readProject(broken)).rejects.toThrow(/x\.png/);
+  });
+
+  it('rejects malformed document.json', async () => {
+    const zip = new JSZip();
+    zip.file('document.json', JSON.stringify({ version: 1, width: -5, height: 10, layers: [], assets: {}, background: { kind: 'transparent' } }));
+    await expect(readProject(await zip.generateAsync({ type: 'uint8array' }))).rejects.toThrow(/寸法/);
+  });
+
+  it('refuses to save when image data is missing', async () => {
+    await expect(writeProject(sampleDoc(), () => undefined)).rejects.toThrow(ProjectError);
+  });
+});
