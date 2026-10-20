@@ -11,7 +11,6 @@ export function NewDocumentDialog({ onClose }: { onClose: () => void }) {
   const [color, setColor] = useState('#ffffff');
 
   function create() {
-    if (editor.dirty && !window.confirm('保存していない変更は失われます。新規ドキュメントを作成しますか？')) return;
     const ok = newDocument(editor, width, height, transparent ? { kind: 'transparent' } : { kind: 'color', color });
     if (ok) onClose();
   }

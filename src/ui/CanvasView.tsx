@@ -27,6 +27,7 @@ import { deleteSelectedNodes, editablePath, insertNode, nudgeNodes, selectedNode
 import { cancelCrop, commitCrop, startCrop } from '../store/imageActions';
 import { hasImageExtension } from '../io/imageFormats';
 import { isTextEntry } from './keyboard';
+import { TabBar } from './TabBar';
 import { editor, useEditor } from './useEditor';
 
 const PAD = 400; // workspace margin around the canvas, in screen px
@@ -95,23 +96,40 @@ export function CanvasView() {
   );
 
   // Center the canvas on first render and whenever the document size changes.
+  // Switching tabs restores that tab's last scroll position.
+  const activeTabId = useEditor((s) => s.activeTabId);
+  const tabScroll = useRef(new Map<string, Point>());
+  const shownTab = useRef(activeTabId);
   useLayoutEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
+    const saved = shownTab.current !== activeTabId ? tabScroll.current.get(activeTabId) : undefined;
+    shownTab.current = activeTabId;
+    if (saved) {
+      el.scrollLeft = saved.x;
+      el.scrollTop = saved.y;
+      return;
+    }
     el.scrollLeft = (el.scrollWidth - el.clientWidth) / 2;
     el.scrollTop = (el.scrollHeight - el.clientHeight) / 2;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [doc.width, doc.height]);
+  }, [doc.width, doc.height, activeTabId]);
 
   // Zooming at the pointer (zoom tool, Ctrl+wheel) keeps the point under the cursor fixed.
   // Other zooming (buttons, menu, shortcuts) keeps the view centered: the whole canvas is
   // centered when it fits, otherwise the document point at the middle of the view stays there.
   const zoomAnchor = useRef<{ doc: Point; client: Point } | null>(null);
   const prevZoom = useRef(zoom);
+  const zoomTab = useRef(activeTabId);
   useLayoutEffect(() => {
     const el = scrollRef.current;
     const before = prevZoom.current;
     prevZoom.current = zoom;
+    // A different tab brings its own zoom; its scroll position is restored above.
+    if (zoomTab.current !== activeTabId) {
+      zoomTab.current = activeTabId;
+      return;
+    }
     if (!el || !stageRef.current) return;
     const a = zoomAnchor.current;
     if (a) {
@@ -129,7 +147,7 @@ export function CanvasView() {
     const cy = center(el.scrollTop, el.clientHeight, dh);
     el.scrollLeft = PAD + cx * zoom - el.clientWidth / 2;
     el.scrollTop = PAD + cy * zoom - el.clientHeight / 2;
-  }, [zoom]);
+  }, [zoom, activeTabId]);
 
   const setZoomAt = useCallback(
     (next: number, clientX: number, clientY: number) => {
@@ -159,6 +177,15 @@ export function CanvasView() {
       window.removeEventListener('keyup', up);
     };
   }, []);
+
+  // In-progress drawing belongs to the document it started in.
+  useEffect(() => {
+    setPolyPoints(null);
+    setPenNodes(null);
+    setEditingText(null);
+    setMarquee(null);
+    gesture.current = null;
+  }, [activeTabId]);
 
   // Entering the crop tool picks the target (selected image or the document).
   useEffect(() => {
@@ -792,9 +819,11 @@ export function CanvasView() {
 
   return (
     <div className="center">
+    <TabBar />
     <div
       className="workspace"
       ref={scrollRef}
+      onScroll={(e) => tabScroll.current.set(activeTabId, { x: e.currentTarget.scrollLeft, y: e.currentTarget.scrollTop })}
       onDragOver={(e) => e.preventDefault()}
       onDrop={onDrop}
       data-testid="workspace"

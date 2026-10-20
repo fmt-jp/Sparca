@@ -46,7 +46,7 @@ export function App() {
   // Warn before closing the tab with unsaved changes.
   useEffect(() => {
     const onBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (editor.dirty) {
+      if (editor.anyDirty) {
         e.preventDefault();
         e.returnValue = '';
       }
