@@ -202,3 +202,34 @@ test('whole-image blur and before/after comparison', async ({ page }) => {
   await page.mouse.up();
   expect(await state<string | null>(page, 's => s.compareImageId')).toBeNull();
 });
+
+test('image size can also resize the canvas to the image (default for an opened photo)', async ({ page }) => {
+  // An image opened as a document fills the canvas → the option starts checked.
+  const chooser = page.waitForEvent('filechooser');
+  await page.getByRole('button', { name: 'ファイル' }).click();
+  await page.getByRole('menuitem', { name: /開く/ }).click();
+  await (await chooser).setFiles({ name: 'photo.png', mimeType: 'image/png', buffer: testPng() });
+  await expect.poll(() => state<number>(page, 's => s.doc.width')).toBe(200);
+  await page.getByRole('button', { name: '画像サイズ…' }).click();
+  const dialog = page.getByRole('dialog', { name: '画像サイズ' });
+  await expect(dialog.getByLabel('キャンバスサイズも画像に合わせる')).toBeChecked();
+  await dialog.getByLabel('比率指定').check();
+  await setNumber(page, '拡大・縮小率', '50', dialog);
+  await dialog.getByRole('button', { name: '適用' }).click();
+  expect(await state<number[]>(page, 's => [s.doc.width, s.doc.height]')).toEqual([100, 50]);
+  expect((await imageObject(page)).box).toMatchObject({ x: 0, y: 0, width: 100, height: 50 });
+  // One undo step restores both.
+  await page.keyboard.press('Control+z');
+  expect(await state<number[]>(page, 's => [s.doc.width, s.doc.height]')).toEqual([200, 100]);
+  expect((await imageObject(page)).box).toMatchObject({ x: 0, y: 0, width: 200, height: 100 });
+});
+
+test('image size leaves the canvas alone when the option is off (default for a placed image)', async ({ page }) => {
+  await placePng(page, 'img.png', testPng());
+  await page.getByRole('button', { name: '画像サイズ…' }).click();
+  const dialog = page.getByRole('dialog', { name: '画像サイズ' });
+  await expect(dialog.getByLabel('キャンバスサイズも画像に合わせる')).not.toBeChecked();
+  await setNumber(page, '幅', '100', dialog);
+  await dialog.getByRole('button', { name: '適用' }).click();
+  expect(await state<number[]>(page, 's => [s.doc.width, s.doc.height]')).toEqual([800, 600]);
+});

@@ -2,7 +2,7 @@ import { produce } from 'immer';
 import { describe, expect, it } from 'vitest';
 import { addObject } from './commands';
 import { createDocument, createImage, createShape, defaultGeometry } from './factory';
-import { cropDocument, cropImage, resizeCanvas, resizeImagePixels, selectionToImageMask } from './imageOps';
+import { coversCanvas, cropDocument, cropImage, fitCanvasToObject, resizeCanvas, resizeImagePixels, selectionToImageMask } from './imageOps';
 import { findObject } from './tree';
 import type { AssetMeta, ImageObject, SparcaDocument } from './types';
 
@@ -98,5 +98,37 @@ describe('selection masks', () => {
     const rotated = { ...o, box: { ...o.box, rotation: 90 } };
     const m = selectionToImageMask(rotated, { kind: 'rect', x: 0, y: 0, width: 10, height: 10 });
     expect(m.kind).toBe('polygon');
+  });
+});
+
+describe('fit canvas to an image after resizing it', () => {
+  it('canvas becomes the new image size; image at (0,0); other objects keep their offset', () => {
+    const { doc, img, shape } = setup(400, 200);
+    // Image covering the whole 400×200 canvas.
+    const covering = produce(doc, (d) => {
+      const o = findObject(d, img)!.object as ImageObject;
+      o.box = { x: 0, y: 0, width: 400, height: 200, rotation: 0 };
+    });
+    expect(coversCanvas(covering, img)).toBe(true);
+    expect(coversCanvas(covering, shape)).toBe(false);
+    const out = produce(covering, (d) => {
+      resizeImagePixels(d, img, 200, 100, 'bicubic', 400, 200); // keeps the center → box at (100, 50)
+      fitCanvasToObject(d, img);
+    });
+    expect([out.width, out.height]).toEqual([200, 100]);
+    expect(box(out, img)).toMatchObject({ x: 0, y: 0, width: 200, height: 100 });
+    expect(box(out, shape)).toMatchObject({ x: -100, y: -50, width: 50 }); // moved with the image, not scaled
+  });
+
+  it('lands exactly at (0,0) even when the resized image sits on a half pixel', () => {
+    const { doc, img } = setup(401, 201);
+    const out = produce(doc, (d) => {
+      const o = findObject(d, img)!.object as ImageObject;
+      o.box = { x: 0, y: 0, width: 401, height: 201, rotation: 0 };
+      resizeImagePixels(d, img, 200, 100, 'bicubic', 400, 200); // center 200.5 → x = 100.5
+      fitCanvasToObject(d, img);
+    });
+    expect(box(out, img)).toMatchObject({ x: 0, y: 0, width: 200, height: 100 });
+    expect([out.width, out.height]).toEqual([200, 100]);
   });
 });

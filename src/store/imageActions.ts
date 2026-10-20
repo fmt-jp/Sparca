@@ -1,7 +1,7 @@
 // Raster-related editor actions (spec §7).
 import { updateObject } from '../model/commands';
 import { boundsOfPoints, boxCorners, objectBounds, rectsIntersect, toLocal, type Rect } from '../model/geometry';
-import { addLocalBlur, cropDocument, cropImage, resizeCanvas, resizeImagePixels, selectionToImageMask, type Anchor } from '../model/imageOps';
+import { addLocalBlur, cropDocument, cropImage, fitCanvasToObject, resizeCanvas, resizeImagePixels, selectionToImageMask, type Anchor } from '../model/imageOps';
 import { allObjects, findObject, isEffectivelyLocked, isEffectivelyVisible } from '../model/tree';
 import type { ColorAdjust, Id, ImageObject, MaskShape, ResampleMethod, SceneObject } from '../model/types';
 import { imageCache } from '../render/imageCache';
@@ -96,7 +96,11 @@ export function blurSelection(ed: EditorStore, radius: number): boolean {
   return true;
 }
 
-export function resizeImage(ed: EditorStore, id: Id, width: number, height: number, method: ResampleMethod): boolean {
+/**
+ * Set an image's pixel size. With `fitCanvas`, the canvas also becomes the image's new size
+ * (image at 0,0; other objects keep their position relative to it) in the same undo step.
+ */
+export function resizeImage(ed: EditorStore, id: Id, width: number, height: number, method: ResampleMethod, fitCanvas = false): boolean {
   const problem = validateDimensions(width, height);
   if (problem) {
     ed.notify('error', problem);
@@ -106,7 +110,10 @@ export function resizeImage(ed: EditorStore, id: Id, width: number, height: numb
   const loc = findObject(doc, id);
   if (!loc || loc.object.type !== 'image') return false;
   const meta = doc.assets[loc.object.assetId];
-  ed.edit('画像サイズの変更', (d) => resizeImagePixels(d, id, width, height, method, meta.width, meta.height));
+  ed.edit(fitCanvas ? '画像サイズとキャンバスサイズの変更' : '画像サイズの変更', (d) => {
+    resizeImagePixels(d, id, width, height, method, meta.width, meta.height);
+    if (fitCanvas) fitCanvasToObject(d, id);
+  });
   return true;
 }
 

@@ -189,7 +189,7 @@ export function MenuBar({ onNew }: { onNew: () => void }) {
           ↷
         </button>
         <span className="zoom-control">
-          <button type="button" title="ズームアウト" onClick={zoomOut}>
+          <button type="button" title="ズームアウト" aria-label="ズームアウト" onClick={zoomOut}>
             −
           </button>
           <select
@@ -204,7 +204,7 @@ export function MenuBar({ onNew }: { onNew: () => void }) {
               </option>
             ))}
           </select>
-          <button type="button" title="ズームイン" onClick={zoomIn}>
+          <button type="button" title="ズームイン" aria-label="ズームイン" onClick={zoomIn}>
             ＋
           </button>
         </span>

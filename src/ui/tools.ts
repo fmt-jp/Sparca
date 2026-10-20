@@ -37,14 +37,7 @@ export const TOOL_GROUPS: ToolGroup[] = [
       { id: 'polygon-lasso', label: '多角形選択ツール（クリックで頂点、始点クリック／ダブルクリック／Enter で閉じる）', key: 'L' },
     ],
   },
-  {
-    id: 'line',
-    label: 'ライン',
-    tools: [
-      { id: 'line', label: 'ラインツール', key: 'N' },
-      { id: 'arrow', label: '矢印ツール', key: 'N' },
-    ],
-  },
+  { id: 'line', label: 'ライン', tools: [{ id: 'line', label: 'ラインツール', key: 'N' }] },
   { id: 'pen', label: 'ペン', tools: [{ id: 'pen', label: 'ペンツール（クリックで角、ドラッグで曲線、始点クリックで閉じる、Enter で終了）', key: 'P' }] },
   {
     id: 'shape',
@@ -55,6 +48,7 @@ export const TOOL_GROUPS: ToolGroup[] = [
       { id: 'ellipse', label: '楕円ツール', key: 'R' },
       { id: 'polygon', label: '多角形ツール', key: 'R' },
       { id: 'star', label: '星ツール', key: 'R' },
+      { id: 'arrow', label: '矢印ツール', key: 'R' },
     ],
   },
   { id: 'text', label: 'テキスト', tools: [{ id: 'text', label: 'テキストツール', key: 'T' }] },
