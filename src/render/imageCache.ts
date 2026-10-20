@@ -57,6 +57,8 @@ export class ImageRenderCache {
   private jobSeq = 0;
   private analyzeWaiters = new Map<number, { resolve: (p: AutoColorParams) => void; reject: (e: Error) => void }>();
   private fullTimers = new Map<string, number>();
+  /** Pipelines that failed to process; not retried, so the user is told once. */
+  private failed = new Set<string>();
   private errorHandler: ((message: string) => void) | null = null;
   /** Progress of the running full-resolution job (0..1), or null. */
   progress: number | null = null;
@@ -95,8 +97,12 @@ export class ImageRenderCache {
     return true;
   }
 
+  private signature(assetId: string, p: ImagePipeline): string {
+    return `${assetId}|${JSON.stringify(p)}`;
+  }
+
   private key(assetId: string, p: ImagePipeline, full: boolean): string {
-    return `${assetId}|${full ? 'full' : 'preview'}|${JSON.stringify(p)}`;
+    return `${full ? 'full' : 'preview'}|${this.signature(assetId, p)}`;
   }
 
   private previewScale(assetId: string, p: ImagePipeline): number {
@@ -113,6 +119,7 @@ export class ImageRenderCache {
     const entry = assets.get(o.assetId);
     if (!entry) return undefined;
     if (original || isIdentityPipeline(o.pipeline)) return entry.url;
+    if (this.failed.has(this.signature(o.assetId, o.pipeline))) return this.lastShown.get(o.id);
     const full = this.results.get(this.key(o.assetId, o.pipeline, true));
     if (full) return this.show(o.id, full.url);
     const scale = this.previewScale(o.assetId, o.pipeline);
@@ -227,7 +234,17 @@ export class ImageRenderCache {
     } else if (msg.type === 'error') {
       const err = new Error(`画像処理に失敗しました: ${msg.message}`);
       job.waiters.forEach((w) => w.reject(err));
-      this.errorHandler?.(err.message);
+      const sig = this.signature(job.assetId, job.pipeline);
+      if (!this.failed.has(sig)) {
+        this.failed.add(sig);
+        // Drop the pending full-resolution render of the same parameters.
+        this.queue = this.queue.filter((j) => this.signature(j.assetId, j.pipeline) !== sig || j.waiters.length > 0);
+        if (job.objectId) {
+          clearTimeout(this.fullTimers.get(job.objectId));
+          this.fullTimers.delete(job.objectId);
+        }
+        this.errorHandler?.(`${err.message}。元に戻す（Ctrl+Z）で直前の状態に戻せます。`);
+      }
     }
     this.changed();
     this.pump();

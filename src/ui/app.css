@@ -78,6 +78,7 @@ kbd {
 }
 
 .app {
+  position: relative;
   display: grid;
   height: 100vh;
   grid-template-columns: 48px minmax(0, 1fr) 260px;
@@ -422,7 +423,6 @@ kbd {
   grid-area: props;
   background: var(--panel);
   border-top: 1px solid var(--border);
-  max-height: 34vh;
   overflow: auto;
   padding: 4px 8px;
 }
@@ -759,4 +759,23 @@ kbd {
   height: 18px;
   border: 1px solid #000;
   border-radius: 3px;
+}
+
+.splitter {
+  position: absolute;
+  z-index: 20;
+}
+.splitter-v {
+  top: 38px;
+  bottom: 0;
+  width: 6px;
+  cursor: col-resize;
+}
+.splitter-h {
+  left: 48px;
+  height: 6px;
+  cursor: row-resize;
+}
+.splitter:hover {
+  background: rgba(76, 155, 245, 0.35);
 }

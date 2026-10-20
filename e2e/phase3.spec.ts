@@ -135,3 +135,12 @@ test('eyedropper picks a color from an image and applies it to the selected shap
   await page.mouse.click(c.x + 700, c.y + 100); // white background
   await expect.poll(async () => (await objects(page)).find((o) => o.type === 'shape')!.stroke).toBe('#ffffff');
 });
+
+test('tool shortcuts still work after clicking a checkbox in the properties panel', async ({ page }) => {
+  const c = await canvasBox(page);
+  await page.keyboard.press('r');
+  await drag(page, { x: c.x + 50, y: c.y + 50 }, { x: c.x + 100, y: c.y + 100 });
+  await page.getByLabel('グロー', { exact: true }).check();
+  await page.keyboard.press('p');
+  expect(await state<string>(page, 's => s.tool')).toBe('pen');
+});

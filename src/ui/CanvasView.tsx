@@ -23,6 +23,7 @@ import { placeImageFiles, writableLayer } from '../store/actions';
 import type { PixelSelection, ToolId } from '../store/editor';
 import { pickColorAt } from '../store/colorActions';
 import { cancelCrop, commitCrop, startCrop } from '../store/imageActions';
+import { isTextEntry } from './keyboard';
 import { editor, useEditor } from './useEditor';
 
 const PAD = 400; // workspace margin around the canvas, in screen px
@@ -122,7 +123,8 @@ export function CanvasView() {
   // Space = temporary hand tool.
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
-      if (e.code === 'Space' && !isTyping(e) && !e.repeat) {
+      const onControl = e.target instanceof HTMLElement && /^(INPUT|BUTTON|SELECT|TEXTAREA)$/.test(e.target.tagName);
+      if (e.code === 'Space' && !onControl && !isTyping(e) && !e.repeat) {
         setSpaceDown(true);
         e.preventDefault();
       }
@@ -838,8 +840,7 @@ function objectsInRect(doc: SparcaDocument, r: Rect): Id[] {
 }
 
 function isTyping(e: KeyboardEvent): boolean {
-  const t = e.target as HTMLElement | null;
-  return !!t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable);
+  return isTextEntry(e.target);
 }
 
 function SelectionOverlay({

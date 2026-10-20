@@ -13,8 +13,8 @@ import {
 } from '../model/commands';
 import { createDocument, createImage } from '../model/factory';
 import { IDENTITY_TRANSFORM, unionBounds } from '../model/geometry';
-import { findObject, isEffectivelyLocked } from '../model/tree';
-import type { Background, SceneObject } from '../model/types';
+import { findObject, isEffectivelyLocked, walkObjects } from '../model/tree';
+import type { Background, SceneObject, SparcaDocument } from '../model/types';
 import { isAbort, pickFiles, saveBlob, type FileSystemFileHandleLike } from '../io/files';
 import { PROJECT_EXTENSION, PROJECT_MIME, ProjectError, readProject, writeProject } from '../io/project';
 import { assets, ImageLoadError, importImageFile, validateDimensions } from './assets';
@@ -22,6 +22,8 @@ import type { EditorStore } from './editor';
 
 let projectHandle: FileSystemFileHandleLike | null = null;
 let clipboard: SceneObject[] = [];
+/** Metadata of images referenced by the clipboard, so pasting into another document works. */
+let clipboardAssets: SparcaDocument['assets'] = {};
 let pasteCount = 0;
 
 const IMAGE_ACCEPT = 'image/png,image/jpeg,image/webp,image/gif,image/bmp,image/avif';
@@ -33,7 +35,7 @@ export function newDocument(ed: EditorStore, width: number, height: number, back
     return false;
   }
   const doc = { ...createDocument(Math.round(width), Math.round(height)), background };
-  assets.clear();
+  // Assets are immutable and uniquely keyed, so they are kept: the clipboard may still use them.
   projectHandle = null;
   ed.loadDocument(doc, UNTITLED);
   return true;
@@ -133,7 +135,6 @@ export async function openProjectFile(ed: EditorStore, file: File): Promise<void
   try {
     ed.set({ busy: '読み込み中…' });
     const { doc, assets: blobs } = await readProject(await file.arrayBuffer());
-    assets.clear();
     for (const [id, blob] of blobs) assets.put(doc.assets[id], blob);
     projectHandle = null;
     ed.loadDocument(doc, file.name);
@@ -145,6 +146,7 @@ export async function openProjectFile(ed: EditorStore, file: File): Promise<void
 }
 
 export async function chooseAndOpenProject(ed: EditorStore): Promise<void> {
+  if (ed.dirty && !window.confirm('保存していない変更は失われます。別のプロジェクトを開きますか？')) return;
   const [file] = await pickFiles(`${PROJECT_EXTENSION},${PROJECT_MIME}`);
   if (file) await openProjectFile(ed, file);
 }
@@ -185,6 +187,10 @@ export function duplicateSelection(ed: EditorStore): void {
 export function copySelection(ed: EditorStore): void {
   const { doc, selection } = ed.getState();
   clipboard = selection.map((id) => findObject(doc, id)?.object).filter((o): o is SceneObject => !!o);
+  clipboardAssets = {};
+  walkObjects(clipboard, (o) => {
+    if (o.type === 'image' && doc.assets[o.assetId]) clipboardAssets[o.assetId] = doc.assets[o.assetId];
+  });
   pasteCount = 0;
 }
 
@@ -200,8 +206,10 @@ export function paste(ed: EditorStore): void {
   pasteCount += 1;
   let ids: string[] = [];
   const objs = clipboard;
+  const metas = clipboardAssets;
   const offset = pasteCount * 10;
   ed.edit('ペースト', (d) => {
+    for (const [id, meta] of Object.entries(metas)) if (!d.assets[id]) d.assets[id] = meta;
     ids = pasteObjects(d, layerId, objs, offset, offset);
   });
   ed.select(ids);

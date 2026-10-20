@@ -26,7 +26,9 @@ import { MenuBar, zoomIn, zoomOut, zoomToFit } from './MenuBar';
 import { NewDocumentDialog } from './NewDocumentDialog';
 import { PropertiesPanel } from './PropertiesPanel';
 import { Toolbar } from './Toolbar';
+import { isTextEntry } from './keyboard';
 import { TOOL_GROUPS } from './tools';
+import { startSplitterDrag, usePanelSizes } from './usePanelSizes';
 import { editor, useEditor } from './useEditor';
 
 export function App() {
@@ -35,6 +37,7 @@ export function App() {
   const busy = useEditor((s) => s.busy);
   const fileName = useEditor((s) => s.fileName);
   const dirty = useEditor((s) => s.doc !== s.savedDoc);
+  const [sizes, setSizes] = usePanelSizes();
 
   useEffect(() => {
     document.title = `${dirty ? '● ' : ''}${fileName} — Sparca`;
@@ -55,8 +58,7 @@ export function App() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (dialog) return;
-      const t = e.target as HTMLElement;
-      if (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable) return;
+      if (isTextEntry(e.target)) return;
       if (handleShortcut(e)) e.preventDefault();
     };
     window.addEventListener('keydown', onKey);
@@ -64,12 +66,37 @@ export function App() {
   }, [dialog]);
 
   return (
-    <div className="app">
+    <div
+      className="app"
+      style={{ gridTemplateColumns: `48px minmax(0, 1fr) ${sizes.layersWidth}px`, gridTemplateRows: `38px minmax(0, 1fr) ${sizes.propsHeight}px` }}
+    >
       <MenuBar onNew={() => openDialog({ kind: 'new' })} />
       <Toolbar />
       <CanvasView />
       <LayersPanel />
       <PropertiesPanel />
+      <div
+        className="splitter splitter-v"
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="レイヤーパネルの幅"
+        style={{ right: sizes.layersWidth - 3 }}
+        onPointerDown={(e) => {
+          const w0 = sizes.layersWidth;
+          startSplitterDrag(e, (dx) => setSizes({ layersWidth: w0 - dx }));
+        }}
+      />
+      <div
+        className="splitter splitter-h"
+        role="separator"
+        aria-orientation="horizontal"
+        aria-label="プロパティパネルの高さ"
+        style={{ bottom: sizes.propsHeight - 3, right: sizes.layersWidth }}
+        onPointerDown={(e) => {
+          const h0 = sizes.propsHeight;
+          startSplitterDrag(e, (_dx, dy) => setSizes({ propsHeight: h0 - dy }));
+        }}
+      />
       {dialog?.kind === 'new' && <NewDocumentDialog onClose={closeDialog} />}
       {dialog?.kind === 'canvas-size' && <CanvasSizeDialog onClose={closeDialog} />}
       {dialog?.kind === 'image-size' && <ImageSizeDialog imageId={dialog.imageId} onClose={closeDialog} />}
