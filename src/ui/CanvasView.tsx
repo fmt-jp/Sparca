@@ -40,8 +40,11 @@ const SHAPE_TOOLS: Partial<Record<ToolId, ShapeGeometry['kind']>> = {
   polygon: 'polygon',
   star: 'star',
   line: 'line',
-  arrow: 'arrow',
+  arrow: 'block-arrow',
 };
+
+/** Default head width of a new block arrow relative to its length. */
+const BLOCK_ARROW_ASPECT = 0.55;
 
 type Gesture =
   | { kind: 'move'; start: Point; originals: Map<Id, SceneObject>; moved: boolean }
@@ -671,11 +674,12 @@ export function CanvasView() {
       case 'create': {
         if (!g.id) {
           // Click without drag: create a default-sized shape at the point.
-          const size = 100;
           const kind = SHAPE_TOOLS[g.tool]!;
-          const start = kind === 'line' || kind === 'arrow' ? { x: g.start.x - size / 2, y: g.start.y } : { x: g.start.x - size / 2, y: g.start.y - size / 2 };
+          const directional = kind === 'line' || kind === 'arrow' || kind === 'block-arrow';
+          const size = kind === 'block-arrow' ? 160 : 100;
+          const start = directional ? { x: g.start.x - size / 2, y: g.start.y } : { x: g.start.x - size / 2, y: g.start.y - size / 2 };
           g.start = start;
-          g.current = kind === 'line' || kind === 'arrow' ? { x: start.x + size, y: start.y } : { x: start.x + size, y: start.y + size };
+          g.current = directional ? { x: start.x + size, y: start.y } : { x: start.x + size, y: start.y + size };
           updateCreate(g, false, false);
         }
         editor.endGesture('図形の作成');
@@ -725,7 +729,17 @@ export function CanvasView() {
     let box: Box;
     let geometry = defaultGeometry(kind);
     if (g.tool === 'rounded-rect') geometry = { kind: 'rect', cornerRadius: 12 };
-    if (kind === 'line' || kind === 'arrow') {
+    if (kind === 'block-arrow') {
+      // Drag from tail to tip: length and direction from the drag, head width from the length.
+      const a = g.start;
+      const b = shift ? snap45(a, g.current) : g.current;
+      const len = Math.max(1, Math.hypot(b.x - a.x, b.y - a.y));
+      const h = Math.max(1, len * BLOCK_ARROW_ASPECT);
+      const cx = (a.x + b.x) / 2;
+      const cy = (a.y + b.y) / 2;
+      const rotation = Math.hypot(b.x - a.x, b.y - a.y) < 1e-6 ? 0 : angleTo(a, b);
+      box = { x: cx - len / 2, y: cy - h / 2, width: len, height: h, rotation: Math.round(rotation * 100) / 100 };
+    } else if (kind === 'line' || kind === 'arrow') {
       const a = g.start;
       const b = shift ? snap45(a, g.current) : g.current;
       const r = { x: Math.min(a.x, b.x), y: Math.min(a.y, b.y), width: Math.abs(b.x - a.x), height: Math.abs(b.y - a.y) };

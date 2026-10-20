@@ -10,6 +10,7 @@ import { openDialog } from './dialogs';
 import { moveAnchors, pathToDoc } from '../model/pathEdit';
 import { convertSelectedNodes, deleteSelectedNodes, setPathClosed, setPathNodes } from '../store/pathActions';
 import { measureText } from '../render/text';
+import { arrowTipAngle, headForTipAngle } from '../render/shapes';
 import { alignSelection, groupSelection, ungroupSelection, type AlignOp } from '../store/actions';
 import { ColorInput, Field, NumberInput, SliderInput, Toggle } from './controls';
 import { editor, useEditor } from './useEditor';
@@ -225,6 +226,42 @@ function ShapeSection({ o }: { o: ShapeObject }) {
             <Field label="内径比">
               <SliderInput label="内径比" value={Math.round(g.innerRatio * 100)} min={5} max={95} suffix="%" onChange={(v) => setShape({ innerRatio: v / 100 }, '星の形状の変更', 'star')} />
             </Field>
+          </>
+        )}
+        {g.kind === 'block-arrow' && (
+          <>
+            <Field label="軸の太さ">
+              <SliderInput
+                label="軸の太さ"
+                value={Math.round(g.shaft * 100)}
+                min={5}
+                max={100}
+                suffix="%"
+                onChange={(v) => setShape({ shaft: v / 100 }, '矢印の太さの変更', 'arrow-shaft')}
+              />
+            </Field>
+            <Field label="矢じりの長さ">
+              <SliderInput
+                label="矢じりの長さ"
+                value={Math.round(g.head * 100)}
+                min={5}
+                max={95}
+                suffix="%"
+                onChange={(v) => setShape({ head: v / 100 }, '矢じりの長さの変更', 'arrow-head')}
+              />
+            </Field>
+            <Field label="先端の角度">
+              <NumberInput
+                label="先端の角度"
+                value={arrowTipAngle(g.head * o.box.width, o.box.height)}
+                min={10}
+                max={170}
+                precision={1}
+                suffix="°"
+                onCommit={(a) => setShape({ head: headForTipAngle(a, o.box.width, o.box.height) }, '先端の角度の変更')}
+              />
+            </Field>
+            <span className="hint">向きは「回転」で変更できます（0° = 右向き）。</span>
           </>
         )}
         {g.kind === 'arrow' && (

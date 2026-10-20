@@ -77,8 +77,38 @@ export interface ShapePaths {
   open: boolean;
 }
 
+/** Block arrow outline pointing right: tail at x=0, tip at (w, h/2). */
+export function blockArrowPoints(shaft: number, head: number, w: number, h: number): Point[] {
+  const sh = Math.min(1, Math.max(0.02, shaft)) * h;
+  const hx = w * (1 - Math.min(0.98, Math.max(0.02, head)));
+  const y0 = (h - sh) / 2;
+  const y1 = y0 + sh;
+  return [
+    { x: 0, y: y0 },
+    { x: hx, y: y0 },
+    { x: hx, y: 0 },
+    { x: w, y: h / 2 },
+    { x: hx, y: h },
+    { x: hx, y: y1 },
+    { x: 0, y: y1 },
+  ];
+}
+
+/** Full angle at the arrow tip in degrees, for a head of the given size in px. */
+export function arrowTipAngle(headLength: number, headWidth: number): number {
+  return (2 * Math.atan(headWidth / 2 / Math.max(1e-6, headLength)) * 180) / Math.PI;
+}
+
+/** Head length (fraction of the box width) that gives the requested tip angle. */
+export function headForTipAngle(angleDeg: number, w: number, h: number): number {
+  const a = (Math.min(170, Math.max(10, angleDeg)) * Math.PI) / 180;
+  return Math.min(0.98, Math.max(0.02, h / 2 / Math.tan(a / 2) / w));
+}
+
 export function shapePaths(g: ShapeGeometry, w: number, h: number, strokeWidth: number): ShapePaths {
   switch (g.kind) {
+    case 'block-arrow':
+      return { d: polyD(blockArrowPoints(g.shaft, g.head, w, h), true), open: false };
     case 'rect':
       return { d: roundedRectD(w, h, g.cornerRadius), open: false };
     case 'ellipse':

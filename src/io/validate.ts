@@ -33,7 +33,7 @@ function arr(o: Obj, k: string, where: string): unknown[] {
 }
 
 const OBJECT_TYPES = new Set(['shape', 'path', 'text', 'image', 'group']);
-const SHAPE_KINDS = new Set(['rect', 'ellipse', 'polygon', 'star', 'line', 'arrow']);
+const SHAPE_KINDS = new Set(['rect', 'ellipse', 'polygon', 'star', 'line', 'arrow', 'block-arrow']);
 
 export function validateDocument(raw: unknown): Result {
   try {

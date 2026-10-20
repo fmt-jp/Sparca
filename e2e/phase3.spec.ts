@@ -71,8 +71,8 @@ test('polygon, star and arrow shapes with editable parameters', async ({ page })
   await page.getByRole('menuitem', { name: '矢印ツール' }).click();
   expect(await state<string>(page, 's => s.tool')).toBe('arrow');
   await drag(page, { x: c.x + 50, y: c.y + 300 }, { x: c.x + 300, y: c.y + 300 });
-  expect((await objects(page))[2].shape!.kind).toBe('arrow');
-  await expect(page.locator('[data-testid=canvas] path')).toHaveCount(5); // polygon, star, arrow shaft + head + invisible hit area
+  expect((await objects(page))[2].shape!.kind).toBe('block-arrow');
+  await expect(page.locator('[data-testid=canvas] path')).toHaveCount(3); // polygon, star, block arrow
 });
 
 test('glow and drop shadow on text and shapes are kept as editable settings', async ({ page }) => {

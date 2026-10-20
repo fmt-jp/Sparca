@@ -32,7 +32,7 @@ const paths: Record<string, ReactElement> = {
     </>
   ),
   line: <path {...S} d="M4 16 L16 4" />,
-  arrow: <path {...S} d="M4 16 L15 5 M9 4.5 H15.5 V11" />,
+  arrow: <path {...S} d="M2.5 7.5 H10 V3.5 L17.5 10 L10 16.5 V12.5 H2.5 Z" />,
   pen: (
     <>
       <path {...S} d="M10 2.5 L15 11 L12 17 H8 L5 11 Z" />
