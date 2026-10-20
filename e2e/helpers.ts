@@ -117,3 +117,59 @@ export async function decodePixels(page: Page, bytes: Buffer, mime: string, poin
     { b64: bytes.toString('base64'), mime, points },
   );
 }
+
+/** Build a 24-bit uncompressed BMP. */
+export function makeBmp(width: number, height: number, pixel: (x: number, y: number) => [number, number, number]): Buffer {
+  const rowSize = Math.ceil((width * 3) / 4) * 4;
+  const size = 54 + rowSize * height;
+  const b = Buffer.alloc(size);
+  b.write('BM', 0, 'ascii');
+  b.writeUInt32LE(size, 2);
+  b.writeUInt32LE(54, 10);
+  b.writeUInt32LE(40, 14);
+  b.writeInt32LE(width, 18);
+  b.writeInt32LE(height, 22);
+  b.writeUInt16LE(1, 26);
+  b.writeUInt16LE(24, 28);
+  b.writeUInt32LE(rowSize * height, 34);
+  for (let y = 0; y < height; y++) {
+    const row = 54 + (height - 1 - y) * rowSize; // bottom-up
+    for (let x = 0; x < width; x++) {
+      const [r, g, bl] = pixel(x, y);
+      b[row + x * 3] = bl;
+      b[row + x * 3 + 1] = g;
+      b[row + x * 3 + 2] = r;
+    }
+  }
+  return b;
+}
+
+/** 1×1 red GIF89a. */
+export const RED_GIF = Buffer.from('R0lGODlhAQABAIABAP8AAP///ywAAAAAAQABAAACAkQBADs=', 'base64');
+
+/** Encode a solid-color JPEG in the browser. */
+export async function makeJpeg(page: Page, width: number, height: number, color: string): Promise<Buffer> {
+  const b64 = await page.evaluate(
+    async ({ width, height, color }) => {
+      const c = new OffscreenCanvas(width, height);
+      const ctx = c.getContext('2d')!;
+      ctx.fillStyle = color;
+      ctx.fillRect(0, 0, width, height);
+      const blob = await c.convertToBlob({ type: 'image/jpeg', quality: 0.95 });
+      const bin = new Uint8Array(await blob.arrayBuffer());
+      let s = '';
+      for (const v of bin) s += String.fromCharCode(v);
+      return btoa(s);
+    },
+    { width, height, color },
+  );
+  return Buffer.from(b64, 'base64');
+}
+
+/** File → 開く with the given file. */
+export async function openFile(page: Page, name: string, buffer: Buffer, mimeType = '') {
+  const chooser = page.waitForEvent('filechooser');
+  await page.getByRole('button', { name: 'ファイル' }).click();
+  await page.getByRole('menuitem', { name: /開く/ }).click();
+  await (await chooser).setFiles({ name, mimeType, buffer });
+}

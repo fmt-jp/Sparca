@@ -76,7 +76,7 @@ export function MenuBar({ onNew }: { onNew: () => void }) {
       items: [
         // No shortcut: browsers reserve Ctrl+N for a new window.
         { label: '新規…', action: onNew },
-        { label: '開く…', shortcut: `${mod}O`, action: () => void chooseAndOpenProject(editor) },
+        { label: '開く…（.sparca／PNG・JPEG・GIF・BMP）', shortcut: `${mod}O`, action: () => void chooseAndOpenProject(editor) },
         { separator: true, label: '' },
         { label: '保存', shortcut: `${mod}S`, action: () => void saveProject(editor) },
         { label: '名前を付けて保存…', shortcut: `${mod}Shift+S`, action: () => void saveProject(editor, true) },
