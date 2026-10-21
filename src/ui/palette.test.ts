@@ -20,3 +20,23 @@ describe('swatch palette', () => {
     expect(parseHex('red')).toBeNull();
   });
 });
+
+import { hexToRgb, hsvToRgb, rgbToHex, rgbToHsv } from './palette';
+
+describe('color conversion', () => {
+  it('round-trips hex ↔ rgb ↔ hsv', () => {
+    for (const hex of ['#000000', '#ffffff', '#ff0000', '#00ff00', '#0000ff', '#c8c8c8', '#ff6600', '#123456', '#abcdef']) {
+      const [r, g, b] = hexToRgb(hex);
+      expect(rgbToHex(r, g, b)).toBe(hex);
+      const back = hsvToRgb(rgbToHsv(r, g, b));
+      expect(rgbToHex(...back)).toBe(hex);
+    }
+  });
+
+  it('gives the expected hue, saturation and value', () => {
+    expect(rgbToHsv(255, 0, 0)).toEqual({ h: 0, s: 1, v: 1 });
+    expect(rgbToHsv(0, 0, 255).h).toBeCloseTo(240);
+    expect(rgbToHsv(128, 128, 128).s).toBe(0);
+    expect(hsvToRgb({ h: 120, s: 1, v: 1 })).toEqual([0, 255, 0]);
+  });
+});
