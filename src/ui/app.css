@@ -1040,3 +1040,104 @@ kbd {
   opacity: 0;
   pointer-events: none;
 }
+
+/* ---- Color mixer (その他の色) ---- */
+.mixer-title {
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+.mixer-main {
+  display: flex;
+  gap: 8px;
+}
+.mixer-sv {
+  position: relative;
+  width: 150px;
+  height: 150px;
+  border: 1px solid #777;
+  cursor: crosshair;
+  touch-action: none;
+}
+.mixer-sv-mark {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  margin: -5px 0 0 -5px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px #000;
+  pointer-events: none;
+}
+.mixer-hue {
+  position: relative;
+  width: 16px;
+  height: 150px;
+  border: 1px solid #777;
+  background: linear-gradient(to bottom, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00);
+  cursor: pointer;
+  touch-action: none;
+}
+.mixer-hue-mark {
+  position: absolute;
+  left: -3px;
+  right: -3px;
+  height: 4px;
+  margin-top: -2px;
+  border: 1px solid #000;
+  background: #fff;
+  pointer-events: none;
+}
+.mixer-side {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+.mixer-compare {
+  display: flex;
+  border: 1px solid #777;
+  height: 30px;
+}
+.mixer-compare span {
+  flex: 1;
+}
+.mixer-compare-labels {
+  display: flex;
+  font-size: 10px;
+  color: #555;
+}
+.mixer-compare-labels span {
+  flex: 1;
+  text-align: center;
+}
+.mixer-channel {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+}
+.mixer-channel input {
+  width: 100%;
+  min-width: 0;
+  background: #fff !important;
+  color: #111 !important;
+  border: 1px solid #999 !important;
+}
+.mixer-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 8px;
+}
+.mixer-buttons button {
+  background: #e4e4e4;
+  color: #111;
+  border-color: #999;
+}
+.mixer-buttons .mixer-ok {
+  background: var(--accent);
+  border-color: var(--accent-dim);
+  color: #fff;
+  min-width: 64px;
+}

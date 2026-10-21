@@ -72,3 +72,40 @@ test('the same palette is used for text color, effects and the background', asyn
   await page.getByRole('dialog', { name: '影の色のパレット' }).getByRole('button', { name: '#0000ff', exact: true }).first().click();
   expect(await state<string>(page, 's => s.doc.layers[0].children[0].effects.dropShadow.color')).toBe('#0000ff');
 });
+
+test('その他の色: picking a color does not apply it until OK; キャンセル returns to the swatches', async ({ page }) => {
+  await props(page).getByRole('button', { name: '塗り', exact: true }).click();
+  const pal = page.getByRole('dialog', { name: '塗りのパレット' });
+  await pal.getByRole('button', { name: 'その他の色' }).click();
+  const mixer = page.getByTestId('color-mixer');
+  await expect(mixer).toBeVisible();
+
+  // Click in the color square and on the hue bar: the shape keeps its color meanwhile.
+  const sq = (await mixer.getByRole('slider', { name: '彩度・明度' }).boundingBox())!;
+  await page.mouse.click(sq.x + sq.width - 2, sq.y + 2); // full saturation, full value
+  const hue = (await mixer.getByRole('slider', { name: '色相' }).boundingBox())!;
+  await page.mouse.click(hue.x + hue.width / 2, hue.y + hue.height / 3); // ~120° = green
+  await expect(mixer).toBeVisible(); // still open
+  expect((await shape(page)).fill).toBe('#4a90e2'); // unchanged
+
+  // Exact values via RGB fields / code.
+  await mixer.getByLabel('R', { exact: true }).fill('200');
+  await mixer.getByLabel('G', { exact: true }).fill('100');
+  await mixer.getByLabel('B', { exact: true }).fill('50');
+  await expect(mixer.getByLabel('塗りの新しいカラーコード')).toHaveValue('#C86432');
+  expect((await shape(page)).fill).toBe('#4a90e2');
+
+  // OK applies and closes.
+  await mixer.getByRole('button', { name: 'OK' }).click();
+  await expect(pal).toHaveCount(0);
+  expect((await shape(page)).fill).toBe('#c86432');
+
+  // Cancel: back to the swatch grid, nothing applied.
+  await props(page).getByRole('button', { name: '塗り', exact: true }).click();
+  await pal.getByRole('button', { name: 'その他の色' }).click();
+  await mixer.getByLabel('塗りの新しいカラーコード').fill('#00ff00');
+  await mixer.getByRole('button', { name: 'キャンセル' }).click();
+  await expect(mixer).toHaveCount(0);
+  await expect(pal.locator('.palette-grid .palette-cell')).toHaveCount(216);
+  expect((await shape(page)).fill).toBe('#c86432');
+});
