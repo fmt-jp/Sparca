@@ -119,7 +119,7 @@ function checkObject(o: unknown, where: string, ids: Set<string>, assets: Obj): 
       str(o, 'text', where);
       str(o, 'fontFamily', where);
       num(o, 'fontSize', where);
-      str(o, 'color', where);
+      checkFill(o.color, `${where}.color`, false);
       break;
     case 'image': {
       const assetId = str(o, 'assetId', where);
@@ -130,8 +130,32 @@ function checkObject(o: unknown, where: string, ids: Set<string>, assets: Obj): 
   }
 }
 
+const GRADIENT_KINDS = new Set(['linear', 'radial', 'conic']);
+
+/** A fill is a color string, a gradient, or (where allowed) null. */
+function checkFill(v: unknown, where: string, allowNull: boolean) {
+  if (typeof v === 'string' || (allowNull && v === null)) return;
+  if (!isObj(v) || !GRADIENT_KINDS.has(v.kind as string)) throw new Invalid(`${where} が正しくありません`);
+  for (const k of ['start', 'end'] as const) {
+    const p = v[k];
+    if (!isObj(p)) throw new Invalid(`${where}.${k} が正しくありません`);
+    num(p, 'x', `${where}.${k}`);
+    num(p, 'y', `${where}.${k}`);
+  }
+  const stops = arr(v, 'stops', where);
+  if (stops.length < 2) throw new Invalid(`${where}.stops には色が2つ以上必要です`);
+  stops.forEach((st, i) => {
+    const w = `${where}.stops[${i}]`;
+    if (!isObj(st)) throw new Invalid(`${w} が正しくありません`);
+    const off = num(st, 'offset', w);
+    if (off < 0 || off > 1) throw new Invalid(`${w}.offset が範囲外です`);
+    str(st, 'color', w);
+    if (typeof st.opacity !== 'number') st.opacity = 1;
+  });
+}
+
 function checkPaint(o: Obj, where: string) {
-  if (o.fill !== null && typeof o.fill !== 'string') throw new Invalid(`${where}.fill が正しくありません`);
+  checkFill(o.fill, `${where}.fill`, true);
   if (o.stroke !== null && typeof o.stroke !== 'string') throw new Invalid(`${where}.stroke が正しくありません`);
   num(o, 'strokeWidth', where);
 }

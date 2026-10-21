@@ -10,6 +10,7 @@ import type {
   SparcaDocument,
   TextObject,
 } from '../model/types';
+import { fillPaint } from './gradient';
 import { pathNodesD, shapePaths } from './shapes';
 import { textLines, textBaselineOffset } from './text';
 
@@ -77,17 +78,18 @@ function renderObject(o: SceneObject, opts: RenderOptions, prefix: string): Reac
   const filterId = hasEffects(o.effects) ? `${prefix}-fx-${o.id}` : null;
   let body: ReactElement | null;
   let strokeWidth = 0;
+  const fillId = `${prefix}-fill-${o.id}`;
   switch (o.type) {
     case 'shape':
-      body = renderShape(o);
+      body = renderShape(o, fillId);
       strokeWidth = o.stroke ? o.strokeWidth : 0;
       break;
     case 'path':
-      body = renderPath(o);
+      body = renderPath(o, fillId);
       strokeWidth = o.stroke ? o.strokeWidth : 0;
       break;
     case 'text':
-      body = renderText(o);
+      body = renderText(o, fillId);
       break;
     case 'image':
       body = renderImage(o, opts);
@@ -102,15 +104,17 @@ function renderObject(o: SceneObject, opts: RenderOptions, prefix: string): Reac
   );
 }
 
-function renderShape(o: ShapeObject): ReactElement {
+function renderShape(o: ShapeObject, fillId: string): ReactElement {
   const { width: w, height: h } = o.box;
   const p = shapePaths(o.shape, w, h, o.strokeWidth);
   const stroke = o.stroke && o.strokeWidth > 0 ? o.stroke : 'none';
+  const fill = fillPaint(p.open ? null : o.fill, fillId, w, h);
   return (
     <>
+      {fill.def && <defs>{fill.def}</defs>}
       <path
         d={p.d}
-        fill={p.open ? 'none' : (o.fill ?? 'none')}
+        fill={fill.paint}
         stroke={stroke}
         strokeWidth={o.strokeWidth}
         strokeLinejoin="round"
@@ -121,33 +125,40 @@ function renderShape(o: ShapeObject): ReactElement {
   );
 }
 
-function renderPath(o: PathObject): ReactElement {
+function renderPath(o: PathObject, fillId: string): ReactElement {
   const { width: w, height: h } = o.box;
+  const fill = fillPaint(o.closed ? o.fill : null, fillId, w, h);
   return (
-    <path
-      d={pathNodesD(o.nodes, o.closed, w, h)}
-      fill={o.closed ? (o.fill ?? 'none') : 'none'}
-      stroke={o.stroke && o.strokeWidth > 0 ? o.stroke : 'none'}
-      strokeWidth={o.strokeWidth}
-      strokeLinejoin="round"
-      strokeLinecap="round"
-    />
+    <>
+      {fill.def && <defs>{fill.def}</defs>}
+      <path
+        d={pathNodesD(o.nodes, o.closed, w, h)}
+        fill={fill.paint}
+        stroke={o.stroke && o.strokeWidth > 0 ? o.stroke : 'none'}
+        strokeWidth={o.strokeWidth}
+        strokeLinejoin="round"
+        strokeLinecap="round"
+      />
+    </>
   );
 }
 
-function renderText(o: TextObject): ReactElement {
+function renderText(o: TextObject, fillId: string): ReactElement {
   const lines = textLines(o.text);
   const lh = o.fontSize * o.lineHeight;
   const anchor = o.align === 'center' ? 'middle' : o.align === 'right' ? 'end' : 'start';
   const ax = o.align === 'center' ? o.box.width / 2 : o.align === 'right' ? o.box.width : 0;
   const base = textBaselineOffset(o.fontSize, o.lineHeight);
+  const fill = fillPaint(o.color, fillId, o.box.width, o.box.height);
   return (
+    <>
+    {fill.def && <defs>{fill.def}</defs>}
     <text
       fontFamily={o.fontFamily}
       fontSize={o.fontSize}
       fontWeight={o.bold ? 'bold' : 'normal'}
       fontStyle={o.italic ? 'italic' : 'normal'}
-      fill={o.color}
+      fill={fill.paint}
       letterSpacing={o.letterSpacing || undefined}
       textAnchor={anchor}
       style={{ whiteSpace: 'pre' }}
@@ -158,6 +169,7 @@ function renderText(o: TextObject): ReactElement {
         </tspan>
       ))}
     </text>
+    </>
   );
 }
 

@@ -1165,3 +1165,80 @@ kbd {
   left: auto;
   right: 100%;
 }
+
+/* Fill type + gradient editor */
+.fill-input,
+.gradient-editor {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.gradient-ramp {
+  display: inline-flex;
+  flex-direction: column;
+  width: 180px;
+  padding: 0 6px;
+}
+.gradient-bar {
+  position: relative;
+  height: 16px;
+  border: 1px solid #000;
+  border-radius: 2px;
+  cursor: copy;
+  background-color: #fff;
+  background-image: linear-gradient(45deg, #ccc 25%, transparent 25%), linear-gradient(-45deg, #ccc 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #ccc 75%), linear-gradient(-45deg, transparent 75%, #ccc 75%);
+  background-size: 8px 8px;
+  background-position: 0 0, 0 4px, 4px -4px, -4px 0;
+}
+.gradient-bar-fill {
+  position: absolute;
+  inset: 0;
+}
+.gradient-stops {
+  position: relative;
+  height: 14px;
+}
+.gradient-stop {
+  position: absolute;
+  top: 1px;
+  width: 11px;
+  height: 12px;
+  min-width: 0;
+  margin-left: -6px;
+  padding: 0;
+  border: 1px solid #000;
+  border-radius: 2px;
+  background: var(--stop-color);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.6);
+  cursor: ew-resize;
+}
+.gradient-stop::before {
+  content: '';
+  position: absolute;
+  top: -5px;
+  left: 50%;
+  margin-left: -4px;
+  border: 4px solid transparent;
+  border-top: none;
+  border-bottom: 4px solid #000;
+}
+.gradient-stop.selected {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.gradient-stop.removing {
+  opacity: 0.3;
+}
+.gradient-line {
+  stroke: #fff;
+  pointer-events: none;
+  filter: drop-shadow(0 0 1px #000);
+}
+.gradient-handle {
+  pointer-events: all;
+  fill: #fff;
+  stroke: #000;
+  cursor: move;
+}

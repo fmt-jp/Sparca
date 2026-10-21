@@ -52,8 +52,33 @@ interface BaseObject {
   effects: Effects;
 }
 
+export interface GradientStop {
+  /** Position along the gradient, 0..1. Stops may be stored in any order. */
+  offset: number;
+  color: string;
+  opacity: number;
+}
+
+/**
+ * Gradient fill. `start` / `end` are in box-normalized coordinates of the unrotated box
+ * (0..1, may lie outside), so the gradient moves, scales and rotates with the object.
+ * - linear: the color runs from start (offset 0) to end (offset 1).
+ * - radial: start is the center; end lies on the outer circle (offset 1). In
+ *   normalized coordinates it is a circle, so it stretches to an ellipse with the box.
+ * - conic: start is the center; offset 0 points toward end and runs clockwise.
+ */
+export interface Gradient {
+  kind: 'linear' | 'radial' | 'conic';
+  stops: GradientStop[];
+  start: Point;
+  end: Point;
+}
+
+/** A solid color (#rrggbb) or a gradient. */
+export type Fill = string | Gradient;
+
 export interface Paint {
-  fill: string | null;
+  fill: Fill | null;
   stroke: string | null;
   strokeWidth: number;
 }
@@ -102,7 +127,7 @@ export interface TextObject extends BaseObject {
   fontSize: number;
   bold: boolean;
   italic: boolean;
-  color: string;
+  color: Fill;
   /** Extra spacing between characters in px. */
   letterSpacing: number;
   /** Line height as a multiple of the font size. */
