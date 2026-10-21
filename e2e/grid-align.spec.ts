@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { canvasBox, drag, state } from './helpers';
+import { canvasBox, drag, setColor, state } from './helpers';
 
 test.beforeEach(async ({ page }) => {
   await page.goto('/');
@@ -19,6 +19,7 @@ test('drawing tools return to the select tool after creating something', async (
   // Text: after typing and confirming.
   await page.keyboard.press('t');
   await page.mouse.click(c.x + 300, c.y + 300);
+  await expect(page.locator('textarea.text-editor')).toBeFocused();
   await page.keyboard.type('abc');
   await page.keyboard.press('Escape');
   expect(await state<string>(page, 's => s.tool')).toBe('select');
@@ -47,7 +48,7 @@ test('grid: show, spacing, color, and snapping (also remembered after reload)', 
   const size = dlg.locator('input[aria-label="グリッドの間隔"]');
   await size.fill('50');
   await size.press('Enter');
-  await dlg.getByLabel('グリッドの色').fill('#ff0000');
+  await setColor(page, dlg, 'グリッドの色', '#ff0000');
   await dlg.getByLabel(/グリッドにスナップ/).check();
   await dlg.getByRole('button', { name: '閉じる' }).click();
   await expect(page.locator('#sparca-grid')).toHaveAttribute('width', '50');

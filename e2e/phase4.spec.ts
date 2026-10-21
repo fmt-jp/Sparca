@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
-import { canvasBox, decodePixels, disableNativePickers, drag, makePng, placePng } from './helpers';
+import { canvasBox, decodePixels, disableNativePickers, drag, makePng, placePng, setColor } from './helpers';
 
 test.beforeEach(async ({ page }) => {
   await disableNativePickers(page);
@@ -39,7 +39,7 @@ async function buildScene(page: Page) {
   await page.keyboard.press('r');
   await drag(page, { x: c.x + 10, y: c.y + 10 }, { x: c.x + 60, y: c.y + 60 });
   // Red fill via the color input.
-  await page.getByRole('region', { name: 'プロパティ' }).getByLabel('塗り', { exact: true }).fill('#ff0000');
+  await setColor(page, page.getByRole('region', { name: 'プロパティ' }), '塗り', '#ff0000');
   // Shadowed shape.
   await page.keyboard.press('r');
   await drag(page, { x: c.x + 100, y: c.y + 10 }, { x: c.x + 150, y: c.y + 60 });

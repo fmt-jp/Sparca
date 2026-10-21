@@ -12,7 +12,7 @@ import { convertSelectedNodes, deleteSelectedNodes, setPathClosed, setPathNodes 
 import { measureText } from '../render/text';
 import { arrowTipAngle, headForTipAngle } from '../render/shapes';
 import { alignSelection, groupSelection, ungroupSelection, type AlignOp } from '../store/actions';
-import { ColorInput, Field, NumberInput, PopupSliderInput, SliderInput, Toggle } from './controls';
+import { ColorInput, Field, NumberInput, PopupSliderInput, Toggle } from './controls';
 import { editor, useEditor } from './useEditor';
 import { useState } from 'react';
 import { toolDef } from './tools';
@@ -159,8 +159,8 @@ function TransformSection({ o }: { o: Exclude<SceneObject, { type: 'group' }> })
       <Field label="回転">
         <NumberInput label="回転" value={b.rotation} min={-360} max={360} precision={1} suffix="°" onCommit={(rotation) => setBox({ rotation }, '回転')} />
       </Field>
-      <Field label="不透明度">
-        <SliderInput
+      <Field label="不透明度" group>
+        <PopupSliderInput
           label="不透明度"
           value={Math.round(o.opacity * 100)}
           min={0}
@@ -258,15 +258,15 @@ function ShapeSection({ o }: { o: ShapeObject }) {
                 onChange={(points) => setShape({ points: Math.round(points) }, '頂点数の変更', 'points')}
               />
             </Field>
-            <Field label="内径比">
-              <SliderInput label="内径比" value={Math.round(g.innerRatio * 100)} min={5} max={95} suffix="%" onChange={(v) => setShape({ innerRatio: v / 100 }, '星の形状の変更', 'star')} />
+            <Field label="内径比" group>
+              <PopupSliderInput label="内径比" value={Math.round(g.innerRatio * 100)} min={5} max={95} suffix="%" onChange={(v) => setShape({ innerRatio: v / 100 }, '星の形状の変更', 'star')} />
             </Field>
           </>
         )}
         {g.kind === 'block-arrow' && (
           <>
-            <Field label="軸の太さ">
-              <SliderInput
+            <Field label="軸の太さ" group>
+              <PopupSliderInput
                 label="軸の太さ"
                 value={Math.round(g.shaft * 100)}
                 min={5}
@@ -275,8 +275,8 @@ function ShapeSection({ o }: { o: ShapeObject }) {
                 onChange={(v) => setShape({ shaft: v / 100 }, '矢印の太さの変更', 'arrow-shaft')}
               />
             </Field>
-            <Field label="矢じりの長さ">
-              <SliderInput
+            <Field label="矢じりの長さ" group>
+              <PopupSliderInput
                 label="矢じりの長さ"
                 value={Math.round(g.head * 100)}
                 min={5}
@@ -377,8 +377,8 @@ function ImageSection({ o }: { o: ImageObject }) {
   const comparing = useEditor((s) => s.compareImageId === o.id);
   const a = o.pipeline.adjust;
   const adj = (key: keyof Omit<ColorAdjust, 'auto'>, label: string) => (
-    <Field label={label}>
-      <SliderInput label={label} value={a[key]} min={-100} max={100} onChange={(v) => setAdjust(editor, o.id, { [key]: v }, `${label}の変更`, key)} />
+    <Field label={label} group>
+      <PopupSliderInput label={label} value={a[key]} min={-100} max={100} onChange={(v) => setAdjust(editor, o.id, { [key]: v }, `${label}の変更`, key)} />
     </Field>
   );
   const out = meta ? pipelineOutputSize(o.pipeline, meta.width, meta.height) : null;
@@ -401,8 +401,8 @@ function ImageSection({ o }: { o: ImageObject }) {
         {adj('saturation', '彩度')}
         {adj('temperature', '色温度')}
         {adj('tint', '色かぶり補正')}
-        <Field label="ぼかし">
-          <SliderInput label="ぼかし" value={o.pipeline.blur} min={0} max={100} step={0.5} precision={1} suffix="px" onChange={(v) => setImageBlur(editor, o.id, v)} />
+        <Field label="ぼかし" group>
+          <PopupSliderInput label="ぼかし" value={o.pipeline.blur} min={0} max={100} step={0.5} precision={1} suffix="px" onChange={(v) => setImageBlur(editor, o.id, v)} />
         </Field>
       </div>
       <div className="prop-section">
@@ -635,14 +635,14 @@ function EffectsSection({ o }: { o: ShapeObject | PathObject | TextObject }) {
             <Field label="色">
               <ColorInput label="グローの色" value={e.glow.color} onChange={(c) => glow({ color: c ?? '#ffffff' }, 'color')} />
             </Field>
-            <Field label="ぼかし">
-              <SliderInput label="グローのぼかし" value={e.glow.blur} min={0} max={50} suffix="px" onChange={(blur) => glow({ blur }, 'blur')} />
+            <Field label="ぼかし" group>
+              <PopupSliderInput label="グローのぼかし" value={e.glow.blur} min={0} max={50} suffix="px" onChange={(blur) => glow({ blur }, 'blur')} />
             </Field>
-            <Field label="広がり">
-              <SliderInput label="グローの広がり" value={e.glow.spread} min={0} max={30} suffix="px" onChange={(spread) => glow({ spread }, 'spread')} />
+            <Field label="広がり" group>
+              <PopupSliderInput label="グローの広がり" value={e.glow.spread} min={0} max={30} suffix="px" onChange={(spread) => glow({ spread }, 'spread')} />
             </Field>
-            <Field label="強さ">
-              <SliderInput label="グローの強さ" value={Math.round(e.glow.opacity * 100)} min={0} max={100} suffix="%" onChange={(v) => glow({ opacity: v / 100 }, 'opacity')} />
+            <Field label="強さ" group>
+              <PopupSliderInput label="グローの強さ" value={Math.round(e.glow.opacity * 100)} min={0} max={100} suffix="%" onChange={(v) => glow({ opacity: v / 100 }, 'opacity')} />
             </Field>
           </>
         )}
@@ -656,17 +656,17 @@ function EffectsSection({ o }: { o: ShapeObject | PathObject | TextObject }) {
             <Field label="色">
               <ColorInput label="影の色" value={e.dropShadow.color} onChange={(c) => shadow({ color: c ?? '#000000' }, 'color')} />
             </Field>
-            <Field label="不透明度">
-              <SliderInput label="影の不透明度" value={Math.round(e.dropShadow.opacity * 100)} min={0} max={100} suffix="%" onChange={(v) => shadow({ opacity: v / 100 }, 'opacity')} />
+            <Field label="不透明度" group>
+              <PopupSliderInput label="影の不透明度" value={Math.round(e.dropShadow.opacity * 100)} min={0} max={100} suffix="%" onChange={(v) => shadow({ opacity: v / 100 }, 'opacity')} />
             </Field>
-            <Field label="角度">
-              <SliderInput label="影の角度" value={e.dropShadow.angle} min={-180} max={180} suffix="°" onChange={(angle) => shadow({ angle }, 'angle')} />
+            <Field label="角度" group>
+              <PopupSliderInput label="影の角度" value={e.dropShadow.angle} min={-180} max={180} suffix="°" onChange={(angle) => shadow({ angle }, 'angle')} />
             </Field>
-            <Field label="距離">
-              <SliderInput label="影の距離" value={e.dropShadow.distance} min={0} max={100} suffix="px" onChange={(distance) => shadow({ distance }, 'distance')} />
+            <Field label="距離" group>
+              <PopupSliderInput label="影の距離" value={e.dropShadow.distance} min={0} max={100} suffix="px" onChange={(distance) => shadow({ distance }, 'distance')} />
             </Field>
-            <Field label="ぼかし">
-              <SliderInput label="影のぼかし" value={e.dropShadow.blur} min={0} max={50} suffix="px" onChange={(blur) => shadow({ blur }, 'blur')} />
+            <Field label="ぼかし" group>
+              <PopupSliderInput label="影のぼかし" value={e.dropShadow.blur} min={0} max={50} suffix="px" onChange={(blur) => shadow({ blur }, 'blur')} />
             </Field>
           </>
         )}
@@ -744,8 +744,8 @@ function MultiSection({ ids, objects }: { ids: Id[]; objects: SceneObject[] }) {
         </button>
       )}
       {objects.length === 1 && (
-        <Field label="不透明度">
-          <SliderInput
+        <Field label="不透明度" group>
+          <PopupSliderInput
             label="不透明度"
             value={Math.round(objects[0].opacity * 100)}
             min={0}

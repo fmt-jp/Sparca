@@ -173,3 +173,11 @@ export async function openFile(page: Page, name: string, buffer: Buffer, mimeTyp
   await page.getByRole('menuitem', { name: /開く/ }).click();
   await (await chooser).setFiles({ name, mimeType, buffer });
 }
+
+/** Choose a color through the swatch palette by typing its code. */
+export async function setColor(page: Page, scope: import('@playwright/test').Locator, label: string, hex: string) {
+  await scope.getByRole('button', { name: label, exact: true }).click();
+  const code = page.getByRole('dialog', { name: `${label}のパレット` }).getByLabel(`${label}のカラーコード`);
+  await code.fill(hex);
+  await code.press('Enter');
+}

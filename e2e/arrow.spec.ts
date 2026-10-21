@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
-import { canvasBox, decodePixels, disableNativePickers, drag, state } from './helpers';
+import { canvasBox, decodePixels, disableNativePickers, drag, setColor, state } from './helpers';
 
 test.beforeEach(async ({ page }) => {
   await disableNativePickers(page);
@@ -42,8 +42,8 @@ test('draws a filled, outlined block arrow pointing along the drag', async ({ pa
   expect(a.box.width).toBeCloseTo(Math.hypot(200, 200), 0);
   // Fill and outline are edited like any other shape.
   const props = page.getByRole('region', { name: 'プロパティ' });
-  await expect(props.getByLabel('塗り', { exact: true })).toHaveValue('#ffe100');
-  await props.getByLabel('塗り', { exact: true }).fill('#ff0000');
+  await expect(props.getByRole('button', { name: '塗り', exact: true })).toHaveAttribute('data-color', '#ffe100');
+  await setColor(page, props, '塗り', '#ff0000');
   await setNumber(page, '線幅', '8');
   expect(await arrow(page)).toMatchObject({ fill: '#ff0000', strokeWidth: 8 });
 });
