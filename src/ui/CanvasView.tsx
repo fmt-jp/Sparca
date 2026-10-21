@@ -18,7 +18,7 @@ import { findObject, isEffectivelyLocked } from '../model/tree';
 import type { Box, Id, PathNode, Point, SceneObject, ShapeGeometry, SparcaDocument, TextObject } from '../model/types';
 import { DocumentSvg } from '../render/DocumentSvg';
 import { imageCache } from '../render/imageCache';
-import { measureText } from '../render/text';
+import { fitTextBox, measureText } from '../render/text';
 import { placeImageFiles, writableLayer } from '../store/actions';
 import type { PixelSelection, ToolId } from '../store/editor';
 import { pickColorAt } from '../store/colorActions';
@@ -1291,7 +1291,12 @@ function TextEditor({ obj, zoom, isNew, onDone }: { obj: TextObject; zoom: numbe
     });
     return () => cancelAnimationFrame(f);
   }, []);
-  const size = measureText({ ...obj, text: value || 'M' });
+  // The editor follows the box the text will get, so centered / right-aligned text
+  // grows around its alignment point while typing.
+  const live = fitTextBox({ ...obj, text: value || 'M' });
+  // Extra room for the caret, split according to the alignment.
+  const pad = obj.fontSize;
+  const padLeft = obj.align === 'center' ? pad / 2 : obj.align === 'right' ? pad : 0;
 
   function commit() {
     if (done.current) return;
@@ -1301,10 +1306,9 @@ function TextEditor({ obj, zoom, isNew, onDone }: { obj: TextObject; zoom: numbe
       if (isNew) editor.cancelGesture();
       else editor.edit('テキストの削除', (d) => removeObjects(d, [id]));
     } else {
-      const m = measureText({ ...obj, text: value });
       if (value !== obj.text) {
         editor.edit('テキストの編集', (d) =>
-          updateObject(d, id, { text: value, box: { ...obj.box, width: m.width, height: m.height } } as Partial<SceneObject>),
+          updateObject(d, id, { text: value, box: fitTextBox({ ...obj, text: value }) } as Partial<SceneObject>),
         );
       }
       if (isNew) editor.endGesture('テキストの追加');
@@ -1330,10 +1334,10 @@ function TextEditor({ obj, zoom, isNew, onDone }: { obj: TextObject; zoom: numbe
         }
       }}
       style={{
-        left: PAD + obj.box.x * zoom,
-        top: PAD + obj.box.y * zoom,
-        width: (Math.max(size.width, obj.box.width) + obj.fontSize) * zoom,
-        height: size.height * zoom,
+        left: PAD + (live.x - padLeft) * zoom,
+        top: PAD + live.y * zoom,
+        width: (live.width + pad) * zoom,
+        height: live.height * zoom,
         fontFamily: obj.fontFamily,
         fontSize: obj.fontSize * zoom,
         fontWeight: obj.bold ? 'bold' : 'normal',
@@ -1343,7 +1347,8 @@ function TextEditor({ obj, zoom, isNew, onDone }: { obj: TextObject; zoom: numbe
         color: obj.color,
         textAlign: obj.align,
         transform: obj.box.rotation ? `rotate(${obj.box.rotation}deg)` : undefined,
-        transformOrigin: `${(obj.box.width * zoom) / 2}px ${(obj.box.height * zoom) / 2}px`,
+        // Rotate about the box center, as the rendered text does.
+        transformOrigin: `${(padLeft + live.width / 2) * zoom}px ${(live.height / 2) * zoom}px`,
       }}
     />
   );

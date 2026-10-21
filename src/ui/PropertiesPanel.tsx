@@ -9,7 +9,7 @@ import { autoColor, cancelCrop, commitCrop, pixelTargetImage, resetAdjust, setAd
 import { openDialog } from './dialogs';
 import { moveAnchors, pathToDoc } from '../model/pathEdit';
 import { convertSelectedNodes, deleteSelectedNodes, setPathClosed, setPathNodes } from '../store/pathActions';
-import { measureText } from '../render/text';
+import { fitTextBox } from '../render/text';
 import { arrowTipAngle, headForTipAngle } from '../render/shapes';
 import { alignSelection, groupSelection, ungroupSelection, type AlignOp } from '../store/actions';
 import { ColorInput, Field, NumberInput, PopupSliderInput, Toggle } from './controls';
@@ -42,11 +42,9 @@ function set(id: Id, patch: Partial<SceneObject>, label: string, key?: string) {
   editor.edit(label, (d) => updateObject(d, id, patch), key ? `${key}:${id}` : null);
 }
 
-/** Update text properties and re-fit the box to the text's natural size. */
+/** Update text properties and re-fit the box to the text's natural size, keeping its alignment point. */
 function setText(o: TextObject, patch: Partial<TextObject>, label: string, key?: string) {
-  const next = { ...o, ...patch };
-  const m = measureText(next);
-  set(o.id, { ...patch, box: { ...o.box, width: m.width, height: m.height } } as Partial<SceneObject>, label, key);
+  set(o.id, { ...patch, box: fitTextBox({ ...o, ...patch }) } as Partial<SceneObject>, label, key);
 }
 
 export function PropertiesPanel() {
