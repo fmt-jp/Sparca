@@ -936,3 +936,107 @@ kbd {
   border: 1px solid #fff;
   border-radius: 2px;
 }
+
+/* ---- Color swatch & palette ---- */
+.swatch-button {
+  width: 34px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid #000;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.5);
+  border-radius: 3px;
+  cursor: pointer;
+}
+.swatch-button.none,
+.palette-preview.none,
+.palette-none {
+  background: #fff linear-gradient(to top right, transparent calc(50% - 1.5px), #e00 calc(50% - 1.5px), #e00 calc(50% + 1.5px), transparent calc(50% + 1.5px));
+}
+.palette {
+  position: fixed;
+  z-index: 400;
+  background: #f0f0f0;
+  color: #111;
+  border: 1px solid #555;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.5);
+  padding: 6px;
+  color-scheme: light;
+}
+.palette-top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+.palette-preview {
+  width: 48px;
+  height: 22px;
+  border: 1px solid #777;
+}
+.palette-hex {
+  flex: 1;
+  min-width: 0;
+  background: #fff !important;
+  color: #111 !important;
+  border: 1px solid #999 !important;
+  font-family: ui-monospace, monospace;
+}
+.palette-hex.invalid {
+  outline: 1px solid #e00;
+}
+.palette-none,
+.palette-system {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid #777;
+  border-radius: 2px;
+}
+.palette-system {
+  background: conic-gradient(red, yellow, lime, cyan, blue, magenta, red);
+  border-radius: 50%;
+}
+.palette-body {
+  display: flex;
+  gap: 4px;
+}
+.palette-basic,
+.palette-grid {
+  display: grid;
+  gap: 0;
+  background: #000;
+  border: 1px solid #000;
+}
+.palette-basic {
+  grid-template-columns: 14px;
+}
+.palette-grid {
+  grid-template-columns: repeat(18, 14px);
+}
+.palette-cell {
+  width: 14px;
+  height: 14px;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  outline: 1px solid #000;
+  outline-offset: -1px;
+}
+.palette-cell:hover,
+.palette-cell:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: -2px;
+  position: relative;
+  z-index: 1;
+}
+.palette-cell.current {
+  outline: 2px solid #fff;
+  outline-offset: -2px;
+}
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}

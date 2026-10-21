@@ -18,6 +18,7 @@ test('draws shapes and text, then undo/redo restores them', async ({ page }) => 
   await drag(page, { x: c.x + 50, y: c.y + 300 }, { x: c.x + 300, y: c.y + 320 });
   await page.keyboard.press('t');
   await page.mouse.click(c.x + 400, c.y + 400);
+  await expect(page.locator('textarea.text-editor')).toBeFocused();
   await page.keyboard.type('Hello');
   await page.keyboard.press('Escape');
   expect((await objects(page)).map((o) => o.type)).toEqual(['shape', 'shape', 'text']);
@@ -160,12 +161,14 @@ test('double-clicking a text object with the select tool edits it in place', asy
   const c = await canvasBox(page);
   await page.keyboard.press('t');
   await page.mouse.click(c.x + 100, c.y + 100);
+  await expect(page.locator('textarea.text-editor')).toBeFocused();
   await page.keyboard.type('Before');
   await page.keyboard.press('Escape');
   await page.keyboard.press('v');
   const t = (await page.locator('[data-testid=canvas] text').boundingBox())!;
   await page.mouse.dblclick(t.x + t.width / 2, t.y + t.height / 2);
-  await expect(page.locator('textarea.text-editor')).toBeVisible();
+  // The editor takes focus on the next animation frame; wait for it before typing.
+  await expect(page.locator('textarea.text-editor')).toBeFocused();
   await page.keyboard.press('Control+a');
   await page.keyboard.type('After');
   await page.keyboard.press('Escape');

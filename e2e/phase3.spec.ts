@@ -87,6 +87,7 @@ test('glow and drop shadow on text and shapes are kept as editable settings', as
   const c = await canvasBox(page);
   await page.keyboard.press('t');
   await page.mouse.click(c.x + 100, c.y + 100);
+  await expect(page.locator('textarea.text-editor')).toBeFocused();
   await page.keyboard.type('Glow');
   await page.keyboard.press('Escape');
   await page.keyboard.press('v');

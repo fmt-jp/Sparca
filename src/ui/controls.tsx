@@ -1,5 +1,6 @@
 // Small form controls shared by the property panel and dialogs.
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { ColorPicker } from './ColorPicker';
 import { editor } from './useEditor';
 
 /**
@@ -145,40 +146,8 @@ export function SliderInput({
   );
 }
 
-/** Color swatch with an optional "none" toggle. */
-export function ColorInput({
-  value,
-  onChange,
-  allowNone,
-  label,
-}: {
-  value: string | null;
-  onChange: (v: string | null) => void;
-  allowNone?: boolean;
-  label: string;
-}) {
-  const [last, setLast] = useState(value ?? '#000000');
-  useEffect(() => {
-    if (value) setLast(value);
-  }, [value]);
-  return (
-    <span className="color-input">
-      <input
-        type="color"
-        aria-label={label}
-        value={toHex6(value ?? last)}
-        disabled={value === null}
-        onChange={(e) => onChange(e.target.value)}
-      />
-      {allowNone && (
-        <label className="none-toggle" title={`${label}なし`}>
-          <input type="checkbox" checked={value === null} onChange={(e) => onChange(e.target.checked ? null : last)} />
-          なし
-        </label>
-      )}
-    </span>
-  );
-}
+/** Color field: swatch button opening the palette (see ColorPicker). */
+export const ColorInput = ColorPicker;
 
 export function toHex6(c: string): string {
   if (/^#[0-9a-f]{6}$/i.test(c)) return c.toLowerCase();
