@@ -844,3 +844,27 @@ kbd {
   border: none;
   margin-bottom: 3px;
 }
+.menu-item .check {
+  display: inline-block;
+  width: 1.2em;
+  color: var(--accent);
+}
+.status-toggles {
+  margin-left: auto;
+  display: inline-flex;
+  gap: 12px;
+}
+.status-toggles label {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  cursor: pointer;
+}
+.align-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.align-row {
+  align-items: center;
+}

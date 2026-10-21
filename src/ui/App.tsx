@@ -20,6 +20,7 @@ import { CanvasView } from './CanvasView';
 import { BlurSelectionDialog } from './BlurSelectionDialog';
 import { closeDialog, openDialog, useDialog } from './dialogs';
 import { ExportDialog } from './ExportDialog';
+import { GridDialog } from './GridDialog';
 import { ImageSizeDialog } from './ImageSizeDialog';
 import { LayersPanel } from './LayersPanel';
 import { MenuBar, zoomIn, zoomOut, zoomToFit } from './MenuBar';
@@ -102,6 +103,7 @@ export function App() {
       {dialog?.kind === 'image-size' && <ImageSizeDialog imageId={dialog.imageId} onClose={closeDialog} />}
       {dialog?.kind === 'blur-selection' && <BlurSelectionDialog onClose={closeDialog} />}
       {dialog?.kind === 'export' && <ExportDialog onClose={closeDialog} />}
+      {dialog?.kind === 'grid' && <GridDialog onClose={closeDialog} />}
       <div className="notices" role="status" aria-live="polite">
         {notices.map((n) => (
           <div key={n.id} className={`notice ${n.kind}`} onClick={() => editor.dismiss(n.id)}>

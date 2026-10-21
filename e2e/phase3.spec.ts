@@ -34,6 +34,9 @@ test('pen tool draws an editable bezier path (corner + smooth anchors), open or 
   expect(objs[0].nodes![0].out).toBeNull();
   expect(objs[0].nodes![1].out).not.toBeNull();
   expect(objs[0].nodes![1].in).not.toBeNull();
+  // Finishing a path returns to the select tool; pick the pen again for the next one.
+  expect(await state<string>(page, 's => s.tool')).toBe('select');
+  await page.keyboard.press('p');
   // Closed triangle by clicking the first anchor again.
   await page.mouse.click(c.x + 400, c.y + 300);
   await page.mouse.click(c.x + 500, c.y + 300);
@@ -56,14 +59,19 @@ test('polygon, star and arrow shapes with editable parameters', async ({ page })
   await drag(page, { x: c.x + 50, y: c.y + 50 }, { x: c.x + 150, y: c.y + 150 });
   await setNumber(page, '頂点数', '8');
   expect((await objects(page))[0].shape).toMatchObject({ kind: 'polygon', sides: 8 });
-  await page.keyboard.press('r'); // cycle within the shape group → star
+  // After drawing, the select tool is active again; pick the star from the shape group.
+  expect(await state<string>(page, 's => s.tool')).toBe('select');
+  await page.locator('[data-tool="polygon"]').click({ button: 'right' });
+  await page.getByRole('menuitem', { name: '星ツール' }).click();
   expect(await state<string>(page, 's => s.tool')).toBe('star');
   await drag(page, { x: c.x + 200, y: c.y + 50 }, { x: c.x + 300, y: c.y + 150 });
   await setNumber(page, '頂点数', '6');
   expect((await objects(page))[1].shape).toMatchObject({ kind: 'star', points: 6 });
-  // The arrow tool sits in the shape group next to the star: R cycles to it.
-  await page.keyboard.press('r');
-  expect(await state<string>(page, 's => s.tool')).toBe('arrow');
+  // R cycles through the shape group, which ends with the arrow tool.
+  for (const t of ['rect', 'rounded-rect', 'ellipse', 'polygon', 'star', 'arrow']) {
+    await page.keyboard.press('r');
+    expect(await state<string>(page, 's => s.tool')).toBe(t);
+  }
   // It is also listed in the shape group's flyout.
   await page.locator('[data-tool="arrow"]').click({ button: 'right' });
   await expect(page.getByRole('menuitem', { name: '矢印ツール' })).toBeVisible();
@@ -100,6 +108,7 @@ test('group, transform as a unit, align and copy/paste', async ({ page }) => {
   const c = await canvasBox(page);
   await page.keyboard.press('r');
   await drag(page, { x: c.x + 50, y: c.y + 50 }, { x: c.x + 100, y: c.y + 100 });
+  await page.keyboard.press('r');
   await drag(page, { x: c.x + 200, y: c.y + 80 }, { x: c.x + 260, y: c.y + 140 });
   await page.keyboard.press('v');
   await page.keyboard.press('Control+a');

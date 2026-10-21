@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import {
+  alignSelection,
   arrangeSelection,
   chooseAndOpenProject,
   chooseAndPlaceImage,
@@ -17,6 +18,7 @@ import {
 import { autoColor, pixelTargetImage, selectedImage } from '../store/imageActions';
 import { ZOOM_STEPS } from './CanvasView';
 import { openDialog } from './dialogs';
+import { ALIGN } from './PropertiesPanel';
 import { editor, useEditor } from './useEditor';
 
 export interface MenuItem {
@@ -25,6 +27,8 @@ export interface MenuItem {
   action?: () => void;
   disabled?: boolean;
   separator?: boolean;
+  /** Shows a check mark (toggle items). */
+  checked?: boolean;
 }
 
 const mod = /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘' : 'Ctrl+';
@@ -65,6 +69,8 @@ export function MenuBar({ onNew }: { onNew: () => void }) {
 
   const hasSel = selection.length > 0;
   const pixelSel = useEditor((s) => s.pixelSelection);
+  const grid = useEditor((s) => s.grid);
+  const alignToCanvas = useEditor((s) => s.alignToCanvas);
   const image = selectedImage(editor);
   const undoLabel = history.past[history.past.length - 1]?.label;
   const redoLabel = history.future[0]?.label;
@@ -115,6 +121,13 @@ export function MenuBar({ onNew }: { onNew: () => void }) {
         { label: 'グループ化', shortcut: `${mod}G`, action: () => groupSelection(editor), disabled: selection.length < 2 },
         { label: 'グループ解除', shortcut: `${mod}Shift+G`, action: () => ungroupSelection(editor), disabled: !hasSel },
         { separator: true, label: '' },
+        ...ALIGN.map((a) => ({
+          label: `整列：${a.label}`,
+          action: () => alignSelection(editor, a.op, alignToCanvas),
+          disabled: !hasSel,
+        })),
+        { label: '整列：キャンバスに対して', checked: alignToCanvas, action: () => editor.set({ alignToCanvas: !alignToCanvas }) },
+        { separator: true, label: '' },
         { label: 'キャンバスサイズ…', action: () => openDialog({ kind: 'canvas-size' }) },
         { label: '画像サイズ…（選択中の画像）', action: () => image && openDialog({ kind: 'image-size', imageId: image.id }), disabled: !image },
         { label: 'トリミング', shortcut: 'C', action: () => editor.setTool('crop') },
@@ -137,6 +150,10 @@ export function MenuBar({ onNew }: { onNew: () => void }) {
         { label: 'ズームアウト', shortcut: `${mod}-`, action: zoomOut },
         { label: '100%', shortcut: `${mod}1`, action: () => editor.set({ zoom: 1 }) },
         { label: '画面に合わせる', shortcut: `${mod}0`, action: zoomToFit },
+        { separator: true, label: '' },
+        { label: 'グリッドを表示', checked: grid.visible, action: () => editor.setGrid({ visible: !grid.visible }) },
+        { label: 'グリッドにスナップ', checked: grid.snap, action: () => editor.setGrid({ snap: !grid.snap }) },
+        { label: 'グリッド設定…', action: () => openDialog({ kind: 'grid' }) },
       ],
     },
   ];
@@ -163,7 +180,8 @@ export function MenuBar({ onNew }: { onNew: () => void }) {
                   <button
                     key={i}
                     type="button"
-                    role="menuitem"
+                    role={it.checked === undefined ? 'menuitem' : 'menuitemcheckbox'}
+                    aria-checked={it.checked}
                     className="menu-item"
                     disabled={it.disabled}
                     onClick={() => {
@@ -171,7 +189,10 @@ export function MenuBar({ onNew }: { onNew: () => void }) {
                       it.action?.();
                     }}
                   >
-                    <span>{it.label}</span>
+                    <span>
+                      {it.checked !== undefined && <span className="check">{it.checked ? '✓' : ''}</span>}
+                      {it.label}
+                    </span>
                     {it.shortcut && <kbd>{it.shortcut}</kbd>}
                   </button>
                 ),

@@ -41,6 +41,7 @@ async function buildScene(page: Page) {
   // Red fill via the color input.
   await page.getByRole('region', { name: 'プロパティ' }).getByLabel('塗り', { exact: true }).fill('#ff0000');
   // Shadowed shape.
+  await page.keyboard.press('r');
   await drag(page, { x: c.x + 100, y: c.y + 10 }, { x: c.x + 150, y: c.y + 60 });
   await page.getByLabel('ドロップシャドウ', { exact: true }).check();
   const dist = page.locator('input[type="text"][aria-label="影の距離"]');
