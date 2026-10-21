@@ -1,4 +1,5 @@
-import type { TextObject } from '../model/types';
+import { boxCenter, rotatePoint } from '../model/geometry';
+import type { Box, TextObject } from '../model/types';
 
 export function textLines(text: string): string[] {
   return text.split(/\r?\n/);
@@ -41,4 +42,21 @@ export function measureText(o: Pick<TextObject, 'text' | 'fontFamily' | 'fontSiz
     width: Math.max(Math.ceil(width), Math.ceil(o.fontSize * 0.5)),
     height: Math.ceil(lines.length * o.fontSize * o.lineHeight),
   };
+}
+
+/**
+ * Box for `next` refitted to its natural size, keeping the point its alignment hangs from
+ * fixed: the left edge (left), the middle (center) or the right edge (right) of the top.
+ * Works for rotated text too (the box rotates about its center).
+ */
+export function fitTextBox(next: TextObject): Box {
+  const b = next.box;
+  const m = measureText(next);
+  const f = next.align === 'center' ? 0.5 : next.align === 'right' ? 1 : 0;
+  // The fixed point in document space, before the resize.
+  const fixed = rotatePoint({ x: b.x + b.width * f, y: b.y }, boxCenter(b), b.rotation);
+  // Where that point sits relative to the new box's center, rotated.
+  const off = rotatePoint({ x: m.width * f - m.width / 2, y: -m.height / 2 }, { x: 0, y: 0 }, b.rotation);
+  const c = { x: fixed.x - off.x, y: fixed.y - off.y };
+  return { ...b, x: c.x - m.width / 2, y: c.y - m.height / 2, width: m.width, height: m.height };
 }
