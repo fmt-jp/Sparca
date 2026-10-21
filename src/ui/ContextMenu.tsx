@@ -113,7 +113,7 @@ function MenuItems({ items, onClose, autoFocus, onBack }: { items: MenuItem[]; o
                 <span aria-hidden="true">▸</span>
               </button>
               {open && (
-                <div className="menu-list context-menu sub" role="menu" aria-label={it.label}>
+                <SubMenu label={it.label}>
                   <MenuItems
                     items={it.children}
                     onClose={onClose}
@@ -123,7 +123,7 @@ function MenuItems({ items, onClose, autoFocus, onBack }: { items: MenuItem[]; o
                       list.current?.querySelector<HTMLButtonElement>(`[data-sub="${i}"]`)?.focus();
                     }}
                   />
-                </div>
+                </SubMenu>
               )}
             </div>
           );
@@ -150,6 +150,22 @@ function MenuItems({ items, onClose, autoFocus, onBack }: { items: MenuItem[]; o
           </button>
         );
       })}
+    </div>
+  );
+}
+
+/** Submenu box, moved up when it would run past the bottom of the window. */
+function SubMenu({ label, children }: { label: string; children: React.ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [shift, setShift] = useState(0);
+  useLayoutEffect(() => {
+    const r = ref.current!.getBoundingClientRect();
+    const over = r.bottom - (window.innerHeight - 4);
+    if (over > 0) setShift(-Math.min(over, r.top - 4));
+  }, []);
+  return (
+    <div ref={ref} className="menu-list context-menu sub" role="menu" aria-label={label} style={shift ? { transform: `translateY(${shift}px)` } : undefined}>
+      {children}
     </div>
   );
 }

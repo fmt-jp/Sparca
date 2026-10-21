@@ -49,7 +49,7 @@ interface BaseObject {
   visible: boolean; locked: boolean;
   opacity: number;          // 0..1
   box: Box;                 // 親（ドキュメント）座標での外接矩形と回転
-  effects: Effects;         // グロー、ドロップシャドウ（編集情報として保持、焼き込まない）
+  effects: Effect[];        // エフェクト（先頭から順に適用。編集情報として保持し、焼き込まない）
 }
 interface Box { x: number; y: number; width: number; height: number; rotation: number /* 度、矩形中心まわり */ }
 ```
@@ -59,6 +59,8 @@ interface Box { x: number; y: number; width: number; height: number; rotation: n
 - **TextObject**：テキスト内容、フォント、サイズ、太字／斜体、色、文字間隔、行間、揃え。ベクターのまま保持する。
 - **ImageObject**：元画像 `assetId` と非破壊の加工パイプライン（§4）。
 - **GroupObject**：`children: SceneObject[]`。子は**ドキュメント座標のまま**保持し、グループ自体は独自の変形を持たない。グループの移動・拡縮・回転は子それぞれへ同じ変換を適用する（回転は子の中心をグループ中心まわりに回し、子の回転角に加算）。回転済みの子を非等倍で拡縮した場合は外接矩形ベースの近似になる（Fireworks と同等の挙動）。
+
+**エフェクト（Effect）**：`{ id, kind, enabled, strength, ...種類ごとの設定 }`。`kind` は drop-shadow / inner-shadow / glow / inner-glow / bevel-inner / bevel-outer / emboss / blur / sharpen / brightness-contrast / hue-saturation / invert / color-overlay。`enabled` は一時的なオン／オフ、`strength`（0..1）は適用前とのブレンド率。同じ種類を複数持てる。旧形式 `{ glow, dropShadow }` は読み込み時に配列へ変換する（有効なものだけ、グロー→ドロップシャドウの順）。
 
 **塗り（Fill）**：図形・パスの `fill` とテキストの `color` は、色文字列（`#rrggbb`）か次のグラデーション。`fill` は塗りなし（`null`）も可。
 
@@ -91,7 +93,8 @@ interface Gradient {
 ## 3. レンダリング方式
 
 - キャンバスはドキュメント全体を **1つの SVG** で描画する。`viewBox` はドキュメント座標、表示倍率は SVG の表示サイズで表現する（表示倍率と実寸を分離）。
-- 図形・パス・テキストは SVG 要素。グロー・ドロップシャドウは SVG フィルター（`feGaussianBlur`、`feMorphology`（広がり）、`feOffset`、`feFlood`）で描く。
+- 図形・パス・テキストは SVG 要素。
+- エフェクトはオブジェクトごとに 1 つの SVG フィルターにまとめる（`render/effects.tsx`）。リストの先頭から順に、前の結果（最初は `SourceGraphic`）を入力にしてフィルター要素をつなぐ。強さが 1 未満なら `feComposite operator="arithmetic"` で前の結果とブレンドする。シャドウ・グローは結果のアルファ（`feColorMatrix`）からぼかし・膨張・オフセット・塗り（`feGaussianBlur`／`feMorphology`／`feOffset`／`feFlood`）、内側系はアルファの反転を元の形で切り抜く。ベベル・エンボスは光源方向へずらしたアルファとの差（`feComposite out`）でハイライトと影を作る。色の調整は `feComponentTransfer`／`feColorMatrix`（明るさ・コントラストは画像の色調整と同じ式）。フィルターはオブジェクトの回転した座標系で働くため、角度は回転を打ち消して画面上で一定の向きにする。
 - 画像は画像エンジンでパイプラインを適用した結果（§4）を `<image>` として配置する。
 - グラデーション：線形・放射は SVG の `linearGradient`／`radialGradient`（`gradientUnits="userSpaceOnUse"` と box への変換行列）。SVG に円錐グラデーションはないため、Canvas の `createConicGradient` で画像（長辺 最大 2048px、小さい図形は 2 倍密度）を生成し `pattern` として塗る。生成画像はキャッシュする。
 - 選択ハンドル・範囲選択の点線などの操作 UI は、ドキュメント SVG の上に重ねた別レイヤーで描画し、書き出しには含めない。

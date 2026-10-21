@@ -2,7 +2,6 @@
 // so what you see is what gets exported (docs/design.md §3).
 import type { ReactElement } from 'react';
 import type {
-  Effects,
   ImageObject,
   PathObject,
   SceneObject,
@@ -10,6 +9,7 @@ import type {
   SparcaDocument,
   TextObject,
 } from '../model/types';
+import { effectsFilter } from './effects';
 import { fillPaint } from './gradient';
 import { pathNodesD, shapePaths } from './shapes';
 import { textLines, textBaselineOffset } from './text';
@@ -75,7 +75,7 @@ function renderObject(o: SceneObject, opts: RenderOptions, prefix: string): Reac
   const { x, y, width: w, height: h, rotation } = o.box;
   const transform =
     `translate(${x} ${y})` + (rotation ? ` rotate(${rotation} ${w / 2} ${h / 2})` : '');
-  const filterId = hasEffects(o.effects) ? `${prefix}-fx-${o.id}` : null;
+  const filterId = `${prefix}-fx-${o.id}`;
   let body: ReactElement | null;
   let strokeWidth = 0;
   const fillId = `${prefix}-fill-${o.id}`;
@@ -95,10 +95,11 @@ function renderObject(o: SceneObject, opts: RenderOptions, prefix: string): Reac
       body = renderImage(o, opts);
       break;
   }
+  const filter = effectsFilter(filterId, o.effects, w, h, rotation, strokeWidth);
   return (
     <g key={o.id} data-object-id={o.id} transform={transform} opacity={o.opacity}>
-      {filterId && effectsFilter(filterId, o.effects, w, h, rotation, strokeWidth)}
-      <g filter={filterId ? `url(#${filterId})` : undefined}>{body}</g>
+      {filter}
+      <g filter={filter ? `url(#${filterId})` : undefined}>{body}</g>
       {opts.hitAreas && hitArea(o)}
     </g>
   );
@@ -200,67 +201,4 @@ function hitArea(o: SceneObject): ReactElement | null {
     );
   }
   return null;
-}
-
-export function hasEffects(e: Effects): boolean {
-  return e.glow.enabled || e.dropShadow.enabled;
-}
-
-function effectsFilter(
-  id: string,
-  e: Effects,
-  w: number,
-  h: number,
-  rotation: number,
-  strokeWidth: number,
-): ReactElement {
-  const ds = e.dropShadow;
-  const gl = e.glow;
-  // The filter works in the rotated local frame; counter-rotate the shadow
-  // direction so the shadow falls the same way regardless of object rotation.
-  const a = ((ds.angle - rotation) * Math.PI) / 180;
-  const dx = Math.cos(a) * ds.distance;
-  const dy = Math.sin(a) * ds.distance;
-  const margin =
-    strokeWidth +
-    Math.max(
-      ds.enabled ? ds.distance + ds.blur * 3 : 0,
-      gl.enabled ? gl.spread + gl.blur * 3 : 0,
-    ) +
-    8;
-  return (
-    <defs>
-      <filter
-        id={id}
-        filterUnits="userSpaceOnUse"
-        x={-margin}
-        y={-margin}
-        width={w + margin * 2}
-        height={h + margin * 2}
-        colorInterpolationFilters="sRGB"
-      >
-        {ds.enabled && (
-          <>
-            <feGaussianBlur in="SourceAlpha" stdDeviation={ds.blur / 2} result="dsBlur" />
-            <feOffset in="dsBlur" dx={dx} dy={dy} result="dsOff" />
-            <feFlood floodColor={ds.color} floodOpacity={ds.opacity} result="dsColor" />
-            <feComposite in="dsColor" in2="dsOff" operator="in" result="shadow" />
-          </>
-        )}
-        {gl.enabled && (
-          <>
-            <feMorphology in="SourceAlpha" operator="dilate" radius={gl.spread} result="glSpread" />
-            <feGaussianBlur in="glSpread" stdDeviation={gl.blur / 2} result="glBlur" />
-            <feFlood floodColor={gl.color} floodOpacity={gl.opacity} result="glColor" />
-            <feComposite in="glColor" in2="glBlur" operator="in" result="glow" />
-          </>
-        )}
-        <feMerge>
-          {ds.enabled && <feMergeNode in="shadow" />}
-          {gl.enabled && <feMergeNode in="glow" />}
-          <feMergeNode in="SourceGraphic" />
-        </feMerge>
-      </filter>
-    </defs>
-  );
 }

@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
-import { canvasBox, decodePixels, disableNativePickers, drag, makePng, placePng, setColor } from './helpers';
+import { addEffect, canvasBox, decodePixels, disableNativePickers, drag, makePng, placePng, setColor } from './helpers';
 
 test.beforeEach(async ({ page }) => {
   await disableNativePickers(page);
@@ -43,11 +43,11 @@ async function buildScene(page: Page) {
   // Shadowed shape.
   await page.keyboard.press('r');
   await drag(page, { x: c.x + 100, y: c.y + 10 }, { x: c.x + 150, y: c.y + 60 });
-  await page.getByLabel('ドロップシャドウ', { exact: true }).check();
-  const dist = page.locator('input[type="text"][aria-label="影の距離"]');
+  await addEffect(page, 'シャドウとグロー', 'ドロップシャドウ');
+  const dist = page.locator('input[type="text"][aria-label="ドロップシャドウの距離"]');
   await dist.fill('20');
   await dist.press('Enter');
-  const blur = page.locator('input[type="text"][aria-label="影のぼかし"]');
+  const blur = page.locator('input[type="text"][aria-label="ドロップシャドウのぼかし"]');
   await blur.fill('0');
   await blur.press('Enter');
   // Image 100×100 gray(100) with brightness +50.

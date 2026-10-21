@@ -1,6 +1,8 @@
 // Structural validation of document.json. Rejects anything that would leave the editor
 // in an inconsistent state; fills in fields added after a file was written.
-import { defaultEffects, defaultPipeline } from '../model/factory';
+import { createEffect, EFFECT_KINDS, migrateLegacyEffects } from '../model/effects';
+import { defaultPipeline } from '../model/factory';
+import type { EffectKind } from '../model/types';
 import type { SparcaDocument } from '../model/types';
 import { MAX_DIMENSION } from '../model/types';
 
@@ -100,7 +102,7 @@ function checkObject(o: unknown, where: string, ids: Set<string>, assets: Obj): 
   const box = o.box;
   if (!isObj(box)) throw new Invalid(`${where}.box がありません`);
   for (const k of ['x', 'y', 'width', 'height', 'rotation']) num(box, k, `${where}.box`);
-  o.effects = mergeDefaults(defaultEffects(), o.effects);
+  o.effects = checkEffects(o.effects, `${where}.effects`);
   switch (type) {
     case 'shape': {
       const s = o.shape;
@@ -128,6 +130,35 @@ function checkObject(o: unknown, where: string, ids: Set<string>, assets: Obj): 
       break;
     }
   }
+}
+
+/**
+ * Effects list: unknown kinds are rejected, missing settings get their defaults, and the
+ * older `{ glow, dropShadow }` form is converted.
+ */
+function checkEffects(v: unknown, where: string): unknown[] {
+  if (v === undefined) return [];
+  if (isObj(v)) return migrateLegacyEffects(v);
+  if (!Array.isArray(v)) throw new Invalid(`${where} が正しくありません`);
+  const ids = new Set<string>();
+  return v.map((e, i) => {
+    const w = `${where}[${i}]`;
+    if (!isObj(e) || !EFFECT_KINDS.has(e.kind as string)) throw new Invalid(`${w} の種類が正しくありません`);
+    const d = createEffect(e.kind as EffectKind) as unknown as Obj;
+    const out: Obj = { ...d };
+    for (const [k, dv] of Object.entries(d)) {
+      if (k === 'kind' || !(k in e)) continue;
+      if (typeof e[k] !== typeof dv || (typeof dv === 'number' && !Number.isFinite(e[k] as number))) {
+        throw new Invalid(`${w}.${k} が正しくありません`);
+      }
+      out[k] = e[k];
+    }
+    out.strength = Math.min(1, Math.max(0, out.strength as number));
+    // Ids only need to be unique within the object.
+    if (ids.has(out.id as string)) out.id = d.id;
+    ids.add(out.id as string);
+    return out;
+  });
 }
 
 const GRADIENT_KINDS = new Set(['linear', 'radial', 'conic']);

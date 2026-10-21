@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { canvasBox, drag, state } from './helpers';
+import { addEffect, canvasBox, drag, state } from './helpers';
 
 test.beforeEach(async ({ page }) => {
   await page.goto('/');
@@ -67,10 +67,10 @@ test('the same palette is used for text color, effects and the background', asyn
   expect(await state<unknown>(page, 's => s.doc.background')).toEqual({ kind: 'color', color: '#ffff00' });
   // Drop shadow color on the rectangle.
   await page.locator('[data-object-row="矩形"]').click();
-  await page.getByLabel('ドロップシャドウ', { exact: true }).check();
-  await props(page).getByRole('button', { name: '影の色', exact: true }).click();
-  await page.getByRole('dialog', { name: '影の色のパレット' }).getByRole('button', { name: '#0000ff', exact: true }).first().click();
-  expect(await state<string>(page, 's => s.doc.layers[0].children[0].effects.dropShadow.color')).toBe('#0000ff');
+  await addEffect(page, 'シャドウとグロー', 'ドロップシャドウ');
+  await props(page).getByRole('button', { name: 'ドロップシャドウの色', exact: true }).click();
+  await page.getByRole('dialog', { name: 'ドロップシャドウの色のパレット' }).getByRole('button', { name: '#0000ff', exact: true }).first().click();
+  expect(await state<string>(page, 's => s.doc.layers[0].children[0].effects[0].color')).toBe('#0000ff');
 });
 
 test('その他の色: picking a color does not apply it until OK; キャンセル returns to the swatches', async ({ page }) => {

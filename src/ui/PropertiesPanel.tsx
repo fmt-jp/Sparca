@@ -2,7 +2,7 @@
 import { transformObjects, updateObject } from '../model/commands';
 import { boxCenter, unionBounds } from '../model/geometry';
 import { findObject, isEffectivelyLocked } from '../model/tree';
-import type { ColorAdjust, Effects, SceneObject, ShapeObject, TextObject, ImageObject, PathObject, Id, Box } from '../model/types';
+import type { ColorAdjust, SceneObject, ShapeObject, TextObject, ImageObject, PathObject, Id, Box } from '../model/types';
 import { pipelineOutputSize } from '../engine/pipeline';
 import { METHOD_LABELS } from '../engine/resample';
 import { autoColor, cancelCrop, commitCrop, pixelTargetImage, resetAdjust, setAdjust, setCropTarget, setImageBlur } from '../store/imageActions';
@@ -12,6 +12,7 @@ import { convertSelectedNodes, deleteSelectedNodes, setPathClosed, setPathNodes 
 import { fitTextBox } from '../render/text';
 import { isGradient } from '../model/gradient';
 import { FillInput } from './FillInput';
+import { EffectsPanel } from './EffectsPanel';
 import { arrowTipAngle, headForTipAngle } from '../render/shapes';
 import { alignSelection, groupSelection, ungroupSelection, type AlignOp } from '../store/actions';
 import { ColorInput, Field, NumberInput, PopupSliderInput, Toggle } from './controls';
@@ -81,7 +82,7 @@ export function PropertiesPanel() {
         {o.type === 'path' && <PaintSection o={o} />}
         {o.type === 'text' && <TextSection o={o} />}
         {o.type === 'image' && <ImageSection o={o} />}
-        {o.type !== 'image' && <EffectsSection o={o} />}
+        <EffectsPanel o={o} />
       </fieldset>
     );
   } else {
@@ -614,64 +615,6 @@ function PixelSelectionSection() {
         選択解除
       </button>
     </div>
-  );
-}
-
-function EffectsSection({ o }: { o: ShapeObject | PathObject | TextObject }) {
-  const e = o.effects;
-  const setFx = (patch: Partial<Effects>, label: string, key?: string) =>
-    set(o.id, { effects: { ...e, ...patch } } as Partial<SceneObject>, label, key);
-  const glow = (p: Partial<Effects['glow']>, key?: string) => setFx({ glow: { ...e.glow, ...p } }, 'グローの変更', key && `glow-${key}`);
-  const shadow = (p: Partial<Effects['dropShadow']>, key?: string) =>
-    setFx({ dropShadow: { ...e.dropShadow, ...p } }, 'ドロップシャドウの変更', key && `shadow-${key}`);
-  return (
-    <>
-      <div className="prop-section effect">
-        <Toggle checked={e.glow.enabled} onChange={(enabled) => glow({ enabled })}>
-          グロー
-        </Toggle>
-        {e.glow.enabled && (
-          <>
-            <Field label="色">
-              <ColorInput label="グローの色" value={e.glow.color} onChange={(c) => glow({ color: c ?? '#ffffff' }, 'color')} />
-            </Field>
-            <Field label="ぼかし" group>
-              <PopupSliderInput label="グローのぼかし" value={e.glow.blur} min={0} max={50} suffix="px" onChange={(blur) => glow({ blur }, 'blur')} />
-            </Field>
-            <Field label="広がり" group>
-              <PopupSliderInput label="グローの広がり" value={e.glow.spread} min={0} max={30} suffix="px" onChange={(spread) => glow({ spread }, 'spread')} />
-            </Field>
-            <Field label="強さ" group>
-              <PopupSliderInput label="グローの強さ" value={Math.round(e.glow.opacity * 100)} min={0} max={100} suffix="%" onChange={(v) => glow({ opacity: v / 100 }, 'opacity')} />
-            </Field>
-          </>
-        )}
-      </div>
-      <div className="prop-section effect">
-        <Toggle checked={e.dropShadow.enabled} onChange={(enabled) => shadow({ enabled })}>
-          ドロップシャドウ
-        </Toggle>
-        {e.dropShadow.enabled && (
-          <>
-            <Field label="色">
-              <ColorInput label="影の色" value={e.dropShadow.color} onChange={(c) => shadow({ color: c ?? '#000000' }, 'color')} />
-            </Field>
-            <Field label="不透明度" group>
-              <PopupSliderInput label="影の不透明度" value={Math.round(e.dropShadow.opacity * 100)} min={0} max={100} suffix="%" onChange={(v) => shadow({ opacity: v / 100 }, 'opacity')} />
-            </Field>
-            <Field label="角度" group>
-              <PopupSliderInput label="影の角度" value={e.dropShadow.angle} min={-180} max={180} suffix="°" onChange={(angle) => shadow({ angle }, 'angle')} />
-            </Field>
-            <Field label="距離" group>
-              <PopupSliderInput label="影の距離" value={e.dropShadow.distance} min={0} max={100} suffix="px" onChange={(distance) => shadow({ distance }, 'distance')} />
-            </Field>
-            <Field label="ぼかし" group>
-              <PopupSliderInput label="影のぼかし" value={e.dropShadow.blur} min={0} max={50} suffix="px" onChange={(blur) => shadow({ blur }, 'blur')} />
-            </Field>
-          </>
-        )}
-      </div>
-    </>
   );
 }
 

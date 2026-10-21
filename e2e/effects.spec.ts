@@ -1,0 +1,186 @@
+import { expect, test, type Page } from '@playwright/test';
+import { readFileSync } from 'node:fs';
+import { addEffect, canvasBox, decodePixels, disableNativePickers, drag, makePng, placePng, state } from './helpers';
+
+test.beforeEach(async ({ page }) => {
+  await disableNativePickers(page);
+  await page.goto('/');
+});
+
+test.afterEach(async ({ page }) => {
+  await expect(page.locator('.notice.error')).toHaveCount(0);
+});
+
+type Fx = { kind: string; enabled: boolean; strength: number } & Record<string, unknown>;
+const effects = (page: Page) => state<Fx[]>(page, 's => s.doc.layers[0].children[0].effects');
+const props = (page: Page) => page.getByRole('region', { name: 'プロパティ' });
+
+async function exportPixels(page: Page, points: [number, number][]) {
+  await page.keyboard.press('Control+Shift+E');
+  const dialog = page.getByRole('dialog', { name: '画像として書き出し' });
+  await dialog.getByLabel('PNG', { exact: true }).check();
+  const dl = page.waitForEvent('download');
+  await dialog.getByRole('button', { name: '書き出し' }).click();
+  const bytes = readFileSync((await (await dl).path())!);
+  return (await decodePixels(page, bytes, 'image/png', points)).px;
+}
+
+async function setNum(page: Page, label: string, v: string) {
+  const i = props(page).locator(`input[type="text"][aria-label="${label}"]`);
+  await i.fill(v);
+  await i.press('Enter');
+}
+
+/** Blue (#4a90e2) rectangle (100,100)–(300,300) on the white canvas, selected. */
+async function rect(page: Page) {
+  const c = await canvasBox(page);
+  await page.keyboard.press('r');
+  await drag(page, { x: c.x + 100, y: c.y + 100 }, { x: c.x + 300, y: c.y + 300 });
+  return c;
+}
+
+const BLUE = [74, 144, 226];
+const lum = (p: number[]) => p[0] + p[1] + p[2];
+
+test('several effects: listed in order, applied top to bottom, reorderable, undoable', async ({ page }) => {
+  await rect(page);
+  await addEffect(page, '色の調整', 'カラーオーバーレイ'); // red
+  await addEffect(page, '色の調整', '反転');
+  expect((await effects(page)).map((e) => e.kind)).toEqual(['color-overlay', 'invert']);
+  await expect(props(page).locator('.effect-name')).toHaveText(['▾カラーオーバーレイ', '反転']);
+  // Red, then inverted → cyan.
+  let [px] = await exportPixels(page, [[200, 200]]);
+  expect(px.slice(0, 3)).toEqual([0, 255, 255]);
+
+  // Move 反転 up: inverted first, then painted red → red.
+  await props(page).getByRole('button', { name: '反転を上へ' }).click();
+  expect((await effects(page)).map((e) => e.kind)).toEqual(['invert', 'color-overlay']);
+  [px] = await exportPixels(page, [[200, 200]]);
+  expect(px.slice(0, 3)).toEqual([255, 0, 0]);
+  await expect(props(page).getByRole('button', { name: '反転を上へ' })).toBeDisabled();
+
+  await page.keyboard.press('Control+z');
+  expect((await effects(page)).map((e) => e.kind)).toEqual(['color-overlay', 'invert']);
+  await props(page).getByRole('button', { name: 'カラーオーバーレイを削除', exact: true }).click();
+  expect((await effects(page)).map((e) => e.kind)).toEqual(['invert']);
+});
+
+test('on/off and strength: off removes the effect without losing its settings; strength blends', async ({ page }) => {
+  await rect(page);
+  await addEffect(page, '色の調整', 'カラーオーバーレイ');
+  await props(page).getByLabel('カラーオーバーレイを有効にする').uncheck();
+  expect((await effects(page))[0]).toMatchObject({ enabled: false, color: '#ff0000' });
+  await expect(page.locator('[data-testid=canvas] filter')).toHaveCount(0);
+  let [px] = await exportPixels(page, [[200, 200]]);
+  expect(px.slice(0, 3)).toEqual(BLUE);
+
+  await props(page).getByLabel('カラーオーバーレイを有効にする').check();
+  await setNum(page, 'カラーオーバーレイの強さ', '50');
+  expect((await effects(page))[0].strength).toBeCloseTo(0.5, 5);
+  [px] = await exportPixels(page, [[200, 200]]);
+  // Halfway between blue and red.
+  expect(px[0]).toBeGreaterThan(155);
+  expect(px[0]).toBeLessThan(175);
+  expect(px[2]).toBeGreaterThan(103);
+  expect(px[2]).toBeLessThan(123);
+});
+
+test('the same kind can be added twice and is numbered; each has its own settings', async ({ page }) => {
+  await rect(page);
+  await addEffect(page, 'シャドウとグロー', 'ドロップシャドウ');
+  await addEffect(page, 'シャドウとグロー', 'ドロップシャドウ');
+  await setNum(page, 'ドロップシャドウ 1の距離', '0');
+  await setNum(page, 'ドロップシャドウ 1のぼかし', '0');
+  await setNum(page, 'ドロップシャドウ 2の角度', '-90'); // up
+  await setNum(page, 'ドロップシャドウ 2の距離', '30');
+  await setNum(page, 'ドロップシャドウ 2のぼかし', '0');
+  await setNum(page, 'ドロップシャドウ 2の不透明度', '100');
+  const fx = await effects(page);
+  expect(fx.map((e) => [e.kind, e.distance])).toEqual([
+    ['drop-shadow', 0],
+    ['drop-shadow', 30],
+  ]);
+  // Shadow 2 shows above the rectangle.
+  const [above, below] = await exportPixels(page, [[200, 85], [200, 315]]);
+  expect(above.slice(0, 3)).toEqual([0, 0, 0]);
+  expect(below.slice(0, 3)).toEqual([255, 255, 255]);
+});
+
+test('shadow, glow, bevel and emboss effects change the right pixels', async ({ page }) => {
+  // Inner shadow (down-right): dark band inside the top-left edges.
+  await rect(page);
+  await addEffect(page, 'シャドウとグロー', '内側シャドウ');
+  let px = await exportPixels(page, [[103, 200], [200, 200], [297, 200]]);
+  expect(lum(px[0])).toBeLessThan(lum(BLUE) - 60);
+  expect(px[1].slice(0, 3)).toEqual(BLUE);
+  expect(px[2].slice(0, 3)).toEqual(BLUE);
+  await props(page).getByRole('button', { name: '内側シャドウを削除', exact: true }).click();
+
+  // Inner glow inside the edge, then glow outside (in that order, so the inner glow
+  // is not also applied to the outer glow).
+  await addEffect(page, 'シャドウとグロー', '内側グロー');
+  await addEffect(page, 'シャドウとグロー', 'グロー');
+  px = await exportPixels(page, [[98, 200], [102, 200], [200, 200]]);
+  expect(px[0][2]).toBeLessThan(180); // yellow glow outside (less blue than white)
+  expect(lum(px[1])).toBeGreaterThan(lum(BLUE) + 60); // white inner glow
+  expect(px[2].slice(0, 3)).toEqual(BLUE);
+  await props(page).getByRole('button', { name: 'グローを削除', exact: true }).click();
+  await props(page).getByRole('button', { name: '内側グローを削除', exact: true }).click();
+
+  // Inner bevel lit from the top-left.
+  await addEffect(page, 'ベベルとエンボス', '内側ベベル');
+  px = await exportPixels(page, [[102, 200], [298, 200], [200, 200]]);
+  expect(lum(px[0])).toBeGreaterThan(lum(BLUE) + 60);
+  expect(lum(px[1])).toBeLessThan(lum(BLUE) - 60);
+  expect(px[2].slice(0, 3)).toEqual(BLUE);
+  await props(page).getByRole('button', { name: '内側ベベルを削除', exact: true }).click();
+
+  // Outer bevel: a gray rim around the shape.
+  await addEffect(page, 'ベベルとエンボス', '外側ベベル');
+  px = await exportPixels(page, [[200, 96], [200, 120]]);
+  expect(Math.abs(px[0][0] - px[0][2])).toBeLessThan(20); // gray-ish rim
+  expect(px[0].slice(0, 3)).not.toEqual([255, 255, 255]);
+  expect(px[1].slice(0, 3)).toEqual(BLUE);
+  await props(page).getByRole('button', { name: '外側ベベルを削除', exact: true }).click();
+
+  // Emboss without the object's color: gray.
+  await addEffect(page, 'ベベルとエンボス', 'エンボス');
+  await props(page).getByLabel('オブジェクトの色を表示').uncheck();
+  px = await exportPixels(page, [[200, 200]]);
+  expect(px[0].slice(0, 3)).toEqual([128, 128, 128]);
+});
+
+test('blur, sharpen and color adjustments', async ({ page }) => {
+  await rect(page);
+  await addEffect(page, 'ぼかしとシャープ', 'ぼかし');
+  let px = await exportPixels(page, [[100, 200], [95, 200]]);
+  expect(px[0][0]).toBeGreaterThan(BLUE[0] + 30); // the edge mixes with the white around it
+  expect(px[1].slice(0, 3)).not.toEqual([255, 255, 255]);
+  await props(page).getByRole('button', { name: 'ぼかしを削除', exact: true }).click();
+
+  await addEffect(page, 'ぼかしとシャープ', 'シャープ');
+  await expect(page.locator('[data-testid=canvas] filter feComposite[operator="arithmetic"]')).toHaveCount(1);
+  await props(page).getByRole('button', { name: 'シャープを削除', exact: true }).click();
+
+  await addEffect(page, '色の調整', '明るさ・コントラスト');
+  await setNum(page, '明るさ・コントラストの明るさ', '50');
+  px = await exportPixels(page, [[200, 200]]);
+  expect(lum(px[0])).toBeGreaterThan(lum(BLUE) + 150);
+  await props(page).getByRole('button', { name: '明るさ・コントラストを削除', exact: true }).click();
+
+  await addEffect(page, '色の調整', '色相・彩度');
+  await setNum(page, '色相・彩度の彩度', '-100');
+  px = await exportPixels(page, [[200, 200]]);
+  expect(Math.max(...px[0].slice(0, 3)) - Math.min(...px[0].slice(0, 3))).toBeLessThan(3); // gray
+});
+
+test('effects also work on images, and are saved as editable settings', async ({ page }) => {
+  await placePng(page, 'g.png', makePng(100, 100, () => [0, 0, 255, 255]));
+  await page.keyboard.press('v');
+  await addEffect(page, '色の調整', '反転');
+  const x = await state<number>(page, 's => s.doc.layers[0].children[0].box.x');
+  const y = await state<number>(page, 's => s.doc.layers[0].children[0].box.y');
+  const [px] = await exportPixels(page, [[x + 50, y + 50]]);
+  expect(px.slice(0, 3)).toEqual([255, 255, 0]);
+  expect((await effects(page)).map((e) => e.kind)).toEqual(['invert']);
+});

@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { canvasBox, drag, makePng, state } from './helpers';
+import { addEffect, canvasBox, drag, makePng, state } from './helpers';
 
 const sides = (page: Page) => state<number>(page, 's => s.doc.layers[0].children[0].shape.sides');
 
@@ -125,19 +125,19 @@ test.describe('the properties panel uses only pop-up sliders', () => {
   test('no inline range sliders remain; opacity, effects and image adjustments open the ▾ slider', async ({ page }) => {
     const props = page.getByRole('region', { name: 'プロパティ' });
     // Polygon from beforeEach is selected: opacity + effects.
-    await page.getByLabel('ドロップシャドウ', { exact: true }).check();
-    await page.getByLabel('グロー', { exact: true }).check();
+    await addEffect(page, 'シャドウとグロー', 'ドロップシャドウ');
+    await addEffect(page, 'シャドウとグロー', 'グロー');
     await expect(props.locator('input[type="range"]')).toHaveCount(0);
 
-    const obj = () => state<{ opacity: number; effects: { dropShadow: { distance: number } } }>(page, 's => s.doc.layers[0].children[0]');
+    const obj = () => state<{ opacity: number; effects: { distance: number }[] }>(page, 's => s.doc.layers[0].children[0]');
     await props.getByRole('button', { name: '不透明度のスライダー', exact: true }).click();
     await page.keyboard.press('Home'); // 0%
     await page.keyboard.press('Escape');
     expect((await obj()).opacity).toBe(0);
-    await props.getByRole('button', { name: '影の距離のスライダー', exact: true }).click();
+    await props.getByRole('button', { name: 'ドロップシャドウの距離のスライダー', exact: true }).click();
     await page.keyboard.press('ArrowUp');
     await page.keyboard.press('Escape');
-    expect((await obj()).effects.dropShadow.distance).toBe(7); // default 6 + 1
+    expect((await obj()).effects[0].distance).toBe(7); // default 6 + 1
 
     // Image adjustments use it too.
     await page.keyboard.press('Control+a');
