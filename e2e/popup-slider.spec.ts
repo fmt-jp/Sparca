@@ -63,3 +63,60 @@ test('arrow keys adjust the slider; clicking elsewhere closes it; typing still w
   await box.press('Enter');
   expect(await sides(page)).toBe(12);
 });
+
+test.describe('every shape tool uses the same ▾ slider for its numbers', () => {
+  const tools: { tool: string; menu: string; extra: string[] }[] = [
+    { tool: 'rect', menu: '矩形ツール', extra: ['角丸'] },
+    { tool: 'rounded-rect', menu: '角丸矩形ツール', extra: ['角丸'] },
+    { tool: 'ellipse', menu: '楕円ツール', extra: [] },
+    { tool: 'polygon', menu: '多角形ツール', extra: ['頂点数'] },
+    { tool: 'star', menu: '星ツール', extra: ['頂点数'] },
+    { tool: 'arrow', menu: '矢印ツール', extra: [] },
+  ];
+  for (const t of tools) {
+    test(`${t.menu}: 線幅${t.extra.map((x) => `・${x}`).join('')}`, async ({ page }) => {
+      await page.keyboard.press('Control+z'); // drop the polygon from beforeEach
+      const c = await canvasBox(page);
+      // R cycles through the shape group.
+      for (let i = 0; i < 6 && (await state<string>(page, 's => s.tool')) !== t.tool; i++) await page.keyboard.press('r');
+      expect(await state<string>(page, 's => s.tool')).toBe(t.tool);
+      await drag(page, { x: c.x + 300, y: c.y + 150 }, { x: c.x + 500, y: c.y + 350 });
+      const props = page.getByRole('region', { name: 'プロパティ' });
+      const obj = () => state<{ strokeWidth: number; shape: Record<string, number> }>(page, 's => s.doc.layers[0].children[0]');
+      const before = await obj();
+
+      for (const label of ['線幅', ...t.extra]) {
+        await props.getByRole('button', { name: `${label}のスライダー` }).click();
+        const slider = page.getByRole('slider', { name: label });
+        await expect(slider).toBeFocused();
+        await page.keyboard.press('ArrowUp');
+        await page.keyboard.press('ArrowUp');
+        await page.keyboard.press('Escape');
+        await expect(slider).toHaveCount(0);
+      }
+      const after = await obj();
+      expect(after.strokeWidth).toBe(before.strokeWidth + 2);
+      if (t.extra.includes('角丸')) expect(after.shape.cornerRadius).toBe(before.shape.cornerRadius + 2);
+      if (t.tool === 'polygon') expect(after.shape.sides).toBe(before.shape.sides + 2);
+      if (t.tool === 'star') expect(after.shape.points).toBe(before.shape.points + 2);
+    });
+  }
+
+  test('the stroke width slider goes to 50px while the box accepts more; the corner slider stops at half the shorter side', async ({ page }) => {
+    await page.keyboard.press('Control+z');
+    const c = await canvasBox(page);
+    await page.keyboard.press('r');
+    await drag(page, { x: c.x + 100, y: c.y + 100 }, { x: c.x + 300, y: c.y + 180 }); // 200×80
+    const props = page.getByRole('region', { name: 'プロパティ' });
+    await props.getByRole('button', { name: '線幅のスライダー' }).click();
+    await page.keyboard.press('End');
+    expect(await state<number>(page, 's => s.doc.layers[0].children[0].strokeWidth')).toBe(50);
+    await page.keyboard.press('Escape');
+    const box = props.locator('input[aria-label="線幅"]');
+    await box.fill('120');
+    await box.press('Enter');
+    expect(await state<number>(page, 's => s.doc.layers[0].children[0].strokeWidth')).toBe(120);
+    await props.getByRole('button', { name: '角丸のスライダー' }).click();
+    await expect(page.getByRole('slider', { name: '角丸' })).toHaveAttribute('aria-valuemax', '40');
+  });
+});

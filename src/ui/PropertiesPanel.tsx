@@ -194,8 +194,18 @@ function PaintSection({ o }: { o: ShapeObject | PathObject }) {
           }}
         />
       </Field>
-      <Field label="線幅">
-        <NumberInput label="線幅" value={o.strokeWidth} min={0} max={500} precision={1} suffix="px" onCommit={(strokeWidth) => set(o.id, { strokeWidth } as Partial<SceneObject>, '線幅の変更')} />
+      <Field label="線幅" group>
+        <PopupSliderInput
+          label="線幅"
+          value={o.strokeWidth}
+          min={0}
+          max={500}
+          sliderMax={50}
+          precision={1}
+          suffix="px"
+          undoLabel="線幅の変更"
+          onChange={(strokeWidth) => set(o.id, { strokeWidth } as Partial<SceneObject>, '線幅の変更', 'strokeWidth')}
+        />
       </Field>
     </div>
   );
@@ -210,8 +220,18 @@ function ShapeSection({ o }: { o: ShapeObject }) {
       <PaintSection o={o} />
       <div className="prop-section">
         {g.kind === 'rect' && (
-          <Field label="角丸">
-            <NumberInput label="角丸" value={g.cornerRadius} min={0} max={10000} suffix="px" onCommit={(cornerRadius) => setShape({ cornerRadius }, '角丸の変更')} />
+          <Field label="角丸" group>
+            <PopupSliderInput
+              label="角丸"
+              value={g.cornerRadius}
+              min={0}
+              max={10000}
+              // Beyond half the shorter side the corners are already fully round.
+              sliderMax={Math.ceil(Math.min(o.box.width, o.box.height) / 2)}
+              suffix="px"
+              undoLabel="角丸の変更"
+              onChange={(cornerRadius) => setShape({ cornerRadius }, '角丸の変更', 'cornerRadius')}
+            />
           </Field>
         )}
         {g.kind === 'polygon' && (
@@ -228,8 +248,15 @@ function ShapeSection({ o }: { o: ShapeObject }) {
         )}
         {g.kind === 'star' && (
           <>
-            <Field label="頂点数">
-              <NumberInput label="頂点数" value={g.points} min={3} max={64} onCommit={(points) => setShape({ points: Math.round(points) }, '頂点数の変更')} />
+            <Field label="頂点数" group>
+              <PopupSliderInput
+                label="頂点数"
+                value={g.points}
+                min={3}
+                max={64}
+                undoLabel="頂点数の変更"
+                onChange={(points) => setShape({ points: Math.round(points) }, '頂点数の変更', 'points')}
+              />
             </Field>
             <Field label="内径比">
               <SliderInput label="内径比" value={Math.round(g.innerRatio * 100)} min={5} max={95} suffix="%" onChange={(v) => setShape({ innerRatio: v / 100 }, '星の形状の変更', 'star')} />
