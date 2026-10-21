@@ -207,15 +207,23 @@ export function PopupSliderInput({
   min,
   max,
   step = 1,
+  precision = 0,
+  sliderMin,
+  sliderMax,
   label,
   suffix,
   undoLabel,
 }: {
   value: number;
   onChange: (v: number) => void;
+  /** Limits for typed values. */
   min: number;
   max: number;
   step?: number;
+  precision?: number;
+  /** Slider range when it should be narrower than what can be typed (defaults to min/max). */
+  sliderMin?: number;
+  sliderMax?: number;
   label: string;
   suffix?: string;
   undoLabel: string;
@@ -250,7 +258,7 @@ export function PopupSliderInput({
 
   return (
     <span className="popup-slider" ref={wrap}>
-      <NumberInput value={value} onCommit={onChange} min={min} max={max} step={step} suffix={suffix} label={label} />
+      <NumberInput value={value} onCommit={onChange} min={min} max={max} step={step} precision={precision} suffix={suffix} label={label} />
       <button
         type="button"
         className={`popup-toggle${open ? ' open' : ''}`}
@@ -275,7 +283,15 @@ export function PopupSliderInput({
             }
           }}
         >
-          <VerticalSlider value={value} min={min} max={max} step={step} label={label} onChange={onChange} undoLabel={undoLabel} />
+          <VerticalSlider
+            value={value}
+            min={sliderMin ?? min}
+            max={Math.max(sliderMax ?? max, (sliderMin ?? min) + step)}
+            step={step}
+            label={label}
+            onChange={onChange}
+            undoLabel={undoLabel}
+          />
         </div>
       )}
     </span>
