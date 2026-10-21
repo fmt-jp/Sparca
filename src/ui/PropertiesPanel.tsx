@@ -12,7 +12,7 @@ import { convertSelectedNodes, deleteSelectedNodes, setPathClosed, setPathNodes 
 import { measureText } from '../render/text';
 import { arrowTipAngle, headForTipAngle } from '../render/shapes';
 import { alignSelection, groupSelection, ungroupSelection, type AlignOp } from '../store/actions';
-import { ColorInput, Field, NumberInput, SliderInput, Toggle } from './controls';
+import { ColorInput, Field, NumberInput, PopupSliderInput, SliderInput, Toggle } from './controls';
 import { editor, useEditor } from './useEditor';
 import { useState } from 'react';
 import { toolDef } from './tools';
@@ -215,8 +215,15 @@ function ShapeSection({ o }: { o: ShapeObject }) {
           </Field>
         )}
         {g.kind === 'polygon' && (
-          <Field label="頂点数">
-            <NumberInput label="頂点数" value={g.sides} min={3} max={64} onCommit={(sides) => setShape({ sides: Math.round(sides) }, '頂点数の変更')} />
+          <Field label="頂点数" group>
+            <PopupSliderInput
+              label="頂点数"
+              value={g.sides}
+              min={3}
+              max={64}
+              undoLabel="頂点数の変更"
+              onChange={(sides) => setShape({ sides: Math.round(sides) }, '頂点数の変更', 'sides')}
+            />
           </Field>
         )}
         {g.kind === 'star' && (
