@@ -10,6 +10,8 @@ import { openDialog } from './dialogs';
 import { moveAnchors, pathToDoc } from '../model/pathEdit';
 import { convertSelectedNodes, deleteSelectedNodes, setPathClosed, setPathNodes } from '../store/pathActions';
 import { fitTextBox } from '../render/text';
+import { isGradient } from '../model/gradient';
+import { FillInput } from './FillInput';
 import { arrowTipAngle, headForTipAngle } from '../render/shapes';
 import { alignSelection, groupSelection, ungroupSelection, type AlignOp } from '../store/actions';
 import { ColorInput, Field, NumberInput, PopupSliderInput, Toggle } from './controls';
@@ -176,8 +178,8 @@ function PaintSection({ o }: { o: ShapeObject | PathObject }) {
   return (
     <div className="prop-section">
       {!lineLike && (
-        <Field label="塗り">
-          <ColorInput label="塗り" allowNone value={o.fill} onChange={(fill) => set(o.id, { fill } as Partial<SceneObject>, '塗りの変更', 'fill')} />
+        <Field label="塗り" group wide={isGradient(o.fill)}>
+          <FillInput label="塗り" allowNone value={o.fill} size={o.box} onChange={(fill, l, k) => set(o.id, { fill } as Partial<SceneObject>, l, k)} />
         </Field>
       )}
       <Field label="線">
@@ -356,8 +358,8 @@ function TextSection({ o }: { o: TextObject }) {
             ))}
           </span>
         </Field>
-        <Field label="色">
-          <ColorInput label="文字色" value={o.color} onChange={(c) => set(o.id, { color: c ?? '#000000' } as Partial<SceneObject>, '文字色の変更', 'color')} />
+        <Field label="色" group wide={isGradient(o.color)}>
+          <FillInput label="文字色" value={o.color} size={o.box} onChange={(c, l, k) => set(o.id, { color: c ?? '#000000' } as Partial<SceneObject>, l, k)} />
         </Field>
         <Field label="文字間隔">
           <NumberInput label="文字間隔" value={o.letterSpacing} min={-100} max={1000} precision={1} suffix="px" onCommit={(letterSpacing) => setText(o, { letterSpacing }, '文字間隔の変更')} />

@@ -60,6 +60,21 @@ interface Box { x: number; y: number; width: number; height: number; rotation: n
 - **ImageObject**：元画像 `assetId` と非破壊の加工パイプライン（§4）。
 - **GroupObject**：`children: SceneObject[]`。子は**ドキュメント座標のまま**保持し、グループ自体は独自の変形を持たない。グループの移動・拡縮・回転は子それぞれへ同じ変換を適用する（回転は子の中心をグループ中心まわりに回し、子の回転角に加算）。回転済みの子を非等倍で拡縮した場合は外接矩形ベースの近似になる（Fireworks と同等の挙動）。
 
+**塗り（Fill）**：図形・パスの `fill` とテキストの `color` は、色文字列（`#rrggbb`）か次のグラデーション。`fill` は塗りなし（`null`）も可。
+
+```ts
+interface Gradient {
+  kind: 'linear' | 'radial' | 'conic';
+  stops: { offset: number /* 0..1 */; color: string; opacity: number /* 0..1 */ }[]; // 2つ以上。保存順は任意
+  start: Point; // box 内の正規化座標（回転前の box、0..1 の外も可）
+  end: Point;
+}
+```
+
+- 線形：`start`（位置 0）→ `end`（位置 1）。放射：`start` が中心、`end` は外周上の点（正規化座標で円なので、box に合わせて楕円に伸びる）。円錐：`start` が中心、`end` の方向が位置 0 で、時計回り。
+- 正規化座標なので、オブジェクトの移動・拡縮・回転・テキスト枠の自動調整に追従する。
+- 線（枠線）の色は単色のみ。
+
 `box` を「回転付き矩形」で統一することで、選択ハンドル・プロパティパネル（X, Y, 幅, 高さ, 回転）・保存形式が全種類のオブジェクトで共通になる。
 
 ### 2.2 画像データ（AssetStore）
@@ -78,6 +93,7 @@ interface Box { x: number; y: number; width: number; height: number; rotation: n
 - キャンバスはドキュメント全体を **1つの SVG** で描画する。`viewBox` はドキュメント座標、表示倍率は SVG の表示サイズで表現する（表示倍率と実寸を分離）。
 - 図形・パス・テキストは SVG 要素。グロー・ドロップシャドウは SVG フィルター（`feGaussianBlur`、`feMorphology`（広がり）、`feOffset`、`feFlood`）で描く。
 - 画像は画像エンジンでパイプラインを適用した結果（§4）を `<image>` として配置する。
+- グラデーション：線形・放射は SVG の `linearGradient`／`radialGradient`（`gradientUnits="userSpaceOnUse"` と box への変換行列）。SVG に円錐グラデーションはないため、Canvas の `createConicGradient` で画像（長辺 最大 2048px、小さい図形は 2 倍密度）を生成し `pattern` として塗る。生成画像はキャッシュする。
 - 選択ハンドル・範囲選択の点線などの操作 UI は、ドキュメント SVG の上に重ねた別レイヤーで描画し、書き出しには含めない。
 - キャンバス外のオブジェクトはドキュメントに残し、作業領域には表示する（書き出し対象はキャンバス内のみ）。
 - **書き出し**：同じ描画関数で書き出し用 SVG（画像は data URL 埋め込み、操作 UI なし、viewBox ＝キャンバス）を生成し、Canvas に描画してから PNG／JPEG／WebP にエンコードする。画面と書き出しで描画経路が同じになり、見た目が一致する。

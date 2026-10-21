@@ -24,6 +24,8 @@ function sampleDoc(): SparcaDocument {
     t.effects.glow.enabled = true;
     addObject(d, l2.id, t);
     addObject(d, l2.id, createShape(defaultGeometry('arrow'), { x: 0, y: 0, width: 10, height: 10, rotation: 0 }));
+    star.fill = { kind: 'conic', start: { x: 0.5, y: 0.5 }, end: { x: 1, y: 0.2 }, stops: [{ offset: 0, color: '#ff0000', opacity: 1 }, { offset: 0.4, color: '#00ff00', opacity: 0.5 }, { offset: 1, color: '#0000ff', opacity: 1 }] };
+    t.color = { kind: 'linear', start: { x: 0, y: 0 }, end: { x: 1, y: 1 }, stops: [{ offset: 0, color: '#111111', opacity: 1 }, { offset: 1, color: '#eeeeee', opacity: 1 }] };
     groupObjects(d, [t.id, l2.children[2].id]);
     d.background = { kind: 'transparent' };
   });
@@ -65,6 +67,23 @@ describe('project format', () => {
     const zip = new JSZip();
     zip.file('document.json', JSON.stringify({ version: 1, width: -5, height: 10, layers: [], assets: {}, background: { kind: 'transparent' } }));
     await expect(readProject(await zip.generateAsync({ type: 'uint8array' }))).rejects.toThrow(/寸法/);
+  });
+
+  it('rejects gradients with fewer than two colors or offsets out of range', async () => {
+    for (const fill of [
+      { kind: 'linear', start: { x: 0, y: 0 }, end: { x: 1, y: 0 }, stops: [{ offset: 0, color: '#000000', opacity: 1 }] },
+      { kind: 'radial', start: { x: 0, y: 0 }, end: { x: 1, y: 0 }, stops: [{ offset: 0, color: '#000000', opacity: 1 }, { offset: 2, color: '#ffffff', opacity: 1 }] },
+      { kind: 'spiral', start: { x: 0, y: 0 }, end: { x: 1, y: 0 }, stops: [] },
+    ]) {
+      const doc = produce(createDocument(10, 10), (d) => {
+        addObject(d, d.layers[0].id, createShape(defaultGeometry('rect'), { x: 0, y: 0, width: 5, height: 5, rotation: 0 }));
+      });
+      const raw = JSON.parse(JSON.stringify(doc));
+      raw.layers[0].children[0].fill = fill;
+      const zip = new JSZip();
+      zip.file('document.json', JSON.stringify(raw));
+      await expect(readProject(await zip.generateAsync({ type: 'uint8array' }))).rejects.toThrow(ProjectError);
+    }
   });
 
   it('refuses to save when image data is missing', async () => {

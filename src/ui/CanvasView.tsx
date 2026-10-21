@@ -19,6 +19,7 @@ import type { Box, Id, PathNode, Point, SceneObject, ShapeGeometry, SparcaDocume
 import { DocumentSvg } from '../render/DocumentSvg';
 import { imageCache } from '../render/imageCache';
 import { fitTextBox, measureText } from '../render/text';
+import { docToNormalized, normalizedToDoc, objectGradient, representativeColor } from '../model/gradient';
 import { placeImageFiles, writableLayer } from '../store/actions';
 import type { PixelSelection, ToolId } from '../store/editor';
 import { pickColorAt } from '../store/colorActions';
@@ -51,6 +52,7 @@ const BLOCK_ARROW_ASPECT = 0.55;
 
 type Gesture =
   | { kind: 'move'; start: Point; originals: Map<Id, SceneObject>; moved: boolean }
+  | { kind: 'gradient'; id: Id; which: 'start' | 'end' }
   | { kind: 'resize'; handle: Handle; originals: Map<Id, SceneObject>; single: Box | null; bounds: Rect }
   | { kind: 'rotate'; center: Point; startAngle: number; originals: Map<Id, SceneObject> }
   | { kind: 'marquee'; start: Point; current: Point; additive: boolean; base: Id[] }
@@ -451,6 +453,12 @@ export function CanvasView() {
     }
 
     if (effectiveTool === 'select') {
+      const gh = target.getAttribute('data-gradient-handle');
+      if (gh && selection.length === 1) {
+        editor.beginGesture();
+        gesture.current = { kind: 'gradient', id: selection[0], which: gh as 'start' | 'end' };
+        return;
+      }
       const handle = target.getAttribute('data-handle');
       if (handle) {
         startHandleGesture(handle as Handle | 'rotate', p);
@@ -637,6 +645,24 @@ export function CanvasView() {
         applyTransformed(g.originals, (o) => transformObject(o, { pivot: { x: 0, y: 0 }, sx: 1, sy: 1, rotation: 0, dx, dy }));
         break;
       }
+      case 'gradient': {
+        const loc = findObject(editor.getState().doc, g.id);
+        const cur = loc && objectGradient(loc.object);
+        if (!loc || !cur) return;
+        const box = cur.box;
+        let q = p;
+        if (e.shiftKey) {
+          // Shift: keep the direction from the other handle at 45° steps.
+          const other = normalizedToDoc(box, g.which === 'start' ? cur.gradient.end : cur.gradient.start);
+          const a = (snapAngle(angleTo(other, p)) * Math.PI) / 180;
+          const len = Math.hypot(p.x - other.x, p.y - other.y);
+          q = { x: other.x + Math.cos(a) * len, y: other.y + Math.sin(a) * len };
+        }
+        const n = docToNormalized(box, q);
+        const next = { ...cur.gradient, [g.which]: n };
+        editor.preview((d) => updateObject(d, g.id, { [cur.key]: next } as Partial<SceneObject>));
+        break;
+      }
       case 'resize': {
         const opt = { keepAspect: e.shiftKey, fromCenter: e.altKey };
         const p = editor.snap(toDoc(e.clientX, e.clientY));
@@ -682,6 +708,9 @@ export function CanvasView() {
     switch (g.kind) {
       case 'move':
         editor.endGesture('移動');
+        break;
+      case 'gradient':
+        editor.endGesture('グラデーションの調整');
         break;
       case 'resize':
         editor.endGesture('拡大縮小');
@@ -981,6 +1010,9 @@ export function CanvasView() {
         >
           <GridOverlay width={doc.width} height={doc.height} zoom={zoom} />
           <SelectionOverlay locs={selectedObjects} zoom={zoom} showHandles={tool === 'select' && !editingText} />
+          {tool === 'select' && !editingText && selectedObjects.length === 1 && !isEffectivelyLocked(selectedObjects[0]) && (
+            <GradientHandles o={selectedObjects[0].object} zoom={zoom} />
+          )}
           {pixelSelection && <PixelSelectionOutline sel={pixelSelection} zoom={zoom} />}
           {polyPoints && (
             <polyline points={polyPoints.map((q) => `${q.x},${q.y}`).join(' ')} className="ants-a" strokeWidth={1 / zoom} />
@@ -1253,6 +1285,28 @@ function SelectionOverlay({
   );
 }
 
+/** Start (circle) and end (square) of the selected object's gradient, joined by a line. */
+function GradientHandles({ o, zoom }: { o: SceneObject; zoom: number }) {
+  const cur = objectGradient(o);
+  if (!cur) return null;
+  const k = 1 / zoom;
+  const a = normalizedToDoc(cur.box, cur.gradient.start);
+  const b = normalizedToDoc(cur.box, cur.gradient.end);
+  const s = 9 * k;
+  const label = { linear: ['始点', '終点'], radial: ['中心', '半径'], conic: ['中心', '開始方向'] }[cur.gradient.kind];
+  return (
+    <g className="gradient-handles" data-testid="gradient-handles">
+      <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} className="gradient-line" strokeWidth={1.5 * k} />
+      <circle data-gradient-handle="start" cx={a.x} cy={a.y} r={s / 2} className="gradient-handle" strokeWidth={1.5 * k}>
+        <title>グラデーションの{label[0]}（ドラッグで移動）</title>
+      </circle>
+      <rect data-gradient-handle="end" x={b.x - s / 2} y={b.y - s / 2} width={s} height={s} className="gradient-handle" strokeWidth={1.5 * k}>
+        <title>グラデーションの{label[1]}（ドラッグで移動、Shift で 45° 刻み）</title>
+      </rect>
+    </g>
+  );
+}
+
 function RotateHandle({ frame, k }: { frame: Box; k: number }) {
   const top = handlePoint(frame, 'n');
   const c = boxCenter(frame);
@@ -1344,7 +1398,7 @@ function TextEditor({ obj, zoom, isNew, onDone }: { obj: TextObject; zoom: numbe
         fontStyle: obj.italic ? 'italic' : 'normal',
         letterSpacing: obj.letterSpacing * zoom,
         lineHeight: obj.lineHeight,
-        color: obj.color,
+        color: representativeColor(obj.color) ?? undefined,
         textAlign: obj.align,
         transform: obj.box.rotation ? `rotate(${obj.box.rotation}deg)` : undefined,
         // Rotate about the box center, as the rendered text does.
