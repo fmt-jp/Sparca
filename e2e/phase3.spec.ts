@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { canvasBox, disableNativePickers, drag, makePng, placePng, state } from './helpers';
+import { addEffect, canvasBox, disableNativePickers, drag, makePng, placePng, state } from './helpers';
 
 test.beforeEach(async ({ page }) => {
   await disableNativePickers(page);
@@ -92,16 +92,16 @@ test('glow and drop shadow on text and shapes are kept as editable settings', as
   await page.keyboard.press('Escape');
   await page.keyboard.press('v');
   await page.locator('[data-object-row="テキスト"]').click();
-  await page.getByLabel('グロー', { exact: true }).check();
-  await page.getByLabel('ドロップシャドウ', { exact: true }).check();
-  await setNumber(page, '影の距離', '12');
-  const t = (await objects(page))[0] as Obj & { effects: { glow: { enabled: boolean }; dropShadow: { enabled: boolean; distance: number } } };
-  expect(t.effects.glow.enabled).toBe(true);
-  expect(t.effects.dropShadow).toMatchObject({ enabled: true, distance: 12 });
+  await addEffect(page, 'シャドウとグロー', 'グロー');
+  await addEffect(page, 'シャドウとグロー', 'ドロップシャドウ');
+  await setNumber(page, 'ドロップシャドウの距離', '12');
+  const t = (await objects(page))[0] as Obj & { effects: { kind: string; enabled: boolean; distance?: number }[] };
+  expect(t.effects.map((e) => e.kind)).toEqual(['glow', 'drop-shadow']);
+  expect(t.effects[1]).toMatchObject({ enabled: true, distance: 12 });
   // Rendered as SVG filters (not baked into pixels).
   await expect(page.locator('[data-testid=canvas] filter feMorphology')).toHaveCount(1);
   await expect(page.locator('[data-testid=canvas] filter feOffset')).toHaveCount(1);
-  await page.getByLabel('グロー', { exact: true }).uncheck();
+  await page.getByLabel('グローを有効にする').uncheck();
   await expect(page.locator('[data-testid=canvas] filter feMorphology')).toHaveCount(0);
 });
 
@@ -156,7 +156,8 @@ test('tool shortcuts still work after clicking a checkbox in the properties pane
   const c = await canvasBox(page);
   await page.keyboard.press('r');
   await drag(page, { x: c.x + 50, y: c.y + 50 }, { x: c.x + 100, y: c.y + 100 });
-  await page.getByLabel('グロー', { exact: true }).check();
+  await addEffect(page, 'シャドウとグロー', 'グロー');
+  await page.getByLabel('グローを有効にする').uncheck();
   await page.keyboard.press('p');
   expect(await state<string>(page, 's => s.tool')).toBe('pen');
 });

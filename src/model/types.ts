@@ -17,30 +17,68 @@ export interface Point {
   y: number;
 }
 
-export interface GlowEffect {
+interface EffectCommon {
+  id: string;
   enabled: boolean;
-  color: string;
-  /** Blur amount in px. */
-  blur: number;
-  /** Spread (dilation) in px before blurring. */
-  spread: number;
-  opacity: number;
+  /** How much of the effect is applied: 0 = off, 1 = full (blends with the input). */
+  strength: number;
 }
 
-export interface DropShadowEffect {
-  enabled: boolean;
+interface ShadowParams {
   color: string;
   opacity: number;
-  /** Degrees; 0 = to the right, 90 = downward. */
+  /** Degrees; 0 = to the right, 90 = downward (direction the shadow is offset). */
   angle: number;
   distance: number;
   blur: number;
 }
 
-export interface Effects {
-  glow: GlowEffect;
-  dropShadow: DropShadowEffect;
+interface GlowParams {
+  color: string;
+  opacity: number;
+  /** Blur amount in px. */
+  blur: number;
+  /** Spread (dilation) in px before blurring. */
+  spread: number;
 }
+
+interface BevelParams {
+  /** Bevel width in px. */
+  width: number;
+  /** Extra blur of the edge in px. */
+  softness: number;
+  /** Direction the light comes from, degrees (0 = right, 90 = below; -135 = top-left). */
+  angle: number;
+  /** Opacity of highlight and shade, 0..1. */
+  intensity: number;
+}
+
+/**
+ * Live effect (Fireworks-style live filter). An object's effects are applied in list
+ * order, each to the result of the previous ones (docs/design.md §3).
+ */
+export type Effect = EffectCommon &
+  (
+    | ({ kind: 'drop-shadow' | 'inner-shadow' } & ShadowParams)
+    | ({ kind: 'glow' | 'inner-glow' } & GlowParams)
+    | ({ kind: 'bevel-inner' } & BevelParams)
+    /** Raised rim around the object, filled with `color` and lit like a bevel. */
+    | ({ kind: 'bevel-outer'; color: string } & BevelParams)
+    /** Relief of the object's edge; without showObject the object turns gray. inset = pressed in. */
+    | ({ kind: 'emboss'; showObject: boolean; inset: boolean } & BevelParams)
+    | { kind: 'blur'; radius: number }
+    /** Unsharp mask: amount 0..5, radius in px. */
+    | { kind: 'sharpen'; amount: number; radius: number }
+    /** -100..100 each (same scale as the image color adjustments). */
+    | { kind: 'brightness-contrast'; brightness: number; contrast: number }
+    /** hue -180..180°, saturation and lightness -100..100. */
+    | { kind: 'hue-saturation'; hue: number; saturation: number; lightness: number }
+    | { kind: 'invert' }
+    /** Replaces the colors with `color`, keeping the object's transparency. */
+    | { kind: 'color-overlay'; color: string }
+  );
+
+export type EffectKind = Effect['kind'];
 
 interface BaseObject {
   id: Id;
@@ -49,7 +87,8 @@ interface BaseObject {
   locked: boolean;
   opacity: number;
   box: Box;
-  effects: Effects;
+  /** Applied first to last. */
+  effects: Effect[];
 }
 
 export interface GradientStop {

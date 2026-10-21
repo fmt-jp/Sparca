@@ -1,0 +1,239 @@
+// Effects list in the properties panel (Fireworks-style live filters): add from a menu,
+// turn on/off, set strength, reorder (applied top to bottom), edit settings, remove.
+import { useRef, useState } from 'react';
+import { createEffect, EFFECT_GROUPS, effectLabel } from '../model/effects';
+import { updateObject } from '../model/commands';
+import type { Effect, EffectKind, Id, SceneObject } from '../model/types';
+import { ColorPicker } from './ColorPicker';
+import { ContextMenu } from './ContextMenu';
+import { PopupSliderInput } from './controls';
+import { editor } from './useEditor';
+
+type NumParam = { key: string; label: string; min: number; max: number; sliderMax?: number; suffix?: string; step?: number; precision?: number; percent?: boolean };
+type Param = ({ type: 'number' } & NumParam) | { type: 'color'; key: string; label: string } | { type: 'bool'; key: string; label: string };
+
+const SHADOW: Param[] = [
+  { type: 'color', key: 'color', label: '色' },
+  { type: 'number', key: 'opacity', label: '不透明度', min: 0, max: 100, suffix: '%', percent: true },
+  { type: 'number', key: 'angle', label: '角度', min: -180, max: 180, suffix: '°' },
+  { type: 'number', key: 'distance', label: '距離', min: 0, max: 500, sliderMax: 100, suffix: 'px' },
+  { type: 'number', key: 'blur', label: 'ぼかし', min: 0, max: 200, sliderMax: 50, suffix: 'px' },
+];
+const GLOW: Param[] = [
+  { type: 'color', key: 'color', label: '色' },
+  { type: 'number', key: 'opacity', label: '不透明度', min: 0, max: 100, suffix: '%', percent: true },
+  { type: 'number', key: 'blur', label: 'ぼかし', min: 0, max: 200, sliderMax: 50, suffix: 'px' },
+  { type: 'number', key: 'spread', label: '広がり', min: 0, max: 100, sliderMax: 30, suffix: 'px' },
+];
+const BEVEL: Param[] = [
+  { type: 'number', key: 'width', label: '幅', min: 1, max: 100, sliderMax: 40, suffix: 'px' },
+  { type: 'number', key: 'softness', label: '柔らかさ', min: 0, max: 50, sliderMax: 20, suffix: 'px' },
+  { type: 'number', key: 'angle', label: '光の角度', min: -180, max: 180, suffix: '°' },
+  { type: 'number', key: 'intensity', label: '明暗の強さ', min: 0, max: 100, suffix: '%', percent: true },
+];
+
+const PARAMS: Record<EffectKind, Param[]> = {
+  'drop-shadow': SHADOW,
+  'inner-shadow': SHADOW,
+  glow: GLOW,
+  'inner-glow': GLOW,
+  'bevel-inner': BEVEL,
+  'bevel-outer': [{ type: 'color', key: 'color', label: '縁の色' }, ...BEVEL],
+  emboss: [...BEVEL, { type: 'bool', key: 'inset', label: 'くぼませる' }, { type: 'bool', key: 'showObject', label: 'オブジェクトの色を表示' }],
+  blur: [{ type: 'number', key: 'radius', label: 'ぼかし量', min: 0, max: 200, sliderMax: 50, suffix: 'px' }],
+  sharpen: [
+    { type: 'number', key: 'amount', label: '量', min: 0, max: 500, suffix: '%', percent: true },
+    { type: 'number', key: 'radius', label: '半径', min: 0.5, max: 20, sliderMax: 10, step: 0.5, precision: 1, suffix: 'px' },
+  ],
+  'brightness-contrast': [
+    { type: 'number', key: 'brightness', label: '明るさ', min: -100, max: 100 },
+    { type: 'number', key: 'contrast', label: 'コントラスト', min: -100, max: 100 },
+  ],
+  'hue-saturation': [
+    { type: 'number', key: 'hue', label: '色相', min: -180, max: 180, suffix: '°' },
+    { type: 'number', key: 'saturation', label: '彩度', min: -100, max: 100 },
+    { type: 'number', key: 'lightness', label: '明度', min: -100, max: 100 },
+  ],
+  invert: [],
+  'color-overlay': [{ type: 'color', key: 'color', label: '色' }],
+};
+
+/** Display names; repeated kinds are numbered (ドロップシャドウ 2). */
+export function effectNames(effects: Effect[]): string[] {
+  const total = new Map<string, number>();
+  for (const e of effects) total.set(e.kind, (total.get(e.kind) ?? 0) + 1);
+  const seen = new Map<string, number>();
+  return effects.map((e) => {
+    const n = (seen.get(e.kind) ?? 0) + 1;
+    seen.set(e.kind, n);
+    return total.get(e.kind)! > 1 ? `${effectLabel(e.kind)} ${n}` : effectLabel(e.kind);
+  });
+}
+
+function setEffects(id: Id, effects: Effect[], label: string, key?: string) {
+  editor.edit(label, (d) => updateObject(d, id, { effects } as Partial<SceneObject>), key ? `${key}:${id}` : null);
+}
+
+export function EffectsPanel({ o }: { o: Exclude<SceneObject, { type: 'group' }> }) {
+  const effects = o.effects;
+  const names = effectNames(effects);
+  const [open, setOpen] = useState<Set<string>>(new Set());
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+  const addBtn = useRef<HTMLButtonElement>(null);
+
+  const replace = (i: number, e: Effect, label: string, key?: string) =>
+    setEffects(o.id, effects.map((x, k) => (k === i ? e : x)), label, key);
+  const move = (i: number, d: -1 | 1) => {
+    const next = [...effects];
+    [next[i], next[i + d]] = [next[i + d], next[i]];
+    setEffects(o.id, next, 'エフェクトの並べ替え');
+  };
+  const add = (kind: EffectKind) => {
+    const e = createEffect(kind);
+    setEffects(o.id, [...effects, e], `${effectLabel(kind)}の追加`);
+    setOpen((s) => new Set(s).add(e.id));
+  };
+
+  return (
+    <div className="prop-section effects" role="group" aria-label="エフェクト">
+      <div className="effects-head">
+        <span className="section-title">エフェクト</span>
+        <button
+          ref={addBtn}
+          type="button"
+          aria-label="エフェクトを追加"
+          aria-haspopup="menu"
+          title="エフェクトを追加"
+          onClick={() => {
+            const r = addBtn.current!.getBoundingClientRect();
+            setMenu({ x: r.left, y: r.bottom + 2 });
+          }}
+        >
+          ＋ 追加
+        </button>
+        {effects.length > 1 && <span className="hint">上から順に適用されます</span>}
+        {!effects.length && <span className="hint">エフェクトはありません</span>}
+      </div>
+      {menu && (
+        <ContextMenu
+          x={menu.x}
+          y={menu.y}
+          label="エフェクトの種類"
+          onClose={() => setMenu(null)}
+          items={EFFECT_GROUPS.map((g) => ({ label: g.label, children: g.kinds.map((k) => ({ label: k.label, action: () => add(k.kind) })) }))}
+        />
+      )}
+      {effects.length > 0 && (
+        <ol className="effect-list">
+          {effects.map((e, i) => {
+            const name = names[i];
+            const expanded = open.has(e.id);
+            return (
+              <li key={e.id} className={`effect-row${e.enabled ? '' : ' off'}`} data-effect={e.kind}>
+                <div className="effect-line">
+                  <input
+                    type="checkbox"
+                    checked={e.enabled}
+                    aria-label={`${name}を有効にする`}
+                    title="一時的にオン／オフ"
+                    onChange={(ev) => replace(i, { ...e, enabled: ev.target.checked }, `${name}を${ev.target.checked ? 'オン' : 'オフ'}`)}
+                  />
+                  <button
+                    type="button"
+                    className="effect-name"
+                    aria-expanded={PARAMS[e.kind].length ? expanded : undefined}
+                    aria-label={`${name}の設定`}
+                    disabled={!PARAMS[e.kind].length}
+                    onClick={() =>
+                      setOpen((s) => {
+                        const n = new Set(s);
+                        if (n.has(e.id)) n.delete(e.id);
+                        else n.add(e.id);
+                        return n;
+                      })
+                    }
+                  >
+                    <span aria-hidden="true" className="effect-caret">
+                      {PARAMS[e.kind].length ? (expanded ? '▾' : '▸') : ''}
+                    </span>
+                    {name}
+                  </button>
+                  <span className="field-label">強さ</span>
+                  <PopupSliderInput
+                    label={`${name}の強さ`}
+                    value={Math.round(e.strength * 100)}
+                    min={0}
+                    max={100}
+                    suffix="%"
+                    onChange={(v) => replace(i, { ...e, strength: v / 100 }, `${name}の強さの変更`, `fx-strength-${e.id}`)}
+                  />
+                  <button type="button" className="icon-btn" aria-label={`${name}を上へ`} title="上へ（先に適用）" disabled={i === 0} onClick={() => move(i, -1)}>
+                    ▲
+                  </button>
+                  <button type="button" className="icon-btn" aria-label={`${name}を下へ`} title="下へ（後に適用）" disabled={i === effects.length - 1} onClick={() => move(i, 1)}>
+                    ▼
+                  </button>
+                  <button
+                    type="button"
+                    className="icon-btn"
+                    aria-label={`${name}を削除`}
+                    title="削除"
+                    onClick={() => setEffects(o.id, effects.filter((_, k) => k !== i), `${name}の削除`)}
+                  >
+                    ×
+                  </button>
+                </div>
+                {expanded && (
+                  <div className="effect-params">
+                    {PARAMS[e.kind].map((p) => (
+                      <ParamInput key={p.key} p={p} e={e} name={name} onChange={(next, key) => replace(i, next, `${name}の変更`, key)} />
+                    ))}
+                  </div>
+                )}
+              </li>
+            );
+          })}
+        </ol>
+      )}
+    </div>
+  );
+}
+
+function ParamInput({ p, e, name, onChange }: { p: Param; e: Effect; name: string; onChange: (e: Effect, key?: string) => void }) {
+  const v = (e as unknown as Record<string, unknown>)[p.key];
+  const label = `${name}の${p.label}`;
+  const set = (value: unknown, key?: string) => onChange({ ...e, [p.key]: value } as Effect, key);
+  if (p.type === 'color') {
+    return (
+      <span className="field">
+        <span className="field-label">{p.label}</span>
+        <ColorPicker label={label} value={v as string} onChange={(c) => c && set(c)} />
+      </span>
+    );
+  }
+  if (p.type === 'bool') {
+    return (
+      <label className="toggle">
+        <input type="checkbox" checked={v as boolean} onChange={(ev) => set(ev.target.checked)} />
+        {p.label}
+      </label>
+    );
+  }
+  const scale = p.percent ? 100 : 1;
+  return (
+    <span className="field" role="group" aria-label={label}>
+      <span className="field-label">{p.label}</span>
+      <PopupSliderInput
+        label={label}
+        value={Math.round((v as number) * scale * 100) / 100}
+        min={p.min}
+        max={p.max}
+        sliderMax={p.sliderMax}
+        step={p.step}
+        precision={p.precision}
+        suffix={p.suffix}
+        onChange={(n) => set(n / scale, `fx-${p.key}-${e.id}`)}
+      />
+    </span>
+  );
+}

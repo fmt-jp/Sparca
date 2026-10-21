@@ -181,3 +181,10 @@ export async function setColor(page: Page, scope: import('@playwright/test').Loc
   await code.fill(hex);
   await code.press('Enter');
 }
+
+/** Add an effect to the selected object from the properties panel's 「＋ 追加」 menu. */
+export async function addEffect(page: Page, group: string, kind: string) {
+  await page.getByRole('button', { name: 'エフェクトを追加' }).click();
+  await page.getByRole('menuitem', { name: group }).hover();
+  await page.getByRole('menuitem', { name: kind, exact: true }).click();
+}

@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { addLayer, addObject, groupObjects } from '../model/commands';
 import { createDocument, createImage, createShape, createText, defaultGeometry } from '../model/factory';
 import type { AssetMeta, SparcaDocument } from '../model/types';
+import { createEffect } from '../model/effects';
 import { ProjectError, readProject, writeProject } from './project';
 
 const asset: AssetMeta = { id: 'a_1', mimeType: 'image/png', width: 2, height: 2, fileName: 'x.png' };
@@ -18,10 +19,10 @@ function sampleDoc(): SparcaDocument {
     img.pipeline.adjust.brightness = 30;
     addObject(d, d.layers[0].id, img);
     const star = createShape({ kind: 'star', points: 7, innerRatio: 0.3 }, { x: 5, y: 5, width: 50, height: 50, rotation: 0 });
-    star.effects.dropShadow.enabled = true;
+    star.effects = [createEffect('drop-shadow'), { ...createEffect('bevel-outer'), strength: 0.5, enabled: false }];
     addObject(d, l2.id, star);
     const t = createText('こんにちは\n2行目', { x: 0, y: 0, width: 100, height: 40, rotation: 0 });
-    t.effects.glow.enabled = true;
+    t.effects = [createEffect('glow'), createEffect('glow'), createEffect('hue-saturation')];
     addObject(d, l2.id, t);
     addObject(d, l2.id, createShape(defaultGeometry('arrow'), { x: 0, y: 0, width: 10, height: 10, rotation: 0 }));
     star.fill = { kind: 'conic', start: { x: 0.5, y: 0.5 }, end: { x: 1, y: 0.2 }, stops: [{ offset: 0, color: '#ff0000', opacity: 1 }, { offset: 0.4, color: '#00ff00', opacity: 0.5 }, { offset: 1, color: '#0000ff', opacity: 1 }] };

@@ -2,7 +2,7 @@ import type {
   AssetMeta,
   Box,
   ColorAdjust,
-  Effects,
+  Effect,
   GroupObject,
   ImageObject,
   ImagePipeline,
@@ -25,11 +25,9 @@ export function newId(prefix = 'o'): string {
   return `${prefix}_${Date.now().toString(36)}${counter.toString(36)}${rand}`;
 }
 
-export function defaultEffects(): Effects {
-  return {
-    glow: { enabled: false, color: '#ffd84a', blur: 6, spread: 2, opacity: 0.9 },
-    dropShadow: { enabled: false, color: '#000000', opacity: 0.5, angle: 45, distance: 6, blur: 4 },
-  };
+/** New objects start without effects. */
+export function defaultEffects(): Effect[] {
+  return [];
 }
 
 export function defaultAdjust(): ColorAdjust {

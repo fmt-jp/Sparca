@@ -1242,3 +1242,68 @@ kbd {
   stroke: #000;
   cursor: move;
 }
+
+/* Effects list */
+.prop-section.effects {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+}
+.effects-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.section-title {
+  font-weight: 600;
+}
+.effect-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.effect-row {
+  border: 1px solid #2e3035;
+  border-radius: 4px;
+  padding: 3px 6px;
+  background: rgba(255, 255, 255, 0.02);
+}
+.effect-row.off .effect-name {
+  color: var(--text-dim);
+  text-decoration: line-through;
+}
+.effect-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.effect-name {
+  min-width: 170px;
+  text-align: left;
+  background: transparent;
+  border: none;
+  padding: 2px 4px;
+}
+.effect-name:disabled {
+  opacity: 1;
+  cursor: default;
+}
+.effect-caret {
+  display: inline-block;
+  width: 1em;
+  color: var(--text-dim);
+}
+.icon-btn {
+  min-width: 24px;
+  padding: 2px 4px;
+}
+.effect-params {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+  padding: 4px 0 4px 30px;
+}
