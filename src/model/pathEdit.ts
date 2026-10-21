@@ -184,7 +184,9 @@ export function splitSegment(nodes: DocNode[], segment: number, t: number): { no
   const b = nodes[ib];
   const index = segment + 1;
   if (!a.out && !b.in) {
-    const mid: DocNode = { anchor: lerp(a.anchor, b.anchor, t), in: null, out: null };
+    // `t` is the Bézier parameter (as from nearestOnPath), which is not linear along a
+    // handle-less segment, so evaluate the curve rather than lerping the anchors.
+    const mid: DocNode = { anchor: bezierPoint(segmentPoints(nodes, segment), t), in: null, out: null };
     const out = [...nodes];
     out.splice(index, 0, mid);
     return { nodes: out, index };

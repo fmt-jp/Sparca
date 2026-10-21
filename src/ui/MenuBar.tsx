@@ -29,6 +29,8 @@ export interface MenuItem {
   separator?: boolean;
   /** Shows a check mark (toggle items). */
   checked?: boolean;
+  /** Submenu (context menu only). */
+  children?: MenuItem[];
 }
 
 const mod = /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘' : 'Ctrl+';

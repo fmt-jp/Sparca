@@ -1141,3 +1141,27 @@ kbd {
   color: #fff;
   min-width: 64px;
 }
+
+/* Right-click menu */
+.context-menu {
+  position: fixed;
+  top: auto;
+  z-index: 200;
+  min-width: 200px;
+}
+.context-menu.sub {
+  position: absolute;
+  left: 100%;
+  top: -5px;
+}
+.context-submenu {
+  position: relative;
+}
+.menu-item:focus-visible {
+  outline: none;
+  background: var(--accent-dim);
+}
+.context-menu.flip-sub .context-menu.sub {
+  left: auto;
+  right: 100%;
+}

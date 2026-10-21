@@ -26,7 +26,10 @@ import { docToPath, isSmooth, moveAnchors, moveHandle, nearestOnPath, pathToDoc,
 import { deleteSelectedNodes, editablePath, insertNode, nudgeNodes, selectedNodes, toggleNodeType } from '../store/pathActions';
 import { cancelCrop, commitCrop, startCrop } from '../store/imageActions';
 import { hasImageExtension } from '../io/imageFormats';
+import { anchorMenu, canvasMenu, objectMenu, segmentNextTo } from './canvasMenu';
+import { ContextMenu } from './ContextMenu';
 import { isTextEntry } from './keyboard';
+import type { MenuItem } from './MenuBar';
 import { TabBar } from './TabBar';
 import { editor, useEditor } from './useEditor';
 
@@ -86,6 +89,8 @@ export function CanvasView() {
   const [spaceDown, setSpaceDown] = useState(false);
   const [editingText, setEditingText] = useState<{ id: Id; isNew: boolean } | null>(null);
   const [cursorPos, setCursorPos] = useState<Point | null>(null);
+  const [menu, setMenu] = useState<{ x: number; y: number; items: MenuItem[]; label: string } | null>(null);
+  const closeMenu = useCallback(() => setMenu(null), []);
 
   const effectiveTool: ToolId = spaceDown ? 'hand' : tool;
 
@@ -829,6 +834,82 @@ export function CanvasView() {
     }
   }
 
+  function onContextMenu(e: React.MouseEvent) {
+    // Text being edited keeps the browser's menu (paste, spell check).
+    if (isTextEntry(e.target)) return;
+    e.preventDefault();
+    if (editingText || penNodes || polyPoints || gesture.current) return;
+    const under = document.elementFromPoint(e.clientX, e.clientY) ?? e.target;
+    const p = toDoc(e.clientX, e.clientY);
+    if (tool === 'subselect') {
+      const path = editablePath(editor);
+      const nodeAttr = (under as Element).getAttribute?.('data-node');
+      if (path && nodeAttr) {
+        const i = Number(nodeAttr);
+        if (!selectedNodes(editor, path).includes(i)) editor.set({ nodeSelection: [i] });
+        setMenu({ x: e.clientX, y: e.clientY, items: anchorMenu(segmentNextTo(i)), label: 'パスの点のメニュー' });
+        return;
+      }
+      if (path) {
+        const near = nearestOnPath(pathToDoc(path), path.closed, p);
+        if (near && near.dist * zoom <= 8) {
+          setMenu({ x: e.clientX, y: e.clientY, items: anchorMenu(near), label: 'パスの点のメニュー' });
+          return;
+        }
+      }
+    }
+    const sel = editor.getState().selection;
+    const onHandle = (under as Element).hasAttribute?.('data-handle') && sel.length > 0;
+    const hit = onHandle ? sel[0] : hitObject(under);
+    if (hit) {
+      // Like other editors: right-clicking outside the selection selects that object first.
+      if (!sel.includes(hit)) editor.select([hit]);
+      setMenu({ x: e.clientX, y: e.clientY, items: objectMenu(), label: 'オブジェクトのメニュー' });
+      return;
+    }
+    setMenu({ x: e.clientX, y: e.clientY, items: canvasMenu(), label: 'キャンバスのメニュー' });
+  }
+
+  // Keyboard: the Menu key or Shift+F10 opens the menu for the selection (or the canvas).
+  const keyMenuAt = useRef(0);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.key === 'ContextMenu' || (e.key === 'F10' && e.shiftKey))) return;
+      if (isTextEntry(e.target) || (e.target as Element | null)?.closest?.('[role="dialog"], [role="menu"]')) return;
+      e.preventDefault();
+      keyMenuAt.current = Date.now();
+      const { selection: sel, doc: d, zoom: z } = editor.getState();
+      const stage = stageRef.current;
+      const ws = scrollRef.current;
+      if (!stage || !ws) return;
+      const sr = stage.getBoundingClientRect();
+      const wr = ws.getBoundingClientRect();
+      const locs = sel.map((id) => findObject(d, id)).filter((l) => !!l);
+      let x = wr.left + wr.width / 2;
+      let y = wr.top + wr.height / 2;
+      const b = unionBounds(locs.map((l) => l.object));
+      if (b) {
+        x = Math.min(wr.right - 8, Math.max(wr.left + 8, sr.left + PAD + (b.x + b.width / 2) * z));
+        y = Math.min(wr.bottom - 8, Math.max(wr.top + 8, sr.top + PAD + (b.y + b.height / 2) * z));
+      }
+      setMenu(
+        locs.length
+          ? { x, y, items: objectMenu(), label: 'オブジェクトのメニュー' }
+          : { x, y, items: canvasMenu(), label: 'キャンバスのメニュー' },
+      );
+    };
+    // The key also fires a native contextmenu event right after; swallow that one.
+    const onNative = (e: MouseEvent) => {
+      if (Date.now() - keyMenuAt.current < 1000) e.preventDefault();
+    };
+    window.addEventListener('keydown', onKey);
+    window.addEventListener('contextmenu', onNative);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('contextmenu', onNative);
+    };
+  }, []);
+
   function onDrop(e: React.DragEvent) {
     e.preventDefault();
     const files = [...e.dataTransfer.files].filter((f) => f.type.startsWith('image/') || hasImageExtension(f.name));
@@ -876,6 +957,7 @@ export function CanvasView() {
         }}
         onPointerLeave={() => setCursorPos(null)}
         onDoubleClick={onDoubleClick}
+        onContextMenu={onContextMenu}
       >
         <div
           className={`canvas-frame${doc.background.kind === 'transparent' ? ' checker' : ''}`}
@@ -929,6 +1011,7 @@ export function CanvasView() {
       </div>
     </div>
     <StatusBar cursor={cursorPos} />
+    {menu && <ContextMenu x={menu.x} y={menu.y} items={menu.items} label={menu.label} onClose={closeMenu} />}
     </div>
   );
 }
