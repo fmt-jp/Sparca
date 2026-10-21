@@ -102,4 +102,12 @@ describe('segments', () => {
     expect(r.nodes).toHaveLength(4);
     expect(r.nodes[3]).toEqual(corner(0, 5));
   });
+
+  it('puts the new straight-segment point where nearestOnPath found it', () => {
+    const line = [corner(0, 0), corner(200, 0)];
+    const hit = nearestOnPath(line, false, { x: 50, y: 1 })!;
+    const a = splitSegment(line, hit.segment, hit.t).nodes[1].anchor;
+    expect(a.x).toBeCloseTo(50, 2);
+    expect(a.y).toBe(0);
+  });
 });
