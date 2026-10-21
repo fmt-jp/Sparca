@@ -88,6 +88,61 @@ export function EffectsPanel({ o }: { o: Exclude<SceneObject, { type: 'group' }>
     [next[i], next[i + d]] = [next[i + d], next[i]];
     setEffects(o.id, next, 'エフェクトの並べ替え');
   };
+  const reorder = (from: number, to: number) => {
+    const next = [...effects];
+    const [moved] = next.splice(from, 1);
+    next.splice(to, 0, moved);
+    setEffects(o.id, next, 'エフェクトの並べ替え');
+  };
+
+  // Drag to reorder: grab a row by its grip or name. `to` is the insertion slot (0..n).
+  const list = useRef<HTMLOListElement>(null);
+  const [drag, setDrag] = useState<{ from: number; to: number } | null>(null);
+  /** Set right after a drag so the name button's click doesn't also open/close the row. */
+  const dragged = useRef(false);
+  function startDrag(ev: React.PointerEvent, from: number) {
+    if (ev.button !== 0 || !(ev.target as Element).closest('.effect-grip, .effect-name')) return;
+    const sx = ev.clientX;
+    const sy = ev.clientY;
+    let active = false;
+    let to = from;
+    const move = (e: PointerEvent) => {
+      if (!active && Math.hypot(e.clientX - sx, e.clientY - sy) < 4) return;
+      active = true;
+      // Near the panel's top/bottom edge, scroll it so longer lists can be reordered.
+      const panel = list.current?.closest<HTMLElement>('.properties');
+      if (panel) {
+        const r = panel.getBoundingClientRect();
+        if (e.clientY < r.top + 24) panel.scrollTop -= 12;
+        else if (e.clientY > r.bottom - 24) panel.scrollTop += 12;
+      }
+      const rows = [...(list.current?.children ?? [])] as HTMLElement[];
+      to = rows.filter((r) => {
+        const b = r.getBoundingClientRect();
+        return b.top + b.height / 2 < e.clientY;
+      }).length;
+      setDrag({ from, to });
+    };
+    const end = (commit: boolean) => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onCancel);
+      if (!active) return;
+      setDrag(null);
+      dragged.current = true;
+      setTimeout(() => (dragged.current = false), 0);
+      const dest = to > from ? to - 1 : to;
+      if (commit && dest !== from) reorder(from, dest);
+    };
+    const onUp = () => end(true);
+    const onCancel = () => end(false);
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onCancel);
+  }
+  /** Where the drop line shows: before row i, or after the last row. */
+  const dropSlot = drag && drag.to !== drag.from && drag.to !== drag.from + 1 ? drag.to : null;
+
   const add = (kind: EffectKind) => {
     const e = createEffect(kind);
     setEffects(o.id, [...effects, e], `${effectLabel(kind)}の追加`);
@@ -124,13 +179,28 @@ export function EffectsPanel({ o }: { o: Exclude<SceneObject, { type: 'group' }>
         />
       )}
       {effects.length > 0 && (
-        <ol className="effect-list">
+        <ol className={`effect-list${drag ? ' dragging' : ''}`} ref={list}>
           {effects.map((e, i) => {
             const name = names[i];
             const expanded = open.has(e.id);
             return (
-              <li key={e.id} className={`effect-row${e.enabled ? '' : ' off'}`} data-effect={e.kind}>
-                <div className="effect-line">
+              <li
+                key={e.id}
+                className={[
+                  'effect-row',
+                  e.enabled ? '' : 'off',
+                  drag?.from === i ? 'drag-source' : '',
+                  dropSlot === i ? 'drop-before' : '',
+                  dropSlot === effects.length && i === effects.length - 1 ? 'drop-after' : '',
+                ]
+                  .filter(Boolean)
+                  .join(' ')}
+                data-effect={e.kind}
+              >
+                <div className="effect-line" onPointerDown={(ev) => startDrag(ev, i)}>
+                  <span className="effect-grip" title="ドラッグで並べ替え" aria-hidden="true" onPointerDown={(ev) => ev.preventDefault()}>
+                    ⠿
+                  </span>
                   <input
                     type="checkbox"
                     checked={e.enabled}
@@ -145,6 +215,7 @@ export function EffectsPanel({ o }: { o: Exclude<SceneObject, { type: 'group' }>
                     aria-label={`${name}の設定`}
                     disabled={!PARAMS[e.kind].length}
                     onClick={() =>
+                      !dragged.current &&
                       setOpen((s) => {
                         const n = new Set(s);
                         if (n.has(e.id)) n.delete(e.id);

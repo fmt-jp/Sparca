@@ -1307,3 +1307,36 @@ kbd {
   gap: 6px 14px;
   padding: 4px 0 4px 30px;
 }
+.effect-grip {
+  cursor: grab;
+  color: var(--text-dim);
+  padding: 0 2px;
+  user-select: none;
+  touch-action: none;
+}
+.effect-list.dragging,
+.effect-list.dragging * {
+  cursor: grabbing !important;
+  user-select: none;
+}
+.effect-row {
+  position: relative;
+}
+.effect-row.drag-source {
+  opacity: 0.45;
+}
+.effect-row.drop-before::before,
+.effect-row.drop-after::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--accent);
+}
+.effect-row.drop-before::before {
+  top: -3px;
+}
+.effect-row.drop-after::after {
+  bottom: -3px;
+}
