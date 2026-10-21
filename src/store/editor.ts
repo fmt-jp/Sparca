@@ -48,6 +48,23 @@ export interface Notice {
 
 export const UNTITLED = '名称未設定';
 
+/** Grid shown over the canvas (a view setting, not part of the document). */
+export interface GridSettings {
+  visible: boolean;
+  /** Spacing in document px. */
+  size: number;
+  color: string;
+  snap: boolean;
+}
+
+export const DEFAULT_GRID: GridSettings = { visible: false, size: 20, color: '#00a0ff', snap: false };
+export const GRID_SIZE_LIMITS = [2, 1000] as const;
+
+/** Round a value to the nearest grid line. */
+export function snapValue(v: number, size: number): number {
+  return Math.round(v / size) * size;
+}
+
 /** A tab as shown in the tab bar. */
 export interface TabInfo {
   id: string;
@@ -98,6 +115,9 @@ export interface EditorState {
   /** Last color picked with the eyedropper. */
   pickedColor: string | null;
   zoom: number;
+  grid: GridSettings;
+  /** Align multiple objects to the canvas instead of to each other. */
+  alignToCanvas: boolean;
   notices: Notice[];
   /** Non-null while a long-running task is in progress. */
   busy: string | null;
@@ -122,6 +142,8 @@ export class EditorStore {
       ...freshSession(doc, UNTITLED, null),
       tool: 'select',
       eyedropperTarget: 'fill',
+      grid: DEFAULT_GRID,
+      alignToCanvas: false,
       pickedColor: null,
       notices: [],
       busy: null,
@@ -305,6 +327,16 @@ export class EditorStore {
   select(ids: Id[]): void {
     const same = ids.length === this.state.selection.length && ids.every((id, i) => id === this.state.selection[i]);
     this.set(same ? { selection: ids } : { selection: ids, nodeSelection: [] });
+  }
+
+  setGrid(patch: Partial<GridSettings>): void {
+    this.set({ grid: { ...this.state.grid, ...patch } });
+  }
+
+  /** Snap a document point to the grid when snapping is on. */
+  snap<T extends Point>(p: T): T {
+    const g = this.state.grid;
+    return g.snap ? { ...p, x: snapValue(p.x, g.size), y: snapValue(p.y, g.size) } : p;
   }
 
   setTool(tool: ToolId): void {

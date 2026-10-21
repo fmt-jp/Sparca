@@ -6,6 +6,7 @@ export type DialogState =
   | { kind: 'image-size'; imageId: string }
   | { kind: 'blur-selection' }
   | { kind: 'export' }
+  | { kind: 'grid' }
   | null;
 
 let current: DialogState = null;

@@ -16,6 +16,7 @@ import { ColorInput, Field, NumberInput, SliderInput, Toggle } from './controls'
 import { editor, useEditor } from './useEditor';
 import { useState } from 'react';
 import { toolDef } from './tools';
+import { SmallIcon } from './icons';
 
 const FONTS = [
   'sans-serif',
@@ -640,23 +641,36 @@ function EffectsSection({ o }: { o: ShapeObject | PathObject | TextObject }) {
   );
 }
 
-const ALIGN: { op: AlignOp; label: string }[] = [
-  { op: 'left', label: '左揃え' },
-  { op: 'hcenter', label: '左右中央' },
-  { op: 'right', label: '右揃え' },
-  { op: 'top', label: '上揃え' },
-  { op: 'vcenter', label: '上下中央' },
-  { op: 'bottom', label: '下揃え' },
+export const ALIGN: { op: AlignOp; label: string; icon: string }[] = [
+  { op: 'left', label: '左揃え', icon: 'M2 1 V15 M4 4 H13 V7 H4 Z M4 9 H9 V12 H4 Z' },
+  { op: 'hcenter', label: '横中央（左右）', icon: 'M8 1 V15 M3 4 H13 V7 H3 Z M5 9 H11 V12 H5 Z' },
+  { op: 'right', label: '右揃え', icon: 'M14 1 V15 M3 4 H12 V7 H3 Z M7 9 H12 V12 H7 Z' },
+  { op: 'top', label: '上揃え', icon: 'M1 2 H15 M4 4 V13 H7 V4 Z M9 4 V9 H12 V4 Z' },
+  { op: 'vcenter', label: '縦中央（上下）', icon: 'M1 8 H15 M4 3 V13 H7 V3 Z M9 5 V11 H12 V5 Z' },
+  { op: 'bottom', label: '下揃え', icon: 'M1 14 H15 M4 3 V12 H7 V3 Z M9 7 V12 H12 V7 Z' },
 ];
 
 export function AlignButtons({ single }: { single: boolean }) {
+  const toCanvas = useEditor((s) => s.alignToCanvas);
   return (
-    <span className="button-row" title={single ? 'キャンバスに対して整列' : '選択範囲に対して整列'}>
+    <span className="button-row align-row">
       {ALIGN.map((a) => (
-        <button key={a.op} type="button" className="align-btn" onClick={() => alignSelection(editor, a.op)}>
+        <button
+          key={a.op}
+          type="button"
+          className="align-btn"
+          title={`${a.label}（${single || toCanvas ? 'キャンバスに対して' : '選択範囲に対して'}）`}
+          onClick={() => alignSelection(editor, a.op, toCanvas)}
+        >
+          <SmallIcon d={a.icon} />
           {a.label}
         </button>
       ))}
+      {!single && (
+        <Toggle checked={toCanvas} onChange={(v) => editor.set({ alignToCanvas: v })}>
+          キャンバスに対して
+        </Toggle>
+      )}
     </span>
   );
 }

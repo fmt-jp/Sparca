@@ -272,6 +272,7 @@ export function CanvasView() {
     if (!layerId) return;
     editor.edit('パスの作成', (d) => addObject(d, layerId, path));
     editor.select([path.id]);
+    editor.setTool('select');
   }
 
   function setCrop(rect: Rect | null) {
@@ -353,7 +354,7 @@ export function CanvasView() {
     if (effectiveTool === 'pen') {
       if (!penNodes) {
         if (!writableLayer(editor, editor.getState().activeLayerId)) return;
-        setPenNodes([{ anchor: p, in: null, out: null }]);
+        setPenNodes([{ anchor: editor.snap(p), in: null, out: null }]);
         gesture.current = { kind: 'pen-handle', index: 0 };
         return;
       }
@@ -366,7 +367,7 @@ export function CanvasView() {
         finishPen(penNodes, false);
         return;
       }
-      setPenNodes([...penNodes, { anchor: p, in: null, out: null }]);
+      setPenNodes([...penNodes, { anchor: editor.snap(p), in: null, out: null }]);
       gesture.current = { kind: 'pen-handle', index: penNodes.length };
       return;
     }
@@ -379,7 +380,7 @@ export function CanvasView() {
       } else if (c?.rect && pointInRect(p, c.rect)) {
         gesture.current = { kind: 'crop-move', start: p, orig: c.rect };
       } else {
-        gesture.current = { kind: 'crop-new', start: p };
+        gesture.current = { kind: 'crop-new', start: editor.snap(p) };
         setCrop({ x: p.x, y: p.y, width: 0, height: 0 });
       }
       return;
@@ -476,7 +477,8 @@ export function CanvasView() {
 
     if (SHAPE_TOOLS[effectiveTool]) {
       if (!writableLayer(editor, editor.getState().activeLayerId)) return;
-      gesture.current = { kind: 'create', tool: effectiveTool, start: p, current: p, id: null };
+      const sp = editor.snap(p);
+      gesture.current = { kind: 'create', tool: effectiveTool, start: sp, current: sp, id: null };
       return;
     }
 
@@ -492,9 +494,12 @@ export function CanvasView() {
       }
       const layerId = writableLayer(editor, editor.getState().activeLayerId);
       if (!layerId) return;
-      const t = createText('', { x: p.x, y: p.y, width: 10, height: 10, rotation: 0 });
+      const tp = editor.snap(p);
+      const t = createText('', { x: tp.x, y: tp.y, width: 10, height: 10, rotation: 0 });
       const size = measureText({ ...t, text: 'M' });
-      t.box = { ...t.box, y: p.y - size.height / 2, width: size.width, height: size.height };
+      // Text is centered vertically on the click; with snapping its top-left sits on the grid.
+      const top = editor.getState().grid.snap ? tp.y : p.y - size.height / 2;
+      t.box = { ...t.box, y: top, width: size.width, height: size.height };
       // The new text and its first edit form one undo step (see TextEditor.commit).
       editor.beginGesture();
       editor.preview((d) => addObject(d, layerId, t));
@@ -546,7 +551,10 @@ export function CanvasView() {
         }
         if (!g.moved && Math.hypot(dx, dy) * zoom < 2) break;
         g.moved = true;
-        previewPath(g.pathId, moveAnchors(g.orig, g.indices, dx, dy));
+        // With grid snapping, the first selected anchor lands on the grid.
+        const lead = g.orig[g.indices[0]].anchor;
+        const snapped = editor.snap({ x: lead.x + dx, y: lead.y + dy });
+        previewPath(g.pathId, moveAnchors(g.orig, g.indices, snapped.x - lead.x, snapped.y - lead.y));
         break;
       }
       case 'handle-move': {
@@ -578,13 +586,13 @@ export function CanvasView() {
         break;
       }
       case 'crop-new':
-        setCrop(dragRect(g.start, p, e.shiftKey, e.altKey));
+        setCrop(dragRect(g.start, editor.snap(p), e.shiftKey, e.altKey));
         break;
       case 'crop-move':
         setCrop({ ...g.orig, x: g.orig.x + p.x - g.start.x, y: g.orig.y + p.y - g.start.y });
         break;
       case 'crop-resize': {
-        const b = resizeBox({ ...g.orig, rotation: 0 }, g.handle, p, { keepAspect: e.shiftKey, fromCenter: e.altKey });
+        const b = resizeBox({ ...g.orig, rotation: 0 }, g.handle, editor.snap(p), { keepAspect: e.shiftKey, fromCenter: e.altKey });
         setCrop({ x: b.x, y: b.y, width: b.width, height: b.height });
         break;
       }
@@ -614,11 +622,19 @@ export function CanvasView() {
         }
         if (!g.moved && Math.hypot(dx, dy) * zoom < 2) return;
         g.moved = true;
+        // With grid snapping, the top-left of the moved objects lands on the grid.
+        const b = unionBounds([...g.originals.values()]);
+        if (b) {
+          const snapped = editor.snap({ x: b.x + dx, y: b.y + dy });
+          dx = snapped.x - b.x;
+          dy = snapped.y - b.y;
+        }
         applyTransformed(g.originals, (o) => transformObject(o, { pivot: { x: 0, y: 0 }, sx: 1, sy: 1, rotation: 0, dx, dy }));
         break;
       }
       case 'resize': {
         const opt = { keepAspect: e.shiftKey, fromCenter: e.altKey };
+        const p = editor.snap(toDoc(e.clientX, e.clientY));
         if (g.single) {
           const [id, orig] = [...g.originals][0];
           const isText = orig.type === 'text';
@@ -647,7 +663,7 @@ export function CanvasView() {
         break;
       }
       case 'create': {
-        g.current = p;
+        g.current = editor.snap(p);
         updateCreate(g, e.shiftKey, e.altKey);
         break;
       }
@@ -683,7 +699,11 @@ export function CanvasView() {
           updateCreate(g, false, false);
         }
         editor.endGesture('図形の作成');
-        if (g.id) editor.select([g.id]);
+        if (g.id) {
+          editor.select([g.id]);
+          // Back to the select tool, so the next click edits instead of drawing another shape.
+          editor.setTool('select');
+        }
         break;
       }
       case 'pan':
@@ -877,6 +897,7 @@ export function CanvasView() {
           viewBox={`0 0 ${doc.width} ${doc.height}`}
           overflow="visible"
         >
+          <GridOverlay width={doc.width} height={doc.height} zoom={zoom} />
           <SelectionOverlay locs={selectedObjects} zoom={zoom} showHandles={tool === 'select' && !editingText} />
           {pixelSelection && <PixelSelectionOutline sel={pixelSelection} zoom={zoom} />}
           {polyPoints && (
@@ -954,6 +975,23 @@ function PathNodeOverlay({ zoom }: { zoom: number }) {
           <rect key={i} data-node={i} x={n.anchor.x - s / 2} y={n.anchor.y - s / 2} width={s} height={s} className={cls} strokeWidth={k} />
         );
       })}
+    </g>
+  );
+}
+
+/** Grid lines over the canvas area (screen only, never exported). */
+function GridOverlay({ width, height, zoom }: { width: number; height: number; zoom: number }) {
+  const grid = useEditor((s) => s.grid);
+  // Too dense to be useful (and expensive) when lines would be closer than 4 screen px.
+  if (!grid.visible || grid.size * zoom < 4) return null;
+  return (
+    <g data-testid="grid" pointerEvents="none">
+      <defs>
+        <pattern id="sparca-grid" width={grid.size} height={grid.size} patternUnits="userSpaceOnUse">
+          <path d={`M ${grid.size} 0 L 0 0 0 ${grid.size}`} fill="none" stroke={grid.color} strokeWidth={1 / zoom} opacity={0.6} />
+        </pattern>
+      </defs>
+      <rect x={0} y={0} width={width} height={height} fill="url(#sparca-grid)" />
     </g>
   );
 }
@@ -1189,6 +1227,7 @@ function TextEditor({ obj, zoom, isNew, onDone }: { obj: TextObject; zoom: numbe
       if (isNew) editor.endGesture('テキストの追加');
     }
     onDone();
+    if (editor.getState().tool === 'text') editor.setTool('select');
   }
 
   return (
@@ -1231,6 +1270,7 @@ function StatusBar({ cursor }: { cursor: Point | null }) {
   const doc = useEditor((s) => s.doc);
   const zoom = useEditor((s) => s.zoom);
   const sel = useEditor((s) => s.pixelSelection);
+  const grid = useEditor((s) => s.grid);
   const [progress, setProgress] = useState<number | null>(null);
   useEffect(() => imageCache.subscribe(() => setProgress(imageCache.progress)), []);
   return (
@@ -1241,6 +1281,14 @@ function StatusBar({ cursor }: { cursor: Point | null }) {
         </span>
       )}
       {sel && <span>範囲選択あり（Esc で解除）</span>}
+      <span className="status-toggles">
+        <label>
+          <input type="checkbox" checked={grid.visible} onChange={(e) => editor.setGrid({ visible: e.target.checked })} /> グリッド
+        </label>
+        <label>
+          <input type="checkbox" checked={grid.snap} onChange={(e) => editor.setGrid({ snap: e.target.checked })} /> スナップ
+        </label>
+      </span>
       <span>
         キャンバス {doc.width} × {doc.height} px
       </span>

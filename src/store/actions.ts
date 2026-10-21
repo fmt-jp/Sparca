@@ -285,13 +285,16 @@ export function ungroupSelection(ed: EditorStore): void {
 
 export type AlignOp = 'left' | 'hcenter' | 'right' | 'top' | 'vcenter' | 'bottom';
 
-/** Align selected objects to their common bounds (or to the canvas for a single object). */
-export function alignSelection(ed: EditorStore, op: AlignOp): void {
+/**
+ * Align selected objects. Relative to their common bounds, or to the canvas when
+ * `toCanvas` is set (always for a single object, which has nothing else to align to).
+ */
+export function alignSelection(ed: EditorStore, op: AlignOp, toCanvas = false): void {
   const { doc } = ed.getState();
   const ids = editableSelection(ed);
   const objs = ids.map((id) => findObject(doc, id)!.object);
   if (!objs.length) return;
-  const target = objs.length === 1 ? { x: 0, y: 0, width: doc.width, height: doc.height } : unionBounds(objs)!;
+  const target = objs.length === 1 || toCanvas ? { x: 0, y: 0, width: doc.width, height: doc.height } : unionBounds(objs)!;
   ed.edit('整列', (d) => {
     for (const o of objs) {
       const b = unionBounds([o]);
