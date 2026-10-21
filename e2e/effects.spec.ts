@@ -184,3 +184,61 @@ test('effects also work on images, and are saved as editable settings', async ({
   expect(px.slice(0, 3)).toEqual([255, 255, 0]);
   expect((await effects(page)).map((e) => e.kind)).toEqual(['invert']);
 });
+
+test('drag a row by its grip or name to reorder; one undo step; a plain click still opens the settings', async ({ page }) => {
+  await rect(page);
+  await addEffect(page, '色の調整', 'カラーオーバーレイ');
+  await addEffect(page, '色の調整', '反転');
+  await addEffect(page, 'ぼかしとシャープ', 'ぼかし');
+  const kinds = async () => (await effects(page)).map((e) => e.kind);
+  const center = async (loc: import('@playwright/test').Locator) => {
+    const b = (await loc.boundingBox())!;
+    return { x: b.x + b.width / 2, y: b.y + b.height / 2 };
+  };
+  const rows = props(page).locator('.effect-row');
+  // Fold the settings so all rows fit on screen.
+  for (const n of ['カラーオーバーレイ', 'ぼかし']) await props(page).getByRole('button', { name: `${n}の設定` }).click();
+  await rows.nth(0).scrollIntoViewIfNeeded();
+
+  // Grip of ぼかし (last) dragged above the first row.
+  const from = await center(rows.nth(2).locator('.effect-grip'));
+  const top = (await rows.nth(0).boundingBox())!;
+  await page.mouse.move(from.x, from.y);
+  await page.mouse.down();
+  await page.mouse.move(from.x, top.y + 10, { steps: 8 });
+  await expect(rows.nth(0)).toHaveClass(/drop-before/);
+  await expect(rows.nth(2)).toHaveClass(/drag-source/);
+  await page.mouse.up();
+  expect(await kinds()).toEqual(['blur', 'color-overlay', 'invert']);
+  await expect(props(page).locator('.drop-before, .drop-after')).toHaveCount(0);
+
+  // By the name: カラーオーバーレイ (now 2nd) to the end.
+  const name = await center(props(page).getByRole('button', { name: 'カラーオーバーレイの設定' }));
+  const last = (await rows.nth(2).boundingBox())!;
+  const wasOpen = await props(page).getByRole('button', { name: 'カラーオーバーレイの設定' }).getAttribute('aria-expanded');
+  await page.mouse.move(name.x, name.y);
+  await page.mouse.down();
+  await page.mouse.move(name.x, last.y + last.height - 2, { steps: 8 });
+  await expect(rows.nth(2)).toHaveClass(/drop-after/);
+  await page.mouse.up();
+  expect(await kinds()).toEqual(['blur', 'invert', 'color-overlay']);
+  // Dragging did not toggle the settings open/closed.
+  await expect(props(page).getByRole('button', { name: 'カラーオーバーレイの設定' })).toHaveAttribute('aria-expanded', wasOpen!);
+
+  // Dropping where it already is changes nothing.
+  const g = await center(rows.nth(0).locator('.effect-grip'));
+  await drag(page, g, { x: g.x, y: g.y + 3 });
+  expect(await kinds()).toEqual(['blur', 'invert', 'color-overlay']);
+
+  // Each drag is one undo step.
+  await page.keyboard.press('Control+z');
+  expect(await kinds()).toEqual(['blur', 'color-overlay', 'invert']);
+  await page.keyboard.press('Control+z');
+  expect(await kinds()).toEqual(['color-overlay', 'invert', 'blur']);
+
+  // A plain click on the name still opens / closes the settings.
+  const btn = props(page).getByRole('button', { name: 'ぼかしの設定' });
+  const before = await btn.getAttribute('aria-expanded');
+  await btn.click();
+  await expect(btn).toHaveAttribute('aria-expanded', before === 'true' ? 'false' : 'true');
+});
