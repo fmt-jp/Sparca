@@ -194,3 +194,175 @@ export function Toggle({ checked, onChange, children }: { checked: boolean; onCh
     </label>
   );
 }
+
+const SLIDER_HEIGHT = 120;
+
+/**
+ * Number box with a ▾ button that pops up a vertical slider (top = max), like Fireworks.
+ * Dragging the slider is one undo step; typing in the box works as in NumberInput.
+ */
+export function PopupSliderInput({
+  value,
+  onChange,
+  min,
+  max,
+  step = 1,
+  label,
+  suffix,
+  undoLabel,
+}: {
+  value: number;
+  onChange: (v: number) => void;
+  min: number;
+  max: number;
+  step?: number;
+  label: string;
+  suffix?: string;
+  undoLabel: string;
+}) {
+  const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
+  const wrap = useRef<HTMLSpanElement>(null);
+  const panel = useRef<HTMLDivElement>(null);
+  const open = pos !== null;
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: PointerEvent) => {
+      const t = e.target as Node;
+      if (!wrap.current?.contains(t) && !panel.current?.contains(t)) setPos(null);
+    };
+    window.addEventListener('pointerdown', onDown);
+    return () => window.removeEventListener('pointerdown', onDown);
+  }, [open]);
+
+  function toggle() {
+    if (open) {
+      setPos(null);
+      return;
+    }
+    const r = wrap.current!.getBoundingClientRect();
+    const h = SLIDER_HEIGHT + 40;
+    // Beside the ▾ so the number stays visible: extend downward when there is room,
+    // otherwise upward from the box's bottom edge.
+    const top = r.top + h <= window.innerHeight - 4 ? r.top : Math.max(4, r.bottom - h);
+    setPos({ left: r.right + 4, top });
+  }
+
+  return (
+    <span className="popup-slider" ref={wrap}>
+      <NumberInput value={value} onCommit={onChange} min={min} max={max} step={step} suffix={suffix} label={label} />
+      <button
+        type="button"
+        className={`popup-toggle${open ? ' open' : ''}`}
+        aria-label={`${label}のスライダー`}
+        aria-expanded={open}
+        title="スライダーで調整"
+        onClick={toggle}
+      >
+        <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
+          <path d="M2 3.5 L5 6.5 L8 3.5" fill="none" stroke="currentColor" strokeWidth="1.5" />
+        </svg>
+      </button>
+      {pos && (
+        <div
+          className="popup-panel"
+          ref={panel}
+          style={{ left: pos.left, top: pos.top }}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') {
+              e.stopPropagation();
+              setPos(null);
+            }
+          }}
+        >
+          <VerticalSlider value={value} min={min} max={max} step={step} label={label} onChange={onChange} undoLabel={undoLabel} />
+        </div>
+      )}
+    </span>
+  );
+}
+
+function VerticalSlider({
+  value,
+  min,
+  max,
+  step,
+  label,
+  onChange,
+  undoLabel,
+}: {
+  value: number;
+  min: number;
+  max: number;
+  step: number;
+  label: string;
+  onChange: (v: number) => void;
+  undoLabel: string;
+}) {
+  const track = useRef<HTMLDivElement>(null);
+  const sliderRef = useRef<HTMLDivElement>(null);
+  // Focus once when opened so the arrow keys work right away.
+  useEffect(() => sliderRef.current?.focus(), []);
+  const clamp = (v: number) => Math.min(max, Math.max(min, Math.round(v / step) * step));
+  const frac = max > min ? (Math.min(max, Math.max(min, value)) - min) / (max - min) : 0;
+
+  function fromPointer(clientY: number) {
+    const r = track.current!.getBoundingClientRect();
+    const f = 1 - Math.min(1, Math.max(0, (clientY - r.top) / r.height));
+    const v = clamp(min + f * (max - min));
+    if (v !== value) onChange(v);
+  }
+
+  return (
+    <div
+      className="vslider"
+      role="slider"
+      tabIndex={0}
+      aria-label={label}
+      aria-orientation="vertical"
+      aria-valuemin={min}
+      aria-valuemax={max}
+      aria-valuenow={value}
+      ref={sliderRef}
+      onPointerDown={(e) => {
+        e.currentTarget.setPointerCapture(e.pointerId);
+        editor.beginGesture();
+        fromPointer(e.clientY);
+      }}
+      onPointerMove={(e) => {
+        if (e.currentTarget.hasPointerCapture(e.pointerId)) fromPointer(e.clientY);
+      }}
+      onPointerUp={(e) => {
+        e.currentTarget.releasePointerCapture(e.pointerId);
+        editor.endGesture(undoLabel);
+      }}
+      onPointerCancel={() => editor.endGesture(undoLabel)}
+      onKeyDown={(e) => {
+        const big = Math.max(step, (max - min) / 10);
+        const delta: Record<string, number> = {
+          ArrowUp: step,
+          ArrowRight: step,
+          ArrowDown: -step,
+          ArrowLeft: -step,
+          PageUp: big,
+          PageDown: -big,
+        };
+        let next: number | null = null;
+        if (e.key in delta) next = clamp(value + delta[e.key]);
+        if (e.key === 'Home') next = min;
+        if (e.key === 'End') next = max;
+        if (next === null) return;
+        e.preventDefault();
+        e.stopPropagation();
+        if (next !== value) onChange(next);
+      }}
+    >
+      <span className="vslider-max">{max}</span>
+      <div className="vslider-track" ref={track} style={{ height: SLIDER_HEIGHT }}>
+        <div className="vslider-fill" style={{ height: `${frac * 100}%` }} />
+        <div className="vslider-thumb" style={{ bottom: `calc(${frac * 100}% - 6px)` }} />
+      </div>
+      <span className="vslider-min">{min}</span>
+    </div>
+  );
+}
