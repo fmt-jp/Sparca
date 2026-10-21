@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { canvasBox, drag, state } from './helpers';
+import { canvasBox, drag, makePng, state } from './helpers';
 
 const sides = (page: Page) => state<number>(page, 's => s.doc.layers[0].children[0].shape.sides');
 
@@ -118,5 +118,38 @@ test.describe('every shape tool uses the same ▾ slider for its numbers', () =>
     expect(await state<number>(page, 's => s.doc.layers[0].children[0].strokeWidth')).toBe(120);
     await props.getByRole('button', { name: '角丸のスライダー' }).click();
     await expect(page.getByRole('slider', { name: '角丸' })).toHaveAttribute('aria-valuemax', '40');
+  });
+});
+
+test.describe('the properties panel uses only pop-up sliders', () => {
+  test('no inline range sliders remain; opacity, effects and image adjustments open the ▾ slider', async ({ page }) => {
+    const props = page.getByRole('region', { name: 'プロパティ' });
+    // Polygon from beforeEach is selected: opacity + effects.
+    await page.getByLabel('ドロップシャドウ', { exact: true }).check();
+    await page.getByLabel('グロー', { exact: true }).check();
+    await expect(props.locator('input[type="range"]')).toHaveCount(0);
+
+    const obj = () => state<{ opacity: number; effects: { dropShadow: { distance: number } } }>(page, 's => s.doc.layers[0].children[0]');
+    await props.getByRole('button', { name: '不透明度のスライダー', exact: true }).click();
+    await page.keyboard.press('Home'); // 0%
+    await page.keyboard.press('Escape');
+    expect((await obj()).opacity).toBe(0);
+    await props.getByRole('button', { name: '影の距離のスライダー', exact: true }).click();
+    await page.keyboard.press('ArrowUp');
+    await page.keyboard.press('Escape');
+    expect((await obj()).effects.dropShadow.distance).toBe(7); // default 6 + 1
+
+    // Image adjustments use it too.
+    await page.keyboard.press('Control+a');
+    await page.keyboard.press('Delete');
+    const chooser = page.waitForEvent('filechooser');
+    await page.keyboard.press('Control+Shift+I');
+    await (await chooser).setFiles({ name: 'g.png', mimeType: 'image/png', buffer: makePng(8, 8, () => [100, 100, 100, 255]) });
+    await page.waitForFunction(() => (window as never as { __sparca: { getState(): { selection: string[] } } }).__sparca.getState().selection.length === 1);
+    await expect(props.locator('input[type="range"]')).toHaveCount(0);
+    await props.getByRole('button', { name: '明るさのスライダー', exact: true }).click();
+    await page.keyboard.press('PageUp'); // +20 (a tenth of −100..100)
+    await page.keyboard.press('Escape');
+    expect(await state<number>(page, 's => s.doc.layers[0].children[0].pipeline.adjust.brightness')).toBe(20);
   });
 });

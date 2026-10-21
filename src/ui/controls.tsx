@@ -195,7 +195,8 @@ export function PopupSliderInput({
   sliderMax?: number;
   label: string;
   suffix?: string;
-  undoLabel: string;
+  /** Undo history label for a slider drag (default: 「<label>の変更」). */
+  undoLabel?: string;
 }) {
   const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
   const wrap = useRef<HTMLSpanElement>(null);
@@ -259,7 +260,7 @@ export function PopupSliderInput({
             step={step}
             label={label}
             onChange={onChange}
-            undoLabel={undoLabel}
+            undoLabel={undoLabel ?? `${label}の変更`}
           />
         </div>
       )}
