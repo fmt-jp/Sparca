@@ -3,6 +3,7 @@ import { updateObject } from '../model/commands';
 import { boundsOfPoints, boxCorners, objectBounds, rectsIntersect, toLocal, type Rect } from '../model/geometry';
 import { addLocalBlur, addLocalMosaic, cropDocument, cropImage, fitCanvasToObject, resizeCanvas, resizeImagePixels, selectionToImageMask, type Anchor } from '../model/imageOps';
 import { allObjects, findObject, isEffectivelyLocked, isEffectivelyVisible } from '../model/tree';
+import { defaultAdjust } from '../model/factory';
 import type { ColorAdjust, Id, ImageObject, MaskShape, ResampleMethod, SceneObject } from '../model/types';
 import { imageCache } from '../render/imageCache';
 import { validateDimensions } from './assets';
@@ -72,23 +73,23 @@ export function resetAdjust(ed: EditorStore, id: Id): void {
   if (!loc || loc.object.type !== 'image') return;
   const pipeline = {
     ...loc.object.pipeline,
-    adjust: { brightness: 0, contrast: 0, saturation: 0, temperature: 0, tint: 0, auto: null },
+    adjust: defaultAdjust(),
     blur: 0,
     localEdits: [],
   };
   ed.edit('調整をリセット', (d) => updateObject(d, id, { pipeline } as Partial<SceneObject>));
 }
 
-/** The target image and the pixel selection as its mask, or null (with an error shown). */
-function selectionTarget(ed: EditorStore): { img: ImageObject; mask: MaskShape } | null {
+/** The target image and the pixel selection as its mask, or null (with an error shown unless quiet). */
+function selectionTarget(ed: EditorStore, quiet = false): { img: ImageObject; mask: MaskShape } | null {
   const { pixelSelection } = ed.getState();
   if (!pixelSelection) {
-    ed.notify('error', '範囲選択がありません。範囲選択ツールで範囲を指定してください。');
+    if (!quiet) ed.notify('error', '範囲選択がありません。範囲選択ツールで範囲を指定してください。');
     return null;
   }
   const img = pixelTargetImage(ed);
   if (!img) {
-    ed.notify('error', '選択範囲に重なる編集可能な画像がありません。');
+    if (!quiet) ed.notify('error', '選択範囲に重なる編集可能な画像がありません。');
     return null;
   }
   return { img, mask: selectionToImageMask(img, pixelSelection) };
@@ -99,6 +100,22 @@ export function blurSelection(ed: EditorStore, radius: number): boolean {
   const t = selectionTarget(ed);
   if (!t) return false;
   ed.edit('選択範囲にぼかし', (d) => addLocalBlur(d, t.img.id, t.mask, radius));
+  return true;
+}
+
+export const SELECTION_EDIT_LABELS = { blur: '選択範囲にぼかし', mosaic: '選択範囲にモザイク' } as const;
+
+/**
+ * Show a selection blur / mosaic on the canvas before it is applied: the edit runs inside
+ * a gesture, replacing the previous preview. Finish with endGesture (apply) or
+ * cancelGesture (back to before). Returns false when there is nothing to preview.
+ */
+export function previewSelectionEdit(ed: EditorStore, kind: 'blur' | 'mosaic', value: number): boolean {
+  ed.cancelGesture();
+  const t = selectionTarget(ed, true);
+  if (!t) return false;
+  ed.beginGesture();
+  ed.edit(SELECTION_EDIT_LABELS[kind], (d) => (kind === 'blur' ? addLocalBlur(d, t.img.id, t.mask, value) : addLocalMosaic(d, t.img.id, t.mask, value)));
   return true;
 }
 

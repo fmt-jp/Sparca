@@ -186,6 +186,94 @@ test('画像 → 選択範囲にモザイク pixelates only the selected area, k
   expect((await imageObject(page)).pipeline.localEdits).toEqual([]);
 });
 
+test('selection blur / mosaic dialogs preview on the canvas before 適用, and the preview can be switched off', async ({ page }) => {
+  await placePng(page, 'img.png', testPng());
+  const img = await imageObject(page);
+  const c = await canvasBox(page);
+  const edits = async () => ((await imageObject(page)).pipeline.localEdits as { kind: string; radius?: number; size?: number }[]);
+  const lastUndo = () => state<string | undefined>(page, 's => s.history.past[s.history.past.length - 1]?.label');
+  await page.keyboard.press('m');
+  await drag(page, { x: c.x + img.box.x + 80, y: c.y + img.box.y - 5 }, { x: c.x + img.box.x + 120, y: c.y + img.box.y + 40 });
+  const undoBefore = await lastUndo();
+
+  // Preview is on by default: the canvas shows the mosaic while the dialog is open.
+  await page.getByRole('button', { name: '画像', exact: true }).click();
+  await page.getByRole('menuitem', { name: '選択範囲にモザイク…' }).click();
+  let dialog = page.getByRole('dialog', { name: '選択範囲にモザイク' });
+  await expect(dialog.getByLabel(/プレビュー/)).toBeChecked();
+  await setNumber(page, 'ブロックの大きさ', '40', dialog);
+  await expect.poll(edits).toEqual([expect.objectContaining({ kind: 'mosaic', size: 40 })]);
+  let out = await processedPixels(page, img.id, [[85, 5]]);
+  expect(out.px[0].slice(0, 3)).toEqual([120, 120, 120]);
+  // キャンセル drops it; nothing in the history.
+  await dialog.getByRole('button', { name: 'キャンセル' }).click();
+  expect(await edits()).toEqual([]);
+  expect(await lastUndo()).toBe(undoBefore);
+
+  // 適用 keeps it as one undo step.
+  await page.getByTestId('selection-panel').getByRole('button', { name: /選択範囲にぼかし/ }).click();
+  dialog = page.getByRole('dialog', { name: '選択範囲にぼかし' });
+  await setNumber(page, 'ぼかし強度', '8', dialog);
+  await expect.poll(edits).toEqual([expect.objectContaining({ kind: 'blur', radius: 8 })]);
+  await setNumber(page, 'ぼかし強度', '3', dialog); // the preview follows changes
+  await expect.poll(edits).toEqual([expect.objectContaining({ kind: 'blur', radius: 3 })]);
+  await dialog.getByRole('button', { name: '適用' }).click();
+  expect(await edits()).toEqual([expect.objectContaining({ kind: 'blur', radius: 3 })]);
+  expect(await lastUndo()).toBe('選択範囲にぼかし');
+  await page.keyboard.press('Control+z');
+  expect(await edits()).toEqual([]);
+
+  // Preview off: nothing changes until 適用; the choice is remembered.
+  await page.getByTestId('selection-panel').getByRole('button', { name: /選択範囲にモザイク/ }).click();
+  dialog = page.getByRole('dialog', { name: '選択範囲にモザイク' });
+  await dialog.getByLabel(/プレビュー/).uncheck();
+  await setNumber(page, 'ブロックの大きさ', '20', dialog);
+  await page.waitForTimeout(200);
+  expect(await edits()).toEqual([]);
+  await dialog.getByRole('button', { name: '適用' }).click();
+  expect(await edits()).toEqual([expect.objectContaining({ kind: 'mosaic', size: 20 })]);
+  await page.getByTestId('selection-panel').getByRole('button', { name: /選択範囲にぼかし/ }).click();
+  await expect(page.getByRole('dialog', { name: '選択範囲にぼかし' }).getByLabel(/プレビュー/)).not.toBeChecked();
+  await page.keyboard.press('Escape');
+  expect(await edits()).toHaveLength(1);
+  // 20-px blocks: x 80..99 is all the left color, x 100..119 all the right one.
+  out = await processedPixels(page, img.id, [[85, 5], [105, 5]]);
+  expect(out.px[0].slice(0, 3)).toEqual([60, 70, 80]);
+  expect(out.px[1].slice(0, 3)).toEqual([180, 170, 160]);
+});
+
+test('color adjustment tone: grayscale and sepia, with strength, undoable and saved as a setting', async ({ page }) => {
+  await placePng(page, 'img.png', testPng());
+  const img = await imageObject(page);
+  const props = page.getByRole('region', { name: 'プロパティ' });
+  await props.getByLabel('色調', { exact: true }).selectOption('grayscale');
+  await waitImagesIdle(page);
+  let out = await processedPixels(page, img.id, [[150, 50], [50, 50]]);
+  const l = (r: number, g: number, b: number) => Math.round(0.2126 * r + 0.7152 * g + 0.0722 * b);
+  expect(out.px[0].slice(0, 3)).toEqual([l(180, 170, 160), l(180, 170, 160), l(180, 170, 160)]);
+  expect(out.px[1].slice(0, 3)).toEqual([l(60, 70, 80), l(60, 70, 80), l(60, 70, 80)]);
+
+  await props.getByLabel('色調', { exact: true }).selectOption('sepia');
+  await setNumber(page, '色調の強さ', '100');
+  await waitImagesIdle(page);
+  out = await processedPixels(page, img.id, [[150, 50]]);
+  const [r, g, b] = out.px[0];
+  expect(r).toBeGreaterThan(g);
+  expect(g).toBeGreaterThan(b); // warm brown
+  expect((await imageObject(page)).pipeline.adjust).toMatchObject({ tone: 'sepia', toneAmount: 100 });
+
+  await setNumber(page, '色調の強さ', '0');
+  await waitImagesIdle(page);
+  out = await processedPixels(page, img.id, [[150, 50]]);
+  expect(out.px[0].slice(0, 3)).toEqual([180, 170, 160]);
+
+  await page.keyboard.press('Control+z'); // strength back to 100
+  await page.keyboard.press('Control+z'); // back to grayscale
+  expect((await imageObject(page)).pipeline.adjust).toMatchObject({ tone: 'grayscale' });
+  await props.getByRole('button', { name: '調整をリセット' }).click();
+  expect((await imageObject(page)).pipeline.adjust).toMatchObject({ tone: 'none' });
+});
+
 test('range selection + blur only affects the selected area', async ({ page }) => {
   await placePng(page, 'img.png', testPng());
   const img = await imageObject(page);

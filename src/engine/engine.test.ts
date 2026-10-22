@@ -157,6 +157,24 @@ describe('color', () => {
     expect(Math.max(...means) - Math.min(...means)).toBeLessThan(8);
   });
 
+  it('grayscale and sepia tones, blended by their amount', () => {
+    const src = fillRaster(createRaster(1, 1), [200, 100, 50, 255]);
+    const gray = pixel(applyAdjust(src, { ...defaultAdjust(), tone: 'grayscale' }), 0, 0);
+    const l = Math.round(0.2126 * 200 + 0.7152 * 100 + 0.0722 * 50);
+    expect(gray).toEqual([l, l, l, 255]);
+    const sepia = pixel(applyAdjust(src, { ...defaultAdjust(), tone: 'sepia' }), 0, 0);
+    expect(sepia).toEqual([
+      Math.min(255, Math.round(0.393 * 200 + 0.769 * 100 + 0.189 * 50)),
+      Math.round(0.349 * 200 + 0.686 * 100 + 0.168 * 50),
+      Math.round(0.272 * 200 + 0.534 * 100 + 0.131 * 50),
+      255,
+    ]);
+    const half = pixel(applyAdjust(src, { ...defaultAdjust(), tone: 'grayscale', toneAmount: 50 }), 0, 0);
+    expect(half[0]).toBe(Math.round((200 + l) / 2));
+    // Amount 0 or tone none: unchanged (and the pipeline can skip the step).
+    expect(pixel(applyAdjust(src, { ...defaultAdjust(), tone: 'sepia', toneAmount: 0 }), 0, 0)).toEqual([200, 100, 50, 255]);
+  });
+
   it('auto color balances on near-gray midtones and keeps warm subjects warm', () => {
     // Half a slightly cool gray ramp, half a warm (orange) ramp that dominates the colors.
     const src = createRaster(64, 64);

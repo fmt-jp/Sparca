@@ -1,15 +1,18 @@
 import { useState } from 'react';
-import { mosaicSelection, pixelTargetImage } from '../store/imageActions';
-import { Field, SliderInput } from './controls';
+import { pixelTargetImage } from '../store/imageActions';
+import { Field, SliderInput, Toggle } from './controls';
 import { Dialog } from './Dialog';
 import { editor } from './useEditor';
+import { useSelectionPreview } from './useSelectionPreview';
 
 /** Mosaic (pixelation) applied to the pixel selection of the target image. */
 export function MosaicSelectionDialog({ onClose }: { onClose: () => void }) {
   const [size, setSize] = useState(10);
   const target = pixelTargetImage(editor);
+  const { preview, setPreview, apply } = useSelectionPreview('mosaic', size);
   return (
     <Dialog
+      clearBackdrop={preview}
       title="選択範囲にモザイク"
       onClose={onClose}
       footer={
@@ -22,7 +25,7 @@ export function MosaicSelectionDialog({ onClose }: { onClose: () => void }) {
             className="primary"
             disabled={!target}
             onClick={() => {
-              if (mosaicSelection(editor, size)) onClose();
+              if (apply()) onClose();
             }}
           >
             適用
@@ -36,6 +39,9 @@ export function MosaicSelectionDialog({ onClose }: { onClose: () => void }) {
       <Field label="ブロックの大きさ">
         <SliderInput label="ブロックの大きさ" value={size} min={2} max={200} step={1} suffix="px" onChange={setSize} />
       </Field>
+      <Toggle checked={preview} onChange={setPreview}>
+        プレビュー（適用前にキャンバスで確認）
+      </Toggle>
       <div className="hint">モザイクは編集情報として保持され、画像のプロパティからいつでも取り消せます。</div>
     </Dialog>
   );
