@@ -9,7 +9,7 @@ import { editor, useEditor } from './useEditor';
 const FORMATS = Object.keys(FORMAT_INFO) as ExportFormat[];
 
 function baseName(fileName: string): string {
-  const n = fileName.replace(/\.sparca$/i, '');
+  const n = fileName.replace(/\.hnb$/i, '');
   return n === '名称未設定' ? 'untitled' : n;
 }
 
@@ -57,7 +57,7 @@ export function ExportDialog({ onClose }: { onClose: () => void }) {
     >
       <div className="notice-inline" role="note">
         書き出した画像は1枚に合成され、レイヤー構造や編集情報（テキスト・図形・調整値）は含まれません。
-        後から編集するには「ファイル → 保存」で .sparca プロジェクトとして保存してください。
+        後から編集するには「ファイル → 保存」で .hnb プロジェクトとして保存してください。
       </div>
       <Field label="ファイル名">
         <input aria-label="ファイル名" value={name} onChange={(e) => setName(e.target.value)} />

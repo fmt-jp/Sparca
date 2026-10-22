@@ -112,7 +112,7 @@ export async function saveProject(ed: EditorStore, saveAs = false): Promise<bool
     const handle = await saveBlob(
       blob,
       projectName(fileName),
-      { description: 'Sparca プロジェクト', accept: { [PROJECT_MIME]: [PROJECT_EXTENSION] } },
+      { description: 'HANABI プロジェクト', accept: { [PROJECT_MIME]: [PROJECT_EXTENSION] } },
       saveAs ? null : fileHandle,
     );
     if (handle === undefined) return false;
@@ -171,7 +171,7 @@ async function isProjectFile(file: File): Promise<boolean> {
   return file.name.toLowerCase().endsWith(PROJECT_EXTENSION);
 }
 
-/** Open one file in a new tab: a .sparca project, or a PNG / JPEG / GIF / BMP image. */
+/** Open one file in a new tab: a .hnb project, or a PNG / JPEG / GIF / BMP image. */
 export async function openFile(ed: EditorStore, file: File): Promise<void> {
   if (await isProjectFile(file)) await openProjectFile(ed, file);
   else await openImageFile(ed, file);

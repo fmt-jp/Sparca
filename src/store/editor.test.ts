@@ -57,7 +57,7 @@ describe('editor tabs', () => {
     ed.openDocument(createDocument(), 'a');
     ed.edit('x', (d) => addObject(d, d.layers[0].id, shape()));
     expect(ed.getState().tabs[0].dirty).toBe(true);
-    ed.markSaved('a.sparca');
-    expect(ed.getState().tabs[0]).toMatchObject({ fileName: 'a.sparca', dirty: false });
+    ed.markSaved('a.hnb');
+    expect(ed.getState().tabs[0]).toMatchObject({ fileName: 'a.hnb', dirty: false });
   });
 });

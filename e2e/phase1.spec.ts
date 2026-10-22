@@ -10,10 +10,13 @@ test.beforeEach(async ({ page }) => {
 const objects = (page: import('@playwright/test').Page) =>
   state<{ type: string; name: string }[]>(page, 's => s.doc.layers.flatMap(l => l.children.map(o => ({ type: o.type, name: o.name, box: o.box })))');
 
-test('the top-left app name reads HANABI in orange', async ({ page }) => {
+test('the app is called HANABI: top-left name in orange and the browser tab title', async ({ page }) => {
   const name = page.locator('header.menubar .app-name');
   await expect(name).toHaveText('HANABI');
   await expect(name).toHaveCSS('color', 'rgb(255, 140, 26)');
+  await expect(page).toHaveTitle('名称未設定 — HANABI');
+  await page.getByRole('button', { name: 'ファイル' }).click();
+  await expect(page.getByRole('menuitem', { name: /^開く…（\.hnb／/ })).toBeVisible();
 });
 
 test('draws shapes and text, then undo/redo restores them', async ({ page }) => {
@@ -144,7 +147,7 @@ test('saves a project and reopens it for further editing', async ({ page }) => {
   const dl = page.waitForEvent('download');
   await page.keyboard.press('Control+s');
   const download = await dl;
-  expect(download.suggestedFilename()).toMatch(/\.sparca$/);
+  expect(download.suggestedFilename()).toMatch(/\.hnb$/);
   const path = await download.path();
   await expect(page.locator('.dirty-mark')).toHaveCount(0);
 
@@ -153,7 +156,7 @@ test('saves a project and reopens it for further editing', async ({ page }) => {
   const opener = page.waitForEvent('filechooser');
   await page.getByRole('button', { name: 'ファイル' }).click();
   await page.getByRole('menuitem', { name: /開く/ }).click();
-  await (await opener).setFiles({ name: 'project.sparca', mimeType: 'application/octet-stream', buffer: readFileSync(path!) });
+  await (await opener).setFiles({ name: 'project.hnb', mimeType: 'application/octet-stream', buffer: readFileSync(path!) });
   await expect(page.locator('[data-testid=canvas] image')).toHaveCount(1);
   expect(await state<unknown>(page, 's => s.doc')).toEqual(before);
   // Continue editing after reopening.
