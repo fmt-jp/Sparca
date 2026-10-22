@@ -67,6 +67,8 @@ const PARAMS: Record<EffectKind, Param[]> = {
   ],
   // Edited in its own dialog (CurvesDialog), confirmed with OK.
   curves: [],
+  grayscale: [],
+  sepia: [],
   invert: [],
   'color-overlay': [{ type: 'color', key: 'color', label: '色' }],
 };

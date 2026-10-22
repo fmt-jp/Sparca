@@ -60,7 +60,7 @@ interface Box { x: number; y: number; width: number; height: number; rotation: n
 - **ImageObject**：元画像 `assetId` と非破壊の加工パイプライン（§4）。
 - **GroupObject**：`children: SceneObject[]`。子は**ドキュメント座標のまま**保持し、グループ自体は独自の変形を持たない。グループの移動・拡縮・回転は子それぞれへ同じ変換を適用する（回転は子の中心をグループ中心まわりに回し、子の回転角に加算）。回転済みの子を非等倍で拡縮した場合は外接矩形ベースの近似になる（Fireworks と同等の挙動）。
 
-**エフェクト（Effect）**：`{ id, kind, enabled, strength, ...種類ごとの設定 }`。`kind` は drop-shadow / inner-shadow / glow / inner-glow / bevel-inner / bevel-outer / emboss / blur / zoom-blur / sharpen / brightness-contrast / hue-saturation / curves / invert / color-overlay。トーンカーブ（curves）は `curves: { rgb, r, g, b }` に各チャンネルの制御点 `{ x, y }`（0..255、x 昇順、2〜16 点）を持ち、各色のカーブ → RGB カーブの順に適用する（描画は単調 3 次補間で 256 段の表を作り `feComponentTransfer type="table"`）。`enabled` は一時的なオン／オフ、`strength`（0..1）は適用前とのブレンド率。同じ種類を複数持てる。旧形式 `{ glow, dropShadow }` は読み込み時に配列へ変換する（有効なものだけ、グロー→ドロップシャドウの順）。
+**エフェクト（Effect）**：`{ id, kind, enabled, strength, ...種類ごとの設定 }`。`kind` は drop-shadow / inner-shadow / glow / inner-glow / bevel-inner / bevel-outer / emboss / blur / zoom-blur / sharpen / brightness-contrast / hue-saturation / curves / grayscale / sepia / invert / color-overlay。トーンカーブ（curves）は `curves: { rgb, r, g, b }` に各チャンネルの制御点 `{ x, y }`（0..255、x 昇順、2〜16 点）を持ち、各色のカーブ → RGB カーブの順に適用する（描画は単調 3 次補間で 256 段の表を作り `feComponentTransfer type="table"`）。`enabled` は一時的なオン／オフ、`strength`（0..1）は適用前とのブレンド率。同じ種類を複数持てる。旧形式 `{ glow, dropShadow }` は読み込み時に配列へ変換する（有効なものだけ、グロー→ドロップシャドウの順）。
 
 **塗り（Fill）**：図形・パスの `fill` とテキストの `color` は、色文字列（`#rrggbb`）か次のグラデーション。`fill` は塗りなし（`null`）も可。
 

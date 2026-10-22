@@ -383,3 +383,30 @@ test('ぼかし（ズーム）: streaks outward from the center, follows the cen
   await props(page).getByLabel('ぼかし（ズーム）を有効にする').uncheck();
   await expect(page.locator('[data-testid=canvas] [data-zoom-blur]')).toHaveCount(0);
 });
+
+test('グレースケール and セピア effects, with strength', async ({ page }) => {
+  await rect(page); // blue #4a90e2
+  const luma = Math.round(0.2126 * BLUE[0] + 0.7152 * BLUE[1] + 0.0722 * BLUE[2]);
+  await addEffect(page, '色の調整', 'グレースケール');
+  let [px] = await exportPixels(page, [[200, 200]]);
+  for (let c = 0; c < 3; c++) expect(Math.abs(px[c] - luma)).toBeLessThanOrEqual(1);
+  // Strength 50 %: halfway back to blue.
+  await setNum(page, 'グレースケールの強さ', '50');
+  [px] = await exportPixels(page, [[200, 200]]);
+  expect(Math.abs(px[0] - (BLUE[0] + luma) / 2)).toBeLessThanOrEqual(2);
+  expect(Math.abs(px[2] - (BLUE[2] + luma) / 2)).toBeLessThanOrEqual(2);
+  await props(page).getByRole('button', { name: 'グレースケールを削除', exact: true }).click();
+
+  await addEffect(page, '色の調整', 'セピア');
+  [px] = await exportPixels(page, [[200, 200]]);
+  const sepia = [
+    0.393 * BLUE[0] + 0.769 * BLUE[1] + 0.189 * BLUE[2],
+    0.349 * BLUE[0] + 0.686 * BLUE[1] + 0.168 * BLUE[2],
+    0.272 * BLUE[0] + 0.534 * BLUE[1] + 0.131 * BLUE[2],
+  ].map((v) => Math.min(255, Math.round(v)));
+  for (let c = 0; c < 3; c++) expect(Math.abs(px[c] - sepia[c])).toBeLessThanOrEqual(1);
+  expect(px[0]).toBeGreaterThan(px[2]); // warm
+  expect((await effects(page)).map((e) => e.kind)).toEqual(['sepia']);
+  await page.keyboard.press('Control+z');
+  expect(await effects(page)).toEqual([]);
+});

@@ -383,6 +383,15 @@ function applyEffect(c: Chain, e: Effect, input: string, rotation: number): stri
         'cv',
       );
     }
+    case 'grayscale':
+    case 'sepia': {
+      // Rec. 709 luma / the CSS sepia matrix, as in the image color adjustment (engine/color.ts).
+      const m =
+        e.kind === 'grayscale'
+          ? '0.2126 0.7152 0.0722 0 0  0.2126 0.7152 0.0722 0 0  0.2126 0.7152 0.0722 0 0  0 0 0 1 0'
+          : '0.393 0.769 0.189 0 0  0.349 0.686 0.168 0 0  0.272 0.534 0.131 0 0  0 0 0 1 0';
+      return c.add((r) => <feColorMatrix key={r} in={input} type="matrix" values={m} result={r} />, e.kind === 'grayscale' ? 'gs' : 'sp');
+    }
     case 'invert':
       return c.add(
         (r) => (

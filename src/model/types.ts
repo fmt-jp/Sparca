@@ -90,6 +90,9 @@ export type Effect = EffectCommon &
     /** hue -180..180°, saturation and lightness -100..100. */
     | { kind: 'hue-saturation'; hue: number; saturation: number; lightness: number }
     | { kind: 'invert' }
+    /** Monochrome tones (same math as the image color adjustment); strength sets how much. */
+    | { kind: 'grayscale' }
+    | { kind: 'sepia' }
     /** Tone curve (composite RGB plus red / green / blue). */
     | { kind: 'curves'; curves: Curves }
     /** Replaces the colors with `color`, keeping the object's transparency. */
