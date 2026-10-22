@@ -249,3 +249,62 @@ test('drag a row by its grip or name to reorder; one undo step; a plain click st
   await btn.click();
   await expect(btn).toHaveAttribute('aria-expanded', before === 'true' ? 'false' : 'true');
 });
+
+test('tone curve: add and move points (graph or numbers), per-channel curves, delete, reset, undo', async ({ page }) => {
+  await rect(page);
+  await addEffect(page, '色の調整', 'トーンカーブ');
+  type Pt = { x: number; y: number };
+  const curves = async () => (await effects(page))[0].curves as Record<'rgb' | 'r' | 'g' | 'b', Pt[]>;
+  // Untouched: no filter at all.
+  await expect(page.locator('[data-testid=canvas] filter')).toHaveCount(0);
+
+  const graph = props(page).getByRole('group', { name: 'トーンカーブのカーブ' });
+  await graph.scrollIntoViewIfNeeded();
+  const g = (await graph.boundingBox())!;
+  // The graph's 0..255 area sits inside a small margin (viewBox -6..261).
+  const at = (x: number, y: number) => ({ x: g.x + ((x + 6) / 267) * g.width, y: g.y + ((261 - y) / 267) * g.height });
+
+  // Click on the graph adds a point; dragging it raises the midtones.
+  await drag(page, at(128, 128), at(128, 190));
+  let c = await curves();
+  expect(c.rgb).toHaveLength(3);
+  expect(Math.abs(c.rgb[1].x - 128)).toBeLessThanOrEqual(4);
+  expect(Math.abs(c.rgb[1].y - 190)).toBeLessThanOrEqual(4);
+  // Exact values by typing.
+  await setNum(page, 'トーンカーブの入力', '128');
+  await setNum(page, 'トーンカーブの出力', '192');
+  expect((await curves()).rgb[1]).toEqual({ x: 128, y: 192 });
+  let [px] = await exportPixels(page, [[200, 200]]);
+  expect(px[0]).toBeGreaterThan(BLUE[0] + 40);
+  expect(px[1]).toBeGreaterThan(BLUE[1] + 30);
+  const brightened = px.slice(0, 3);
+
+  // Red channel only: lift its dark end.
+  await props(page).getByRole('group', { name: 'トーンカーブのチャンネル' }).getByRole('button', { name: '赤' }).click();
+  await setNum(page, 'トーンカーブの出力', '120'); // point 0 of the red curve
+  expect((await curves()).r[0]).toEqual({ x: 0, y: 120 });
+  [px] = await exportPixels(page, [[200, 200]]);
+  expect(px[0]).toBeGreaterThan(brightened[0] + 20);
+  expect(px[1]).toBe(brightened[1]);
+  expect(px[2]).toBe(brightened[2]);
+  await props(page).getByRole('button', { name: 'リセット' }).click();
+  expect((await curves()).r).toEqual([{ x: 0, y: 0 }, { x: 255, y: 255 }]);
+
+  // Back to RGB: a drag is one undo step; Delete removes the selected point.
+  await props(page).getByRole('group', { name: 'トーンカーブのチャンネル' }).getByRole('button', { name: 'RGB' }).click();
+  const before = await curves();
+  await drag(page, at(64, 64), at(64, 30));
+  expect((await curves()).rgb).toHaveLength(4);
+  await page.keyboard.press('Control+z');
+  expect(await curves()).toEqual(before);
+  c = await curves();
+  const p1 = at(128, 192);
+  await page.mouse.click(p1.x, p1.y); // select the middle point (no move = no change)
+  expect(await curves()).toEqual(c);
+  await page.keyboard.press('ArrowUp');
+  expect((await curves()).rgb[1].y).toBe(c.rgb[1].y + 1);
+  await page.keyboard.press('Delete');
+  expect((await curves()).rgb).toEqual([{ x: 0, y: 0 }, { x: 255, y: 255 }]);
+  expect(await effects(page)).toHaveLength(1); // the shape and effect are still there
+  await expect(page.locator('[data-testid=canvas] filter')).toHaveCount(0);
+});

@@ -157,6 +157,46 @@ describe('color', () => {
     expect(Math.max(...means) - Math.min(...means)).toBeLessThan(8);
   });
 
+  it('auto color balances on near-gray midtones and keeps warm subjects warm', () => {
+    // Half a slightly cool gray ramp, half a warm (orange) ramp that dominates the colors.
+    const src = createRaster(64, 64);
+    for (let i = 0; i < 64 * 64; i++) {
+      const v = 30 + ((i >> 1) % 190);
+      src.data.set(i % 2 ? [v * 0.95, v, Math.min(255, v * 1.1), 255] : [v, v * 0.62, v * 0.3, 255], i * 4);
+    }
+    const params = computeAutoColor(src);
+    expect(params.gains).toEqual([1, 1, 1]);
+    const out = applyAdjust(src, { ...defaultAdjust(), auto: params });
+    // A mid gray pixel comes out neutral, an orange one stays orange (gray world would
+    // have pushed the whole image toward blue).
+    const grayPx = pixel(out, 1 + 2 * 50, 0); // odd index → gray ramp
+    expect(Math.abs(grayPx[0] - grayPx[2])).toBeLessThan(10);
+    const before = pixel(src, 2 * 50, 0);
+    const warm = pixel(out, 2 * 50, 0);
+    expect(warm[0] - warm[2]).toBeGreaterThan((before[0] - before[2]) * 0.9);
+  });
+
+  it('auto color leaves the balance alone when nothing in the image is near gray', () => {
+    const src = createRaster(32, 32);
+    // Strong reds, greens and blues only.
+    for (let i = 0; i < 32 * 32; i++) {
+      const v = 120 + (i % 120);
+      const px = [20, 20, 20, 255];
+      px[i % 3] = v;
+      src.data.set(px, i * 4);
+    }
+    expect(computeAutoColor(src).gamma).toEqual([1, 1, 1]);
+  });
+
+  it('older gray-world auto color settings still render the same', () => {
+    const src = gradient(8, 8);
+    const old = { black: [0, 0, 0], white: [255, 255, 255], gains: [1, 1, 0.5] } as const;
+    const out = applyAdjust(src, { ...defaultAdjust(), auto: { ...old, black: [...old.black], white: [...old.white], gains: [...old.gains] } });
+    const [r, , b] = pixel(src, 4, 4);
+    expect(pixel(out, 4, 4)[0]).toBe(r);
+    expect(pixel(out, 4, 4)[2]).toBe(Math.round(b * 0.5));
+  });
+
   it('auto color result depends on the image (not a fixed preset)', () => {
     const a = computeAutoColor(fillRaster(createRaster(2, 2), [10, 10, 10, 255]));
     const g = gradient(20, 20);

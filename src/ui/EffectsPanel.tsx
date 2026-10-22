@@ -3,14 +3,19 @@
 import { useRef, useState } from 'react';
 import { createEffect, EFFECT_GROUPS, effectLabel } from '../model/effects';
 import { updateObject } from '../model/commands';
-import type { Effect, EffectKind, Id, SceneObject } from '../model/types';
+import type { Curves, Effect, EffectKind, Id, SceneObject } from '../model/types';
+import { CurveEditor } from './CurveEditor';
 import { ColorPicker } from './ColorPicker';
 import { ContextMenu } from './ContextMenu';
 import { PopupSliderInput } from './controls';
 import { editor } from './useEditor';
 
 type NumParam = { key: string; label: string; min: number; max: number; sliderMax?: number; suffix?: string; step?: number; precision?: number; percent?: boolean };
-type Param = ({ type: 'number' } & NumParam) | { type: 'color'; key: string; label: string } | { type: 'bool'; key: string; label: string };
+type Param =
+  | ({ type: 'number' } & NumParam)
+  | { type: 'color'; key: string; label: string }
+  | { type: 'bool'; key: string; label: string }
+  | { type: 'curves'; key: string; label: string };
 
 const SHADOW: Param[] = [
   { type: 'color', key: 'color', label: '色' },
@@ -54,6 +59,7 @@ const PARAMS: Record<EffectKind, Param[]> = {
     { type: 'number', key: 'saturation', label: '彩度', min: -100, max: 100 },
     { type: 'number', key: 'lightness', label: '明度', min: -100, max: 100 },
   ],
+  curves: [{ type: 'curves', key: 'curves', label: 'カーブ' }],
   invert: [],
   'color-overlay': [{ type: 'color', key: 'color', label: '色' }],
 };
@@ -281,6 +287,9 @@ function ParamInput({ p, e, name, onChange }: { p: Param; e: Effect; name: strin
         <ColorPicker label={label} value={v as string} onChange={(c) => c && set(c)} />
       </span>
     );
+  }
+  if (p.type === 'curves') {
+    return <CurveEditor curves={v as Curves} name={name} onChange={(c, key) => set(c, key && `fx-${key}-${e.id}`)} />;
   }
   if (p.type === 'bool') {
     return (

@@ -3,6 +3,7 @@
 // (docs/design.md §3). The filter works in the object's rotated local frame, so
 // directions (shadow offset, light) are counter-rotated to stay fixed on screen.
 import type { ReactElement } from 'react';
+import { channelTable, isIdentityCurve } from '../model/curves';
 import type { Effect } from '../model/types';
 
 const ALPHA_ONLY = '0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0';
@@ -269,6 +270,21 @@ function applyEffect(c: Chain, e: Effect, input: string, rotation: number): stri
         );
       }
       return out;
+    }
+    case 'curves': {
+      const cv = e.curves;
+      if ((['rgb', 'r', 'g', 'b'] as const).every((ch) => isIdentityCurve(cv[ch]))) return input;
+      const table = (ch: 'r' | 'g' | 'b') => channelTable(cv, ch).map((v) => +v.toFixed(4)).join(' ');
+      return c.add(
+        (r) => (
+          <feComponentTransfer key={r} in={input} result={r}>
+            <feFuncR type="table" tableValues={table('r')} />
+            <feFuncG type="table" tableValues={table('g')} />
+            <feFuncB type="table" tableValues={table('b')} />
+          </feComponentTransfer>
+        ),
+        'cv',
+      );
     }
     case 'invert':
       return c.add(
