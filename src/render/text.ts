@@ -1,4 +1,5 @@
 import { boxCenter, rotatePoint } from '../model/geometry';
+import { cssFontFamily } from './fonts';
 import type { Box, TextObject } from '../model/types';
 
 export function textLines(text: string): string[] {
@@ -31,7 +32,7 @@ export function measureText(o: Pick<TextObject, 'text' | 'fontFamily' | 'fontSiz
     const chars = [...line].length;
     let w: number;
     if (c) {
-      c.font = `${o.italic ? 'italic ' : ''}${o.bold ? 'bold ' : ''}${o.fontSize}px ${o.fontFamily}`;
+      c.font = `${o.italic ? 'italic ' : ''}${o.bold ? 'bold ' : ''}${o.fontSize}px ${cssFontFamily(o.fontFamily)}`;
       w = c.measureText(line).width;
     } else {
       w = chars * o.fontSize * 0.6;

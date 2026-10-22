@@ -522,9 +522,6 @@ kbd {
   min-width: 300px;
   resize: vertical;
 }
-.font-input {
-  width: 150px;
-}
 .hint {
   color: var(--text-dim);
 }
@@ -1407,4 +1404,87 @@ kbd {
 .dialog-title {
   cursor: move;
   user-select: none;
+}
+
+/* Font picker */
+.font-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 180px;
+  max-width: 240px;
+  justify-content: space-between;
+  font-size: 14px;
+}
+.font-button-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  text-align: left;
+}
+.font-missing {
+  color: #f0b429;
+  font-family: system-ui, sans-serif;
+}
+.font-panel {
+  position: fixed;
+  z-index: 400;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.5);
+}
+.font-search {
+  width: 100%;
+}
+.font-listbox {
+  flex: 1;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+}
+.font-group-label {
+  position: sticky;
+  top: 0;
+  padding: 3px 8px;
+  font-size: 11px;
+  color: var(--text-dim);
+  background: var(--panel);
+}
+.font-option {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+.font-option.active {
+  background: var(--accent-dim);
+}
+.font-option.current .font-option-name::after {
+  content: ' ✓';
+  color: var(--accent);
+  font-family: system-ui, sans-serif;
+}
+.font-option-name {
+  font-size: 15px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.font-option-sample {
+  flex: none;
+  color: var(--text-dim);
+  font-size: 13px;
+}
+.font-local {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
 }

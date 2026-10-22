@@ -10,6 +10,7 @@ import type {
   TextObject,
 } from '../model/types';
 import { effectsFilter } from './effects';
+import { cssFontFamily } from './fonts';
 import { fillPaint } from './gradient';
 import { pathNodesD, shapePaths } from './shapes';
 import { textLines, textBaselineOffset } from './text';
@@ -155,7 +156,7 @@ function renderText(o: TextObject, fillId: string): ReactElement {
     <>
     {fill.def && <defs>{fill.def}</defs>}
     <text
-      fontFamily={o.fontFamily}
+      fontFamily={cssFontFamily(o.fontFamily)}
       fontSize={o.fontSize}
       fontWeight={o.bold ? 'bold' : 'normal'}
       fontStyle={o.italic ? 'italic' : 'normal'}

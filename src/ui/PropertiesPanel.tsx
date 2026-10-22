@@ -12,6 +12,7 @@ import { convertSelectedNodes, deleteSelectedNodes, setPathClosed, setPathNodes 
 import { fitTextBox } from '../render/text';
 import { isGradient } from '../model/gradient';
 import { FillInput } from './FillInput';
+import { FontPicker } from './FontPicker';
 import { EffectsPanel } from './EffectsPanel';
 import { arrowTipAngle, headForTipAngle } from '../render/shapes';
 import { alignSelection, groupSelection, ungroupSelection, type AlignOp } from '../store/actions';
@@ -21,25 +22,6 @@ import { useState } from 'react';
 import { toolDef } from './tools';
 import { SmallIcon } from './icons';
 
-const FONTS = [
-  'sans-serif',
-  'serif',
-  'monospace',
-  'Hiragino Sans',
-  'Hiragino Mincho ProN',
-  'Yu Gothic',
-  'Yu Mincho',
-  'Meiryo',
-  'Noto Sans JP',
-  'Noto Serif JP',
-  'Arial',
-  'Helvetica',
-  'Georgia',
-  'Times New Roman',
-  'Courier New',
-  'Impact',
-  'Verdana',
-];
 
 function set(id: Id, patch: Partial<SceneObject>, label: string, key?: string) {
   editor.edit(label, (d) => updateObject(d, id, patch), key ? `${key}:${id}` : null);
@@ -325,21 +307,8 @@ function TextSection({ o }: { o: TextObject }) {
             }}
           />
         </Field>
-        <Field label="フォント">
-          <input
-            className="font-input"
-            list="sparca-fonts"
-            aria-label="フォント"
-            defaultValue={o.fontFamily}
-            key={o.id + o.fontFamily}
-            onBlur={(e) => e.target.value.trim() && e.target.value !== o.fontFamily && setText(o, { fontFamily: e.target.value.trim() }, 'フォントの変更')}
-            onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
-          />
-          <datalist id="sparca-fonts">
-            {FONTS.map((f) => (
-              <option key={f} value={f} />
-            ))}
-          </datalist>
+        <Field label="フォント" group>
+          <FontPicker value={o.fontFamily} onChange={(fontFamily) => setText(o, { fontFamily }, 'フォントの変更')} />
         </Field>
         <Field label="サイズ">
           <NumberInput label="フォントサイズ" value={o.fontSize} min={1} max={2000} precision={1} suffix="px" onCommit={(fontSize) => setText(o, { fontSize }, 'フォントサイズの変更')} />

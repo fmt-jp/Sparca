@@ -18,6 +18,7 @@ import { findObject, isEffectivelyLocked } from '../model/tree';
 import type { Box, Id, PathNode, Point, SceneObject, ShapeGeometry, SparcaDocument, TextObject } from '../model/types';
 import { DocumentSvg } from '../render/DocumentSvg';
 import { imageCache } from '../render/imageCache';
+import { cssFontFamily } from '../render/fonts';
 import { fitTextBox, measureText } from '../render/text';
 import { docToNormalized, normalizedToDoc, objectGradient, representativeColor } from '../model/gradient';
 import { placeImageFiles, writableLayer } from '../store/actions';
@@ -1392,7 +1393,7 @@ function TextEditor({ obj, zoom, isNew, onDone }: { obj: TextObject; zoom: numbe
         top: PAD + live.y * zoom,
         width: (live.width + pad) * zoom,
         height: live.height * zoom,
-        fontFamily: obj.fontFamily,
+        fontFamily: cssFontFamily(obj.fontFamily),
         fontSize: obj.fontSize * zoom,
         fontWeight: obj.bold ? 'bold' : 'normal',
         fontStyle: obj.italic ? 'italic' : 'normal',
