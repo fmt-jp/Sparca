@@ -35,6 +35,8 @@ export const EFFECT_GROUPS: { label: string; kinds: { kind: EffectKind; label: s
       { kind: 'brightness-contrast', label: '明るさ・コントラスト' },
       { kind: 'hue-saturation', label: '色相・彩度' },
       { kind: 'curves', label: 'トーンカーブ' },
+      { kind: 'grayscale', label: 'グレースケール' },
+      { kind: 'sepia', label: 'セピア' },
       { kind: 'invert', label: '反転' },
       { kind: 'color-overlay', label: 'カラーオーバーレイ' },
     ],
@@ -81,6 +83,8 @@ export function createEffect(kind: EffectKind): Effect {
       return { ...base, kind, hue: 0, saturation: 0, lightness: 0 };
     case 'curves':
       return { ...base, kind, curves: defaultCurves() };
+    case 'grayscale':
+    case 'sepia':
     case 'invert':
       return { ...base, kind };
     case 'color-overlay':

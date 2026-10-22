@@ -31,7 +31,7 @@ async function load(rawEffects: unknown) {
 
 describe('effects', () => {
   it('has defaults for every kind, and each renders a filter', () => {
-    expect(ALL).toHaveLength(15);
+    expect(ALL).toHaveLength(17);
     for (const kind of ALL) {
       const e = createEffect(kind);
       expect(e).toMatchObject({ kind, enabled: true, strength: 1 });
