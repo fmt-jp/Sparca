@@ -78,6 +78,11 @@ export type Effect = EffectCommon &
     /** Relief of the object's edge; without showObject the object turns gray. inset = pressed in. */
     | ({ kind: 'emboss'; showObject: boolean; inset: boolean } & BevelParams)
     | { kind: 'blur'; radius: number }
+    /**
+     * Zoom blur: streaks outward from a center (box-normalized centerX / centerY).
+     * amount = how far the farthest copy is enlarged (0.3 = 130%).
+     */
+    | { kind: 'zoom-blur'; amount: number; centerX: number; centerY: number }
     /** Unsharp mask: amount 0..5, radius in px. */
     | { kind: 'sharpen'; amount: number; radius: number }
     /** -100..100 each (same scale as the image color adjustments). */

@@ -9,7 +9,101 @@ import type { Effect } from '../model/types';
 const ALPHA_ONLY = '0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0';
 
 export function activeEffects(effects: Effect[]): Effect[] {
-  return effects.filter((e) => e.enabled && e.strength > 0);
+  return effects.filter((e) => e.enabled && e.strength > 0 && !(e.kind === 'zoom-blur' && e.amount <= 0));
+}
+
+type ZoomBlur = Extract<Effect, { kind: 'zoom-blur' }>;
+
+/**
+ * SVG filters cannot scale their input, so a zoom blur splits the effects list: the
+ * effects before it become one filter, the zoom blur is drawn as copies of that result,
+ * and the effects after it filter the copies (see DocumentSvg).
+ */
+export function splitAtZoomBlur(effects: Effect[]): { effects: Effect[]; zoom: ZoomBlur | null }[] {
+  const out: { effects: Effect[]; zoom: ZoomBlur | null }[] = [{ effects: [], zoom: null }];
+  for (const e of activeEffects(effects)) {
+    if (e.kind === 'zoom-blur') {
+      out[out.length - 1].zoom = e;
+      out.push({ effects: [], zoom: null });
+    } else out[out.length - 1].effects.push(e);
+  }
+  return out;
+}
+
+const ZOOM_MAX_COPIES = 64;
+/** Copies are placed at most this far apart (px) at the farthest corner, if the cap allows. */
+const ZOOM_STEP = 1.5;
+
+/** Farthest distance (px) a point of the box travels: amount × distance from center to the farthest corner. */
+function zoomTravel(z: ZoomBlur, w: number, h: number): number {
+  const cx = z.centerX * w;
+  const cy = z.centerY * h;
+  return z.amount * Math.max(...[[0, 0], [w, 0], [0, h], [w, h]].map(([x, y]) => Math.hypot(x - cx, y - cy)));
+}
+
+/** Number of copies a zoom blur draws: enough for smooth streaks, capped for speed. */
+export function zoomBlurSteps(z: ZoomBlur, w: number, h: number): number {
+  return Math.max(6, Math.min(ZOOM_MAX_COPIES, Math.ceil(zoomTravel(z, w, h) / ZOOM_STEP) + 1));
+}
+
+/**
+ * Zoom blur as layers: copies of `content` enlarged from 100% to 100% + amount about the
+ * center, averaged. With strength < 1 the original is drawn on top at opacity 1 − strength.
+ */
+export function zoomBlurLayers(content: ReactElement, z: ZoomBlur, w: number, h: number, id: string): { layers: ReactElement; def: ReactElement | null } {
+  const n = zoomBlurSteps(z, w, h);
+  // When the cap leaves gaps between copies, soften them by about half a step.
+  const step = zoomTravel(z, w, h) / (n - 1);
+  const soften = step > ZOOM_STEP ? step / 2 : 0;
+  const cx = z.centerX * w;
+  const cy = z.centerY * h;
+  const scaled = Array.from({ length: n }, (_, i) => {
+    const s = 1 + (z.amount * i) / (n - 1);
+    return (
+      <g key={i} transform={`translate(${cx} ${cy}) scale(${+s.toFixed(5)}) translate(${-cx} ${-cy})`}>
+        {content}
+      </g>
+    );
+  });
+  const copies = average(scaled);
+  const reach = zoomBlurReach(z, w, h) + soften * 3 + 8;
+  const def = soften ? (
+    <filter id={id} filterUnits="userSpaceOnUse" x={-reach} y={-reach} width={w + reach * 2} height={h + reach * 2}>
+      <feGaussianBlur stdDeviation={+soften.toFixed(3)} />
+    </filter>
+  ) : null;
+  return {
+    def,
+    layers: (
+      <g data-zoom-blur={n}>
+        <g filter={def ? `url(#${id})` : undefined}>{copies}</g>
+        {z.strength < 1 && <g opacity={1 - z.strength}>{content}</g>}
+      </g>
+    ),
+  };
+}
+
+/**
+ * Average of layers by halves: the second half drawn over the first at opacity
+ * |second| / total. Each group rounds to 8 bits once, so the error grows with log2(n)
+ * rather than n (a flat stack at opacities 1, 1/2, 1/3… drifts visibly).
+ */
+function average(layers: ReactElement[]): ReactElement {
+  if (layers.length === 1) return layers[0];
+  const mid = Math.floor(layers.length / 2);
+  const a = layers.slice(0, mid);
+  const b = layers.slice(mid);
+  return (
+    <g key={`avg-${layers[0].key}-${layers.length}`}>
+      {average(a)}
+      <g opacity={+(b.length / layers.length).toFixed(5)}>{average(b)}</g>
+    </g>
+  );
+}
+
+/** How far a zoom blur can push content outside the box (px), for later filters' regions. */
+export function zoomBlurReach(z: ZoomBlur, w: number, h: number): number {
+  return z.amount * Math.max(w, h);
 }
 
 /** How far the effects can reach outside the object (px), for the filter region. */
@@ -233,6 +327,9 @@ function applyEffect(c: Chain, e: Effect, input: string, rotation: number): stri
     }
     case 'blur':
       return e.radius > 0 ? c.blur(input, e.radius) : input;
+    case 'zoom-blur':
+      // Not a filter primitive: DocumentSvg draws it as scaled copies (see zoomBlurLayers).
+      return input;
     case 'sharpen': {
       if (e.amount <= 0 || e.radius <= 0) return input;
       const b = c.blur(input, e.radius);
@@ -304,6 +401,8 @@ function applyEffect(c: Chain, e: Effect, input: string, rotation: number): stri
 
 /** The object's effects filter, or null when no effect is active. */
 export function effectsFilter(id: string, effects: Effect[], w: number, h: number, rotation: number, strokeWidth: number): ReactElement | null {
+  // Zoom blurs are drawn outside the filter (zoomBlurLayers).
+  effects = effects.filter((e) => e.kind !== 'zoom-blur');
   const list = activeEffects(effects);
   if (!list.length) return null;
   const c = new Chain('e');

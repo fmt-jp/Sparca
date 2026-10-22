@@ -12,7 +12,7 @@ import { ContextMenu } from './ContextMenu';
 import { PopupSliderInput } from './controls';
 import { editor } from './useEditor';
 
-type NumParam = { key: string; label: string; min: number; max: number; sliderMax?: number; suffix?: string; step?: number; precision?: number; percent?: boolean };
+type NumParam = { key: string; label: string; min: number; max: number; sliderMin?: number; sliderMax?: number; suffix?: string; step?: number; precision?: number; percent?: boolean };
 type Param =
   | ({ type: 'number' } & NumParam)
   | { type: 'color'; key: string; label: string }
@@ -47,6 +47,11 @@ const PARAMS: Record<EffectKind, Param[]> = {
   'bevel-outer': [{ type: 'color', key: 'color', label: '縁の色' }, ...BEVEL],
   emboss: [...BEVEL, { type: 'bool', key: 'inset', label: 'くぼませる' }, { type: 'bool', key: 'showObject', label: 'オブジェクトの色を表示' }],
   blur: [{ type: 'number', key: 'radius', label: 'ぼかし量', min: 0, max: 200, sliderMax: 50, suffix: 'px' }],
+  'zoom-blur': [
+    { type: 'number', key: 'amount', label: '量', min: 0, max: 200, sliderMax: 100, suffix: '%', percent: true },
+    { type: 'number', key: 'centerX', label: '中心 X', min: -100, max: 200, sliderMin: 0, sliderMax: 100, suffix: '%', percent: true },
+    { type: 'number', key: 'centerY', label: '中心 Y', min: -100, max: 200, sliderMin: 0, sliderMax: 100, suffix: '%', percent: true },
+  ],
   sharpen: [
     { type: 'number', key: 'amount', label: '量', min: 0, max: 500, suffix: '%', percent: true },
     { type: 'number', key: 'radius', label: '半径', min: 0.5, max: 20, sliderMax: 10, step: 0.5, precision: 1, suffix: 'px' },
@@ -356,6 +361,7 @@ function ParamInput({ p, e, name, onChange }: { p: Param; e: Effect; name: strin
         value={Math.round((v as number) * scale * 100) / 100}
         min={p.min}
         max={p.max}
+        sliderMin={p.sliderMin}
         sliderMax={p.sliderMax}
         step={p.step}
         precision={p.precision}
