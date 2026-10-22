@@ -49,7 +49,8 @@ export function effectLabel(kind: EffectKind): string {
 /** A new, enabled effect of `kind` with its default settings. */
 export function createEffect(kind: EffectKind): Effect {
   const base = { id: newId('fx'), enabled: true, strength: 1 };
-  const bevel = { width: 6, softness: 2, angle: -135, intensity: 0.7 };
+  // Fireworks defaults: width 10, contrast 75%, softness 3, light from the top-left.
+  const bevel = { width: 10, softness: 3, angle: -135, intensity: 0.75 };
   switch (kind) {
     case 'drop-shadow':
       return { ...base, kind, color: '#000000', opacity: 0.5, angle: 45, distance: 6, blur: 4 };
@@ -64,7 +65,7 @@ export function createEffect(kind: EffectKind): Effect {
     case 'bevel-outer':
       return { ...base, kind, ...bevel, color: '#c0c0c0' };
     case 'emboss':
-      return { ...base, kind, ...bevel, width: 3, showObject: true, inset: false };
+      return { ...base, kind, ...bevel, width: 5, showObject: true, inset: false };
     case 'blur':
       return { ...base, kind, radius: 4 };
     case 'sharpen':

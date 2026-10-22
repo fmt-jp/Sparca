@@ -3,13 +3,10 @@ import {
   arrangeSelection,
   chooseAndOpenProject,
   chooseAndPlaceImage,
-  copySelection,
-  cutSelection,
   deleteSelection,
   duplicateSelection,
   groupSelection,
   nudgeSelection,
-  paste,
   saveProject,
   selectAll,
   ungroupSelection,
@@ -27,6 +24,7 @@ import { MenuBar, zoomIn, zoomOut, zoomToFit } from './MenuBar';
 import { NewDocumentDialog } from './NewDocumentDialog';
 import { PropertiesPanel } from './PropertiesPanel';
 import { Toolbar } from './Toolbar';
+import { installClipboardHandlers } from './clipboard';
 import { isTextEntry } from './keyboard';
 import { TOOL_GROUPS } from './tools';
 import { startSplitterDrag, usePanelSizes } from './usePanelSizes';
@@ -55,6 +53,8 @@ export function App() {
     window.addEventListener('beforeunload', onBeforeUnload);
     return () => window.removeEventListener('beforeunload', onBeforeUnload);
   }, []);
+
+  useEffect(() => installClipboardHandlers(), []);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -131,9 +131,7 @@ function handleShortcut(e: KeyboardEvent): boolean {
     else if (k === 'o') void chooseAndOpenProject(editor);
     else if (k === 'i' && e.shiftKey) void chooseAndPlaceImage(editor);
     else if (k === 'e' && e.shiftKey) openDialog({ kind: 'export' });
-    else if (k === 'c') copySelection(editor);
-    else if (k === 'x') cutSelection(editor);
-    else if (k === 'v') paste(editor);
+    // Ctrl+C / X / V are left to the browser so its clipboard events fire (see clipboard.ts).
     else if (k === 'd') duplicateSelection(editor);
     else if (k === 'a') selectAll(editor);
     else if (k === 'g' && e.shiftKey) ungroupSelection(editor);

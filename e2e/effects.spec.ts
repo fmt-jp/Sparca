@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
-import { addEffect, canvasBox, decodePixels, disableNativePickers, drag, makePng, placePng, state } from './helpers';
+import { addEffect, canvasBox, decodePixels, disableNativePickers, drag, makePng, placePng, setColor, state } from './helpers';
 
 test.beforeEach(async ({ page }) => {
   await disableNativePickers(page);
@@ -135,12 +135,19 @@ test('shadow, glow, bevel and emboss effects change the right pixels', async ({ 
   expect(px[2].slice(0, 3)).toEqual(BLUE);
   await props(page).getByRole('button', { name: '内側ベベルを削除', exact: true }).click();
 
-  // Outer bevel: a gray rim around the shape.
+  // Outer bevel (Fireworks-style): a red rim with rounded corners, lit at the top
+  // (lighter than the rim color) and shaded at the bottom (darker).
   await addEffect(page, 'ベベルとエンボス', '外側ベベル');
-  px = await exportPixels(page, [[200, 96], [200, 120]]);
-  expect(Math.abs(px[0][0] - px[0][2])).toBeLessThan(20); // gray-ish rim
-  expect(px[0].slice(0, 3)).not.toEqual([255, 255, 255]);
-  expect(px[1].slice(0, 3)).toEqual(BLUE);
+  await setColor(page, props(page), '外側ベベルの縁の色', '#ff0000');
+  px = await exportPixels(page, [[200, 95], [200, 305], [200, 120], [93, 93], [95, 200]]);
+  const [top, bottom, inside, corner, left] = px;
+  expect(top[0]).toBe(255);
+  expect(top[1]).toBeGreaterThan(40); // highlight: toward pink
+  expect(bottom[0]).toBeLessThan(200); // shade: darker red
+  expect(bottom[1]).toBeLessThan(20);
+  expect(left[0]).toBeGreaterThan(200); // the rim reaches all around
+  expect(inside.slice(0, 3)).toEqual(BLUE);
+  expect(corner.slice(0, 3)).toEqual([255, 255, 255]); // rounded, not a square corner
   await props(page).getByRole('button', { name: '外側ベベルを削除', exact: true }).click();
 
   // Emboss without the object's color: gray.

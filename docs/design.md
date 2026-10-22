@@ -94,7 +94,7 @@ interface Gradient {
 
 - キャンバスはドキュメント全体を **1つの SVG** で描画する。`viewBox` はドキュメント座標、表示倍率は SVG の表示サイズで表現する（表示倍率と実寸を分離）。
 - 図形・パス・テキストは SVG 要素。
-- エフェクトはオブジェクトごとに 1 つの SVG フィルターにまとめる（`render/effects.tsx`）。リストの先頭から順に、前の結果（最初は `SourceGraphic`）を入力にしてフィルター要素をつなぐ。強さが 1 未満なら `feComposite operator="arithmetic"` で前の結果とブレンドする。シャドウ・グローは結果のアルファ（`feColorMatrix`）からぼかし・膨張・オフセット・塗り（`feGaussianBlur`／`feMorphology`／`feOffset`／`feFlood`）、内側系はアルファの反転を元の形で切り抜く。ベベル・エンボスは光源方向へずらしたアルファとの差（`feComposite out`）でハイライトと影を作る。色の調整は `feComponentTransfer`／`feColorMatrix`（明るさ・コントラストは画像の色調整と同じ式）。フィルターはオブジェクトの回転した座標系で働くため、角度は回転を打ち消して画面上で一定の向きにする。
+- エフェクトはオブジェクトごとに 1 つの SVG フィルターにまとめる（`render/effects.tsx`）。リストの先頭から順に、前の結果（最初は `SourceGraphic`）を入力にしてフィルター要素をつなぐ。強さが 1 未満なら `feComposite operator="arithmetic"` で前の結果とブレンドする。シャドウ・グローは結果のアルファ（`feColorMatrix`）からぼかし・膨張・オフセット・塗り（`feGaussianBlur`／`feMorphology`／`feOffset`／`feFlood`）、内側系はアルファの反転を元の形で切り抜く。ベベル・エンボスは Fireworks の「滑らか」な断面に合わせ、ぼかしたアルファを高さマップとして `feDiffuseLighting`（`feDistantLight`、仰角 50°、`kernelUnitLength=1` で表示倍率に依存しない）で照らし、平らな面より明るい分を白、暗い分を黒の半透明として重ねる。外側ベベルの縁はアルファをぼかして閾値処理した「角の丸い膨張」で作り、縁の色で塗ってから陰影を付ける。色の調整は `feComponentTransfer`／`feColorMatrix`（明るさ・コントラストは画像の色調整と同じ式）。フィルターはオブジェクトの回転した座標系で働くため、角度は回転を打ち消して画面上で一定の向きにする。
 - 画像は画像エンジンでパイプラインを適用した結果（§4）を `<image>` として配置する。
 - グラデーション：線形・放射は SVG の `linearGradient`／`radialGradient`（`gradientUnits="userSpaceOnUse"` と box への変換行列）。SVG に円錐グラデーションはないため、Canvas の `createConicGradient` で画像（長辺 最大 2048px、小さい図形は 2 倍密度）を生成し `pattern` として塗る。生成画像はキャッシュする。
 - 選択ハンドル・範囲選択の点線などの操作 UI は、ドキュメント SVG の上に重ねた別レイヤーで描画し、書き出しには含めない。

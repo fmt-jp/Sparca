@@ -4,19 +4,16 @@ import { segmentCount, pathToDoc } from '../model/pathEdit';
 import {
   alignSelection,
   arrangeSelection,
-  copySelection,
-  cutSelection,
   deleteSelection,
   duplicateSelection,
   groupSelection,
-  hasClipboard,
-  paste,
   selectAll,
   ungroupSelection,
 } from '../store/actions';
 import { convertSelectedNodes, deleteSelectedNodes, editablePath, insertNode } from '../store/pathActions';
 import type { MenuItem } from './MenuBar';
 import { ALIGN } from './PropertiesPanel';
+import { menuCopy, menuPaste } from './clipboard';
 import { editor } from './useEditor';
 
 const mod = /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘' : 'Ctrl+';
@@ -29,9 +26,9 @@ export function objectMenu(): MenuItem[] {
   const single = selection.length === 1 ? findObject(doc, selection[0]) : null;
   const isGroup = selection.some((id) => findObject(doc, id)?.object.type === 'group');
   const items: MenuItem[] = [
-    { label: 'カット', shortcut: `${mod}X`, action: () => cutSelection(editor), disabled: !has },
-    { label: 'コピー', shortcut: `${mod}C`, action: () => copySelection(editor), disabled: !has },
-    { label: 'ペースト', shortcut: `${mod}V`, action: () => paste(editor), disabled: !hasClipboard() },
+    { label: 'カット', shortcut: `${mod}X`, action: () => menuCopy(true), disabled: !has },
+    { label: 'コピー', shortcut: `${mod}C`, action: () => menuCopy(), disabled: !has },
+    { label: 'ペースト', shortcut: `${mod}V`, action: () => void menuPaste() },
     { label: '複製', shortcut: `${mod}D`, action: () => duplicateSelection(editor), disabled: !has },
     { label: '削除', shortcut: 'Delete', action: () => deleteSelection(editor), disabled: !has },
     SEP,
@@ -67,7 +64,7 @@ export function objectMenu(): MenuItem[] {
 export function canvasMenu(): MenuItem[] {
   const { grid } = editor.getState();
   return [
-    { label: 'ペースト', shortcut: `${mod}V`, action: () => paste(editor), disabled: !hasClipboard() },
+    { label: 'ペースト', shortcut: `${mod}V`, action: () => void menuPaste() },
     { label: 'すべてを選択', shortcut: `${mod}A`, action: () => selectAll(editor) },
     SEP,
     { label: 'グリッドを表示', checked: grid.visible, action: () => editor.setGrid({ visible: !grid.visible }) },
