@@ -10,6 +10,8 @@ import {
   isFontAvailable,
   listLocalFonts,
   localFontsIfAllowed,
+  localizeLocalFonts,
+  type LocalFont,
   type FontEntry,
   type FontGroup,
 } from '../render/fonts';
@@ -94,14 +96,18 @@ function FontList({
   const panel = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const [query, setQuery] = useState('');
-  const [local, setLocal] = useState<string[] | null>(null);
+  const [local, setLocal] = useState<LocalFont[] | null>(null);
   const [localError, setLocalError] = useState<string | null>(null);
   // -1 = not moved yet: highlight the current font.
   const [active, setActive] = useState(-1);
   const detected = useMemo(() => detectedFonts(), []);
 
   useEffect(() => {
-    void localFontsIfAllowed().then((l) => l && setLocal(l));
+    void localFontsIfAllowed().then((l) => {
+      if (!l) return;
+      setLocal(l);
+      void localizeLocalFonts().then(setLocal);
+    });
   }, []);
 
   useEffect(() => {
@@ -117,7 +123,7 @@ function FontList({
     const all: FontEntry[] = [...detected];
     if (local) {
       const known = new Set(detected.map((d) => d.family));
-      for (const f of local) if (!known.has(f)) all.push({ family: f, label: f, group: 'local' });
+      for (const f of local) if (!known.has(f.family)) all.push({ family: f.family, label: f.label, group: 'local' });
     }
     // Keep the current font in the list even when this PC lacks it.
     if (!all.some((e) => e.family === value)) all.unshift({ family: value, label: fontLabel(value), group: 'ja' });
@@ -140,6 +146,7 @@ function FontList({
     setLocalError(null);
     try {
       setLocal(await listLocalFonts());
+      setLocal(await localizeLocalFonts());
     } catch {
       setLocalError('フォント一覧を取得できませんでした（ブラウザで許可されていません）。');
     }
@@ -153,6 +160,7 @@ function FontList({
       aria-selected={e.family === value}
       data-active={i === act}
       data-family={e.family}
+      title={!isCustom && e.label !== e.family ? `${e.label}（${e.family}）` : undefined}
       className={`font-option${i === act ? ' active' : ''}${e.family === value ? ' current' : ''}`}
       onPointerEnter={() => setActive(i)}
       onClick={() => onChoose(e.family)}
