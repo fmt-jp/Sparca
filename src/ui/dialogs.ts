@@ -5,6 +5,7 @@ export type DialogState =
   | { kind: 'canvas-size' }
   | { kind: 'image-size'; imageId: string }
   | { kind: 'blur-selection' }
+  | { kind: 'mosaic-selection' }
   | { kind: 'export' }
   | { kind: 'grid' }
   | null;

@@ -21,6 +21,7 @@ import { GridDialog } from './GridDialog';
 import { ImageSizeDialog } from './ImageSizeDialog';
 import { LayersPanel } from './LayersPanel';
 import { MenuBar, zoomIn, zoomOut, zoomToFit } from './MenuBar';
+import { MosaicSelectionDialog } from './MosaicSelectionDialog';
 import { NewDocumentDialog } from './NewDocumentDialog';
 import { PropertiesPanel } from './PropertiesPanel';
 import { Toolbar } from './Toolbar';
@@ -102,6 +103,7 @@ export function App() {
       {dialog?.kind === 'canvas-size' && <CanvasSizeDialog onClose={closeDialog} />}
       {dialog?.kind === 'image-size' && <ImageSizeDialog imageId={dialog.imageId} onClose={closeDialog} />}
       {dialog?.kind === 'blur-selection' && <BlurSelectionDialog onClose={closeDialog} />}
+      {dialog?.kind === 'mosaic-selection' && <MosaicSelectionDialog onClose={closeDialog} />}
       {dialog?.kind === 'export' && <ExportDialog onClose={closeDialog} />}
       {dialog?.kind === 'grid' && <GridDialog onClose={closeDialog} />}
       <div className="notices" role="status" aria-live="polite">

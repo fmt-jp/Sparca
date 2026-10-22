@@ -153,6 +153,39 @@ test('crop tool: document crop and image-only crop are distinct', async ({ page 
   expect((await imageObject(page)).pipeline.crop).toBeNull();
 });
 
+test('画像 → 選択範囲にモザイク pixelates only the selected area, kept as an editable step', async ({ page }) => {
+  await placePng(page, 'img.png', testPng());
+  const img = await imageObject(page);
+  const c = await canvasBox(page);
+  // Disabled until there is a selection.
+  await page.getByRole('button', { name: '画像', exact: true }).click();
+  await expect(page.getByRole('menuitem', { name: '選択範囲にモザイク…' })).toBeDisabled();
+  await page.keyboard.press('Escape');
+  // Select image pixels x 80..120, y 0..40 (across the color boundary at x=100).
+  await page.keyboard.press('m');
+  await drag(page, { x: c.x + img.box.x + 80, y: c.y + img.box.y - 5 }, { x: c.x + img.box.x + 120, y: c.y + img.box.y + 40 });
+  await page.getByRole('button', { name: '画像', exact: true }).click();
+  await page.getByRole('menuitem', { name: '選択範囲にモザイク…' }).click();
+  const dialog = page.getByRole('dialog', { name: '選択範囲にモザイク' });
+  await setNumber(page, 'ブロックの大きさ', '40', dialog);
+  await dialog.getByRole('button', { name: '適用' }).click();
+  const after = await imageObject(page);
+  expect(after.pipeline.localEdits).toMatchObject([{ kind: 'mosaic', size: 40 }]);
+  const out = await processedPixels(page, img.id, [[85, 5], [115, 35], [100, 20], [150, 60], [60, 60], [70, 10]]);
+  // The 40-px block x 80..119 × y 0..39 is one color: the average of both halves.
+  for (const p of out.px.slice(0, 3)) expect(p.slice(0, 3)).toEqual([120, 120, 120]);
+  // Outside the selection: untouched.
+  expect(out.px[3].slice(0, 3)).toEqual([180, 170, 160]);
+  expect(out.px[4].slice(0, 3)).toEqual([60, 70, 80]);
+  expect(out.px[5].slice(0, 3)).toEqual([60, 70, 80]);
+  // Listed in the image properties, removable, and undoable.
+  await page.keyboard.press('v');
+  await page.locator('[data-object-row="img.png"]').click();
+  await expect(page.getByRole('region', { name: 'プロパティ' })).toContainText('部分加工 1 件（モザイク 1）');
+  await page.keyboard.press('Control+z');
+  expect((await imageObject(page)).pipeline.localEdits).toEqual([]);
+});
+
 test('range selection + blur only affects the selected area', async ({ page }) => {
   await placePng(page, 'img.png', testPng());
   const img = await imageObject(page);

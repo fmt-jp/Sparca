@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { defaultAdjust, defaultPipeline } from '../model/factory';
 import type { ResampleMethod } from '../model/types';
-import { blendWithMask, boxesForGauss, gaussianBlur } from './blur';
+import { blendWithMask, boxesForGauss, gaussianBlur, mosaic } from './blur';
 import { applyAdjust, computeAutoColor } from './color';
 import { rasterizeMask } from './mask';
 import { runPipeline } from './pipeline';
@@ -202,6 +202,35 @@ describe('color', () => {
     const g = gradient(20, 20);
     const b = computeAutoColor(g);
     expect(a).not.toEqual(b);
+  });
+});
+
+describe('mosaic', () => {
+  it('fills each block with its average color, blocks aligned to the top-left corner', () => {
+    const src = createRaster(10, 5);
+    for (let y = 0; y < 5; y++) for (let x = 0; x < 10; x++) src.data.set([x * 20, y * 40, 100, 255], (y * 10 + x) * 4);
+    const out = mosaic(src, 4);
+    // Block (0..3, 0..3): mean of x*20 over 0..3 = 30, of y*40 over 0..3 = 60.
+    for (const [x, y] of [[0, 0], [3, 3], [1, 2]]) expect(pixel(out, x, y)).toEqual([30, 60, 100, 255]);
+    // Edge blocks are smaller: x 8..9, y 4 → mean x*20 = 170, y*40 = 160.
+    expect(pixel(out, 9, 4)).toEqual([170, 160, 100, 255]);
+    expect(pixel(out, 4, 0)).not.toEqual(pixel(out, 3, 0));
+  });
+
+  it('ignores transparent pixels when averaging color', () => {
+    const src = createRaster(2, 1);
+    src.data.set([200, 0, 0, 255, 0, 0, 255, 0]);
+    expect(pixel(mosaic(src, 2), 1, 0)).toEqual([200, 0, 0, 128]);
+  });
+
+  it('applies only inside the mask as a local edit of the pipeline', () => {
+    const src = createRaster(20, 20);
+    for (let y = 0; y < 20; y++) for (let x = 0; x < 20; x++) src.data.set([x * 10, y * 10, 0, 255], (y * 20 + x) * 4);
+    const p = { ...defaultPipeline(), localEdits: [{ kind: 'mosaic' as const, size: 5, mask: { kind: 'rect' as const, x: 0, y: 0, width: 0.5, height: 1 } }] };
+    const out = runPipeline(src, p);
+    expect(pixel(out, 0, 0)).toEqual(pixel(out, 4, 4)); // one block
+    expect(pixel(out, 0, 0)).toEqual([20, 20, 0, 255]);
+    expect(pixel(out, 15, 3)).toEqual([150, 30, 0, 255]); // outside: untouched
   });
 });
 

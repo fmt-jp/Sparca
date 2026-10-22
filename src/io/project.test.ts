@@ -17,6 +17,10 @@ function sampleDoc(): SparcaDocument {
     l2.locked = true;
     const img = createImage(asset, { x: 1, y: 2, width: 20, height: 20, rotation: 15 });
     img.pipeline.adjust.brightness = 30;
+    img.pipeline.localEdits = [
+      { kind: 'blur', radius: 4, mask: { kind: 'rect', x: 0, y: 0, width: 0.5, height: 0.5 } },
+      { kind: 'mosaic', size: 8, mask: { kind: 'ellipse', x: 0.2, y: 0.2, width: 0.5, height: 0.5 } },
+    ];
     addObject(d, d.layers[0].id, img);
     const star = createShape({ kind: 'star', points: 7, innerRatio: 0.3 }, { x: 5, y: 5, width: 50, height: 50, rotation: 0 });
     star.effects = [createEffect('drop-shadow'), { ...createEffect('bevel-outer'), strength: 0.5, enabled: false }];
@@ -83,6 +87,18 @@ describe('project format', () => {
       raw.layers[0].children[0].fill = fill;
       const zip = new JSZip();
       zip.file('document.json', JSON.stringify(raw));
+      await expect(readProject(await zip.generateAsync({ type: 'uint8array' }))).rejects.toThrow(ProjectError);
+    }
+  });
+
+  it('rejects image edits of unknown kinds or with a broken mosaic size', async () => {
+    for (const edit of [{ kind: 'swirl', mask: { kind: 'rect', x: 0, y: 0, width: 1, height: 1 } }, { kind: 'mosaic', size: 0, mask: { kind: 'rect', x: 0, y: 0, width: 1, height: 1 } }]) {
+      const doc = sampleDoc();
+      const raw = JSON.parse(JSON.stringify(doc));
+      raw.layers[0].children[0].pipeline.localEdits = [edit];
+      const zip = new JSZip();
+      zip.file('document.json', JSON.stringify(raw));
+      zip.file('assets/a_1.png', bytes);
       await expect(readProject(await zip.generateAsync({ type: 'uint8array' }))).rejects.toThrow(ProjectError);
     }
   });
