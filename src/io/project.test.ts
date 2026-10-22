@@ -17,6 +17,8 @@ function sampleDoc(): SparcaDocument {
     l2.locked = true;
     const img = createImage(asset, { x: 1, y: 2, width: 20, height: 20, rotation: 15 });
     img.pipeline.adjust.brightness = 30;
+    img.pipeline.adjust.tone = 'sepia';
+    img.pipeline.adjust.toneAmount = 60;
     img.pipeline.localEdits = [
       { kind: 'blur', radius: 4, mask: { kind: 'rect', x: 0, y: 0, width: 0.5, height: 0.5 } },
       { kind: 'mosaic', size: 8, mask: { kind: 'ellipse', x: 0.2, y: 0.2, width: 0.5, height: 0.5 } },

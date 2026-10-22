@@ -31,7 +31,7 @@ export function defaultEffects(): Effect[] {
 }
 
 export function defaultAdjust(): ColorAdjust {
-  return { brightness: 0, contrast: 0, saturation: 0, temperature: 0, tint: 0, auto: null };
+  return { brightness: 0, contrast: 0, saturation: 0, temperature: 0, tint: 0, auto: null, tone: 'none', toneAmount: 100 };
 }
 
 export function defaultPipeline(): ImagePipeline {

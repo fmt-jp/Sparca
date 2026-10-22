@@ -18,9 +18,23 @@ export const AUTO_GAMMA_LIMITS = [0.67, 1.5] as const;
 const TEMP_STRENGTH = 0.2;
 const TINT_STRENGTH = 0.2;
 
-export function isIdentityAdjust(a: ColorAdjust): boolean {
-  return !a.auto && a.brightness === 0 && a.contrast === 0 && a.saturation === 0 && a.temperature === 0 && a.tint === 0;
+function hasTone(a: ColorAdjust): boolean {
+  return (a.tone === 'grayscale' || a.tone === 'sepia') && a.toneAmount > 0;
 }
+
+export function isIdentityAdjust(a: ColorAdjust): boolean {
+  return !a.auto && a.brightness === 0 && a.contrast === 0 && a.saturation === 0 && a.temperature === 0 && a.tint === 0 && !hasTone(a);
+}
+
+/**
+ * Sepia (the CSS / SVG Filter Effects sepia matrix). Grayscale uses the same Rec. 709
+ * luma as saturation.
+ */
+const SEPIA = [
+  [0.393, 0.769, 0.189],
+  [0.349, 0.686, 0.168],
+  [0.272, 0.534, 0.131],
+];
 
 function contrastFactor(c: number): number {
   const C = (c / 100) * 255 * 0.99; // keep the denominator positive at +100
@@ -60,6 +74,8 @@ export function applyAdjust(src: Raster, a: ColorAdjust): Raster {
   const s = src.data;
   const o = out.data;
   const sat = 1 + a.saturation / 100;
+  const tone = hasTone(a);
+  const toneK = Math.min(1, Math.max(0, a.toneAmount / 100));
   for (let i = 0; i < s.length; i += 4) {
     let r = lr[s[i]];
     let g = lg[s[i + 1]];
@@ -69,6 +85,18 @@ export function applyAdjust(src: Raster, a: ColorAdjust): Raster {
       r = l + (r - l) * sat;
       g = l + (g - l) * sat;
       b = l + (b - l) * sat;
+    }
+    if (tone) {
+      let tr: number, tg: number, tb: number;
+      if (a.tone === 'grayscale') tr = tg = tb = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+      else {
+        tr = SEPIA[0][0] * r + SEPIA[0][1] * g + SEPIA[0][2] * b;
+        tg = SEPIA[1][0] * r + SEPIA[1][1] * g + SEPIA[1][2] * b;
+        tb = SEPIA[2][0] * r + SEPIA[2][1] * g + SEPIA[2][2] * b;
+      }
+      r += (tr - r) * toneK;
+      g += (tg - g) * toneK;
+      b += (tb - b) * toneK;
     }
     o[i] = r;
     o[i + 1] = g;

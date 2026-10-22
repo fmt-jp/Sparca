@@ -129,6 +129,11 @@ function checkObject(o: unknown, where: string, ids: Set<string>, assets: Obj): 
       if (!isObj(assets[assetId])) throw new Invalid(`${where} が参照する画像 ${assetId} がありません`);
       o.pipeline = mergeDefaults(defaultPipeline(), o.pipeline);
       checkLocalEdits((o.pipeline as Obj).localEdits, `${where}.pipeline.localEdits`);
+      {
+        const adj = (o.pipeline as Obj).adjust as Obj;
+        if (!['none', 'grayscale', 'sepia'].includes(adj.tone as string)) throw new Invalid(`${where}.pipeline.adjust.tone が正しくありません`);
+        num(adj, 'toneAmount', `${where}.pipeline.adjust`);
+      }
       break;
     }
   }
