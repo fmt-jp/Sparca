@@ -128,6 +128,7 @@ function checkObject(o: unknown, where: string, ids: Set<string>, assets: Obj): 
       const assetId = str(o, 'assetId', where);
       if (!isObj(assets[assetId])) throw new Invalid(`${where} が参照する画像 ${assetId} がありません`);
       o.pipeline = mergeDefaults(defaultPipeline(), o.pipeline);
+      checkLocalEdits((o.pipeline as Obj).localEdits, `${where}.pipeline.localEdits`);
       break;
     }
   }
@@ -181,6 +182,19 @@ function checkCurves(v: unknown, where: string): Obj {
     });
   }
   return out;
+}
+
+/** Masked image edits: blur (radius) or mosaic (block size), each with a mask shape. */
+function checkLocalEdits(v: unknown, where: string) {
+  if (!Array.isArray(v)) throw new Invalid(`${where} が配列ではありません`);
+  v.forEach((e, i) => {
+    const w = `${where}[${i}]`;
+    if (!isObj(e) || !isObj(e.mask)) throw new Invalid(`${w} が正しくありません`);
+    if (e.kind === 'blur') num(e, 'radius', w);
+    else if (e.kind === 'mosaic') {
+      if (num(e, 'size', w) < 1) throw new Invalid(`${w}.size が小さすぎます`);
+    } else throw new Invalid(`${w} の種類が正しくありません`);
+  });
 }
 
 const GRADIENT_KINDS = new Set(['linear', 'radial', 'conic']);

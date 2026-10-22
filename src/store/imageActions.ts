@@ -1,7 +1,7 @@
 // Raster-related editor actions (spec §7).
 import { updateObject } from '../model/commands';
 import { boundsOfPoints, boxCorners, objectBounds, rectsIntersect, toLocal, type Rect } from '../model/geometry';
-import { addLocalBlur, cropDocument, cropImage, fitCanvasToObject, resizeCanvas, resizeImagePixels, selectionToImageMask, type Anchor } from '../model/imageOps';
+import { addLocalBlur, addLocalMosaic, cropDocument, cropImage, fitCanvasToObject, resizeCanvas, resizeImagePixels, selectionToImageMask, type Anchor } from '../model/imageOps';
 import { allObjects, findObject, isEffectivelyLocked, isEffectivelyVisible } from '../model/tree';
 import type { ColorAdjust, Id, ImageObject, MaskShape, ResampleMethod, SceneObject } from '../model/types';
 import { imageCache } from '../render/imageCache';
@@ -79,20 +79,34 @@ export function resetAdjust(ed: EditorStore, id: Id): void {
   ed.edit('調整をリセット', (d) => updateObject(d, id, { pipeline } as Partial<SceneObject>));
 }
 
-/** Apply a gaussian blur to the pixel selection on the target image. */
-export function blurSelection(ed: EditorStore, radius: number): boolean {
+/** The target image and the pixel selection as its mask, or null (with an error shown). */
+function selectionTarget(ed: EditorStore): { img: ImageObject; mask: MaskShape } | null {
   const { pixelSelection } = ed.getState();
   if (!pixelSelection) {
     ed.notify('error', '範囲選択がありません。範囲選択ツールで範囲を指定してください。');
-    return false;
+    return null;
   }
   const img = pixelTargetImage(ed);
   if (!img) {
     ed.notify('error', '選択範囲に重なる編集可能な画像がありません。');
-    return false;
+    return null;
   }
-  const mask: MaskShape = selectionToImageMask(img, pixelSelection);
-  ed.edit('選択範囲にぼかし', (d) => addLocalBlur(d, img.id, mask, radius));
+  return { img, mask: selectionToImageMask(img, pixelSelection) };
+}
+
+/** Apply a gaussian blur to the pixel selection on the target image. */
+export function blurSelection(ed: EditorStore, radius: number): boolean {
+  const t = selectionTarget(ed);
+  if (!t) return false;
+  ed.edit('選択範囲にぼかし', (d) => addLocalBlur(d, t.img.id, t.mask, radius));
+  return true;
+}
+
+/** Pixelate the pixel selection on the target image with `size`-px blocks. */
+export function mosaicSelection(ed: EditorStore, size: number): boolean {
+  const t = selectionTarget(ed);
+  if (!t) return false;
+  ed.edit('選択範囲にモザイク', (d) => addLocalMosaic(d, t.img.id, t.mask, size));
   return true;
 }
 

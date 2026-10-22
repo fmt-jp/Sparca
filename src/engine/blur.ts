@@ -135,3 +135,37 @@ export function blendWithMask(a: Raster, b: Raster, mask: Float32Array): Raster 
   }
   return out;
 }
+
+/**
+ * Mosaic: the image cut into `size`×`size` blocks from its top-left corner (edge blocks
+ * are smaller), each filled with its average color. Colors are averaged weighted by
+ * alpha, so transparent pixels don't darken a block.
+ */
+export function mosaic(src: Raster, size: number): Raster {
+  const { width: w, height: h, data } = src;
+  const out = createRaster(w, h);
+  const s = Math.max(1, Math.round(size));
+  for (let by = 0; by < h; by += s) {
+    for (let bx = 0; bx < w; bx += s) {
+      const x1 = Math.min(w, bx + s);
+      const y1 = Math.min(h, by + s);
+      let r = 0, g = 0, b = 0, a = 0;
+      for (let y = by; y < y1; y++) {
+        for (let x = bx; x < x1; x++) {
+          const i = (y * w + x) * 4;
+          const al = data[i + 3];
+          r += data[i] * al;
+          g += data[i + 1] * al;
+          b += data[i + 2] * al;
+          a += al;
+        }
+      }
+      const n = (x1 - bx) * (y1 - by);
+      const px = a > 0 ? [r / a, g / a, b / a, a / n] : [0, 0, 0, 0];
+      for (let y = by; y < y1; y++) {
+        for (let x = bx; x < x1; x++) out.data.set(px, (y * w + x) * 4);
+      }
+    }
+  }
+  return out;
+}

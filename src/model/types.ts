@@ -232,7 +232,15 @@ export interface LocalBlur {
   mask: MaskShape;
 }
 
-export type LocalEdit = LocalBlur;
+/** Mosaic (pixelation) inside the mask: square blocks of `size` px averaged to one color. */
+export interface LocalMosaic {
+  kind: 'mosaic';
+  /** Block size in px of the processed image; blocks line up with the image's top-left corner. */
+  size: number;
+  mask: MaskShape;
+}
+
+export type LocalEdit = LocalBlur | LocalMosaic;
 
 export interface ImagePipeline {
   /** Crop rectangle in source-image pixels. */

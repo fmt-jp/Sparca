@@ -2,7 +2,7 @@
 // document crop) and per-image operations (image crop, image resize) are kept separate.
 import { boxCenter, objectBounds, rotatePoint, toLocal, transformObject, IDENTITY_TRANSFORM, type Rect } from './geometry';
 import { findObject } from './tree';
-import type { Id, ImageObject, MaskShape, Point, ResampleMethod, SparcaDocument } from './types';
+import type { Id, ImageObject, LocalEdit, MaskShape, Point, ResampleMethod, SparcaDocument } from './types';
 
 /** Anchor as fractions: (0,0) = top-left … (1,1) = bottom-right. */
 export interface Anchor {
@@ -163,9 +163,17 @@ export function selectionToImageMask(o: ImageObject, sel: MaskShape): MaskShape 
 }
 
 export function addLocalBlur(doc: SparcaDocument, id: Id, mask: MaskShape, radius: number): void {
+  addLocalEdit(doc, id, { kind: 'blur', radius, mask });
+}
+
+export function addLocalMosaic(doc: SparcaDocument, id: Id, mask: MaskShape, size: number): void {
+  addLocalEdit(doc, id, { kind: 'mosaic', size, mask });
+}
+
+function addLocalEdit(doc: SparcaDocument, id: Id, edit: LocalEdit): void {
   const loc = findObject(doc, id);
   if (!loc || loc.object.type !== 'image') return;
-  loc.object.pipeline.localEdits.push({ kind: 'blur', radius, mask });
+  loc.object.pipeline.localEdits.push(edit);
 }
 
 /** Whether an object exactly covers the canvas (e.g. an image opened as a document). */

@@ -2,7 +2,7 @@
 import { transformObjects, updateObject } from '../model/commands';
 import { boxCenter, unionBounds } from '../model/geometry';
 import { findObject, isEffectivelyLocked } from '../model/tree';
-import type { ColorAdjust, SceneObject, ShapeObject, TextObject, ImageObject, PathObject, Id, Box } from '../model/types';
+import type { ColorAdjust, LocalEdit, SceneObject, ShapeObject, TextObject, ImageObject, PathObject, Id, Box } from '../model/types';
 import { pipelineOutputSize } from '../engine/pipeline';
 import { METHOD_LABELS } from '../engine/resample';
 import { autoColor, cancelCrop, commitCrop, pixelTargetImage, resetAdjust, setAdjust, setCropTarget, setImageBlur } from '../store/imageActions';
@@ -399,12 +399,12 @@ function ImageSection({ o }: { o: ImageObject }) {
         </button>
         {o.pipeline.localEdits.length > 0 && (
           <span className="hint">
-            部分ぼかし {o.pipeline.localEdits.length} 件
+            {localEditsSummary(o.pipeline.localEdits)}
             <button
               type="button"
               className="link-btn"
               onClick={() =>
-                editor.edit('部分ぼかしの削除', (d) => {
+                editor.edit(`${o.pipeline.localEdits[o.pipeline.localEdits.length - 1].kind === 'mosaic' ? '部分モザイク' : '部分ぼかし'}の削除`, (d) => {
                   const loc = findObject(d, o.id);
                   if (loc?.object.type === 'image') loc.object.pipeline.localEdits.pop();
                 })
@@ -570,6 +570,14 @@ function CropSection() {
   );
 }
 
+/** e.g. 「部分加工 3 件（ぼかし 2・モザイク 1）」 */
+function localEditsSummary(edits: LocalEdit[]): string {
+  const blur = edits.filter((e) => e.kind === 'blur').length;
+  const mosaic = edits.length - blur;
+  const parts = [blur && `ぼかし ${blur}`, mosaic && `モザイク ${mosaic}`].filter(Boolean).join('・');
+  return `部分加工 ${edits.length} 件（${parts}）`;
+}
+
 function PixelSelectionSection() {
   const sel = useEditor((s) => s.pixelSelection);
   if (!sel) return null;
@@ -579,6 +587,9 @@ function PixelSelectionSection() {
       <span className="hint">範囲選択：{target ? `対象画像「${target.name}」` : '対象画像なし'}</span>
       <button type="button" disabled={!target} onClick={() => openDialog({ kind: 'blur-selection' })}>
         選択範囲にぼかし…
+      </button>
+      <button type="button" disabled={!target} onClick={() => openDialog({ kind: 'mosaic-selection' })}>
+        選択範囲にモザイク…
       </button>
       <button type="button" onClick={() => editor.set({ pixelSelection: null })}>
         選択解除
