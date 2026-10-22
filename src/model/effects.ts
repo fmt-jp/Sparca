@@ -25,6 +25,7 @@ export const EFFECT_GROUPS: { label: string; kinds: { kind: EffectKind; label: s
     label: 'ぼかしとシャープ',
     kinds: [
       { kind: 'blur', label: 'ぼかし' },
+      { kind: 'zoom-blur', label: 'ぼかし（ズーム）' },
       { kind: 'sharpen', label: 'シャープ' },
     ],
   },
@@ -68,6 +69,8 @@ export function createEffect(kind: EffectKind): Effect {
       return { ...base, kind, ...bevel, color: '#c0c0c0' };
     case 'emboss':
       return { ...base, kind, ...bevel, width: 5, showObject: true, inset: false };
+    case 'zoom-blur':
+      return { ...base, kind, amount: 0.2, centerX: 0.5, centerY: 0.5 };
     case 'blur':
       return { ...base, kind, radius: 4 };
     case 'sharpen':

@@ -31,7 +31,7 @@ async function load(rawEffects: unknown) {
 
 describe('effects', () => {
   it('has defaults for every kind, and each renders a filter', () => {
-    expect(ALL).toHaveLength(14);
+    expect(ALL).toHaveLength(15);
     for (const kind of ALL) {
       const e = createEffect(kind);
       expect(e).toMatchObject({ kind, enabled: true, strength: 1 });
@@ -41,10 +41,13 @@ describe('effects', () => {
           ? { brightness: 20 }
           : kind === 'hue-saturation'
             ? { hue: 30 }
-            : kind === 'curves'
+            : kind === 'zoom-blur'
+              ? {}
+              : kind === 'curves'
               ? { curves: { ...defaultCurves(), rgb: [{ x: 0, y: 30 }, { x: 255, y: 255 }] } }
               : {};
       const active = { ...e, ...tweak } as Effect;
+      if (kind === 'zoom-blur') continue; // drawn as copies, not as a filter (tested below)
       expect(markup([active]), kind).toContain('<filter');
     }
   });
@@ -55,6 +58,35 @@ describe('effects', () => {
     const m = markup([{ ...e, curves: { ...e.curves, g: [{ x: 0, y: 0 }, { x: 255, y: 128 }] } }]);
     expect(m).toMatch(/<feFuncG type="table" tableValues="0 [^"]*0\.502"/);
     expect(m).toMatch(/<feFuncR type="table" tableValues="0 0\.0039 /);
+  });
+
+  it('a zoom blur splits the effects into filters before and after its scaled copies', async () => {
+    const { DocumentSvg } = await import('../render/DocumentSvg');
+    const { splitAtZoomBlur, zoomBlurSteps } = await import('../render/effects');
+    const zoom = { ...createEffect('zoom-blur'), amount: 0.5 } as Extract<Effect, { kind: 'zoom-blur' }>;
+    const list = [createEffect('color-overlay'), zoom, createEffect('invert')];
+    const segs = splitAtZoomBlur(list);
+    expect(segs.map((s) => [s.effects.map((e) => e.kind), s.zoom?.kind ?? null])).toEqual([
+      [['color-overlay'], 'zoom-blur'],
+      [['invert'], null],
+    ]);
+    // Zero amount / disabled zoom blurs are skipped; copies scale with the travel.
+    expect(splitAtZoomBlur([{ ...zoom, amount: 0 }])).toHaveLength(1);
+    expect(zoomBlurSteps({ ...zoom, amount: 0.05 }, 100, 100)).toBeLessThan(zoomBlurSteps(zoom, 100, 100));
+    expect(zoomBlurSteps({ ...zoom, amount: 2 }, 2000, 2000)).toBe(64);
+
+    const doc = produce(createDocument(200, 200), (d) => {
+      const r = createShape(defaultGeometry('rect'), { x: 50, y: 50, width: 100, height: 100, rotation: 0 });
+      r.effects = list;
+      addObject(d, d.layers[0].id, r);
+    });
+    const svg = renderToStaticMarkup(createElement(DocumentSvg, { doc, options: { imageHref: () => undefined, idPrefix: 't' } }));
+    const n = zoomBlurSteps(zoom, 100, 100);
+    expect(svg).toContain(`data-zoom-blur="${n}"`);
+    // n copies of the overlay-filtered shape, all inside the inverting filter.
+    expect(svg.match(/filter="url\(#t-fx-[^)]*\)"><path/g)).toHaveLength(n);
+    expect(svg.indexOf('filter="url(#t-fx-' )).toBeLessThan(svg.indexOf('data-zoom-blur'));
+    expect(svg).toMatch(/<g filter="url\(#t-fx-[^"]*-1\)"><g data-zoom-blur/);
   });
 
   it('skips disabled and zero-strength effects; blends partial strength with the input', () => {

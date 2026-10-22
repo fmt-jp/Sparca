@@ -345,3 +345,41 @@ test('the tone curve dialog keeps the canvas undimmed and can be moved by its ti
   await dlg.getByRole('button', { name: 'OK' }).click();
   expect((await effects(page)).map((e) => e.kind)).toEqual(['curves']);
 });
+
+test('ぼかし（ズーム）: streaks outward from the center, follows the center setting and the effect order', async ({ page }) => {
+  await rect(page); // blue (100,100)–(300,300)
+  await addEffect(page, 'ぼかしとシャープ', 'ぼかし（ズーム）');
+  expect((await effects(page))[0]).toMatchObject({ kind: 'zoom-blur', amount: 0.2, centerX: 0.5, centerY: 0.5 });
+  await expect(page.locator('[data-testid=canvas] [data-zoom-blur]')).toHaveCount(1);
+  let px = await exportPixels(page, [[200, 200], [305, 200], [95, 200], [335, 200]]);
+  // The center stays the shape's color (within rounding of the stacked copies).
+  for (let c = 0; c < 3; c++) expect(Math.abs(px[0][c] - BLUE[c])).toBeLessThanOrEqual(4);
+  for (const p of [px[1], px[2]]) {
+    expect(p[0]).toBeLessThan(230); // streaks reach outside on both sides
+    expect(p[2]).toBeGreaterThan(p[0]);
+  }
+  expect(px[3].slice(0, 3)).toEqual([255, 255, 255]); // beyond 120 % of the half width
+
+  // Center at the left edge: streaks only go right.
+  await setNum(page, 'ぼかし（ズーム）の中心 X', '0');
+  px = await exportPixels(page, [[95, 200], [310, 200]]);
+  expect(px[0].slice(0, 3)).toEqual([255, 255, 255]);
+  expect(px[1][0]).toBeLessThan(230);
+
+  // An effect above it is blurred along (red streaks); one below it applies to the result.
+  await addEffect(page, '色の調整', 'カラーオーバーレイ');
+  await props(page).getByRole('button', { name: 'カラーオーバーレイを上へ' }).click();
+  px = await exportPixels(page, [[310, 200]]);
+  expect(px[0][0]).toBeGreaterThan(200);
+  expect(px[0][2]).toBeLessThan(200); // red, not blue
+  await addEffect(page, '色の調整', '反転');
+  px = await exportPixels(page, [[200, 200]]);
+  // Red overlay, zoomed, then inverted → cyan.
+  expect(px[0][0]).toBeLessThanOrEqual(4);
+  expect(px[0][1]).toBeGreaterThanOrEqual(251);
+  expect(px[0][2]).toBeGreaterThanOrEqual(251);
+
+  // Off: no copies.
+  await props(page).getByLabel('ぼかし（ズーム）を有効にする').uncheck();
+  await expect(page.locator('[data-testid=canvas] [data-zoom-blur]')).toHaveCount(0);
+});

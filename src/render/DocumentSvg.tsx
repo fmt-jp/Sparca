@@ -9,7 +9,7 @@ import type {
   SparcaDocument,
   TextObject,
 } from '../model/types';
-import { effectsFilter } from './effects';
+import { effectsFilter, splitAtZoomBlur, zoomBlurLayers, zoomBlurReach } from './effects';
 import { cssFontFamily } from './fonts';
 import { fillPaint } from './gradient';
 import { pathNodesD, shapePaths } from './shapes';
@@ -96,11 +96,29 @@ function renderObject(o: SceneObject, opts: RenderOptions, prefix: string): Reac
       body = renderImage(o, opts);
       break;
   }
-  const filter = effectsFilter(filterId, o.effects, w, h, rotation, strokeWidth);
+  // Effects run in order; each zoom blur splits them into filters around its copies.
+  const defs: ReactElement[] = [];
+  let content: ReactElement | null = body;
+  let reach = 0;
+  splitAtZoomBlur(o.effects).forEach((seg, i) => {
+    const id = i === 0 ? filterId : `${filterId}-${i}`;
+    const filter = effectsFilter(id, seg.effects, w, h, rotation, strokeWidth + reach);
+    if (filter) {
+      defs.push(<g key={id}>{filter}</g>);
+      content = <g filter={`url(#${id})`}>{content}</g>;
+    }
+    if (seg.zoom && content) {
+      const zid = `${filterId}-z${i}`;
+      const z = zoomBlurLayers(content, seg.zoom, w, h, zid);
+      if (z.def) defs.push(<defs key={zid}>{z.def}</defs>);
+      content = z.layers;
+      reach += zoomBlurReach(seg.zoom, w, h);
+    }
+  });
   return (
     <g key={o.id} data-object-id={o.id} transform={transform} opacity={o.opacity}>
-      {filter}
-      <g filter={filter ? `url(#${filterId})` : undefined}>{body}</g>
+      {defs}
+      {content}
       {opts.hitAreas && hitArea(o)}
     </g>
   );
