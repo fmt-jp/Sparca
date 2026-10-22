@@ -250,61 +250,98 @@ test('drag a row by its grip or name to reorder; one undo step; a plain click st
   await expect(btn).toHaveAttribute('aria-expanded', before === 'true' ? 'false' : 'true');
 });
 
-test('tone curve: add and move points (graph or numbers), per-channel curves, delete, reset, undo', async ({ page }) => {
+test('tone curve: edited in a pop-up dialog, previewed live, confirmed with OK or reverted with キャンセル', async ({ page }) => {
   await rect(page);
-  await addEffect(page, '色の調整', 'トーンカーブ');
   type Pt = { x: number; y: number };
   const curves = async () => (await effects(page))[0].curves as Record<'rgb' | 'r' | 'g' | 'b', Pt[]>;
-  // Untouched: no filter at all.
-  await expect(page.locator('[data-testid=canvas] filter')).toHaveCount(0);
+  const undoLabel = () => state<string | undefined>(page, 's => s.history.past[s.history.past.length - 1]?.label');
 
-  const graph = props(page).getByRole('group', { name: 'トーンカーブのカーブ' });
-  await graph.scrollIntoViewIfNeeded();
+  // Adding a tone curve opens its dialog at once; キャンセル on a new curve removes it again.
+  await addEffect(page, '色の調整', 'トーンカーブ');
+  let dlg = page.getByRole('dialog', { name: 'トーンカーブ' });
+  await expect(dlg).toBeVisible();
+  await dlg.getByRole('button', { name: 'キャンセル' }).click();
+  await expect(dlg).toHaveCount(0);
+  expect(await effects(page)).toHaveLength(0);
+  expect(await undoLabel()).toBe('図形の作成'); // nothing left in the history
+
+  await addEffect(page, '色の調整', 'トーンカーブ');
+  dlg = page.getByRole('dialog', { name: 'トーンカーブ' });
+  const graph = dlg.getByRole('group', { name: 'トーンカーブのカーブ' });
   const g = (await graph.boundingBox())!;
   // The graph's 0..255 area sits inside a small margin (viewBox -6..261).
   const at = (x: number, y: number) => ({ x: g.x + ((x + 6) / 267) * g.width, y: g.y + ((261 - y) / 267) * g.height });
 
-  // Click on the graph adds a point; dragging it raises the midtones.
+  // Click on the graph adds a point; dragging it raises the midtones. The canvas
+  // previews the change while the dialog is open.
   await drag(page, at(128, 128), at(128, 190));
   let c = await curves();
   expect(c.rgb).toHaveLength(3);
-  expect(Math.abs(c.rgb[1].x - 128)).toBeLessThanOrEqual(4);
-  expect(Math.abs(c.rgb[1].y - 190)).toBeLessThanOrEqual(4);
+  expect(Math.abs(c.rgb[1].x - 128)).toBeLessThanOrEqual(3);
+  expect(Math.abs(c.rgb[1].y - 190)).toBeLessThanOrEqual(3);
+  await expect(page.locator('[data-testid=canvas] filter feComponentTransfer')).toHaveCount(1);
   // Exact values by typing.
-  await setNum(page, 'トーンカーブの入力', '128');
-  await setNum(page, 'トーンカーブの出力', '192');
+  for (const [label, v] of [['トーンカーブの入力', '128'], ['トーンカーブの出力', '192']]) {
+    const input = dlg.locator(`input[aria-label="${label}"]`);
+    await input.fill(v);
+    await input.press('Enter');
+  }
   expect((await curves()).rgb[1]).toEqual({ x: 128, y: 192 });
-  let [px] = await exportPixels(page, [[200, 200]]);
-  expect(px[0]).toBeGreaterThan(BLUE[0] + 40);
-  expect(px[1]).toBeGreaterThan(BLUE[1] + 30);
-  const brightened = px.slice(0, 3);
-
   // Red channel only: lift its dark end.
-  await props(page).getByRole('group', { name: 'トーンカーブのチャンネル' }).getByRole('button', { name: '赤' }).click();
-  await setNum(page, 'トーンカーブの出力', '120'); // point 0 of the red curve
-  expect((await curves()).r[0]).toEqual({ x: 0, y: 120 });
-  [px] = await exportPixels(page, [[200, 200]]);
-  expect(px[0]).toBeGreaterThan(brightened[0] + 20);
-  expect(px[1]).toBe(brightened[1]);
-  expect(px[2]).toBe(brightened[2]);
-  await props(page).getByRole('button', { name: 'リセット' }).click();
-  expect((await curves()).r).toEqual([{ x: 0, y: 0 }, { x: 255, y: 255 }]);
-
-  // Back to RGB: a drag is one undo step; Delete removes the selected point.
-  await props(page).getByRole('group', { name: 'トーンカーブのチャンネル' }).getByRole('button', { name: 'RGB' }).click();
-  const before = await curves();
-  await drag(page, at(64, 64), at(64, 30));
-  expect((await curves()).rgb).toHaveLength(4);
-  await page.keyboard.press('Control+z');
-  expect(await curves()).toEqual(before);
+  await dlg.getByRole('group', { name: 'トーンカーブのチャンネル' }).getByRole('button', { name: '赤' }).click();
+  const out = dlg.locator('input[aria-label="トーンカーブの出力"]');
+  await out.fill('120'); // point 0 of the red curve
+  await out.press('Enter');
+  await dlg.getByRole('button', { name: 'OK' }).click();
+  await expect(dlg).toHaveCount(0);
   c = await curves();
+  expect(c.rgb[1]).toEqual({ x: 128, y: 192 });
+  expect(c.r[0]).toEqual({ x: 0, y: 120 });
+  expect(await undoLabel()).toBe('トーンカーブの追加'); // the whole dialog is one undo step
+  let [px] = await exportPixels(page, [[200, 200]]);
+  expect(px[0]).toBeGreaterThan(BLUE[0] + 80); // midtones up + red lifted
+  expect(px[1]).toBeGreaterThan(BLUE[1] + 30);
+
+  // Reopen from the list: changes, then キャンセル (or Esc) → nothing changes.
+  const saved = await curves();
+  await props(page).getByRole('button', { name: 'トーンカーブの設定' }).click();
+  dlg = page.getByRole('dialog', { name: 'トーンカーブ' });
+  await dlg.getByRole('button', { name: 'リセット' }).click(); // RGB curve back to a line
+  expect((await curves()).rgb).toHaveLength(2);
+  await page.keyboard.press('Escape');
+  await expect(dlg).toHaveCount(0);
+  expect(await curves()).toEqual(saved);
+
+  // Reopen: keyboard editing, OK, then a single undo restores the previous curve.
+  await props(page).getByRole('button', { name: 'トーンカーブの設定' }).click();
+  dlg = page.getByRole('dialog', { name: 'トーンカーブ' });
   const p1 = at(128, 192);
   await page.mouse.click(p1.x, p1.y); // select the middle point (no move = no change)
-  expect(await curves()).toEqual(c);
   await page.keyboard.press('ArrowUp');
-  expect((await curves()).rgb[1].y).toBe(c.rgb[1].y + 1);
+  await page.keyboard.press('ArrowUp');
+  expect((await curves()).rgb[1]).toEqual({ x: 128, y: 194 });
   await page.keyboard.press('Delete');
-  expect((await curves()).rgb).toEqual([{ x: 0, y: 0 }, { x: 255, y: 255 }]);
-  expect(await effects(page)).toHaveLength(1); // the shape and effect are still there
-  await expect(page.locator('[data-testid=canvas] filter')).toHaveCount(0);
+  expect((await curves()).rgb).toHaveLength(2);
+  await dlg.getByRole('button', { name: 'OK' }).click();
+  expect(await undoLabel()).toBe('トーンカーブの変更');
+  await page.keyboard.press('Control+z');
+  expect(await curves()).toEqual(saved);
+  [px] = await exportPixels(page, [[200, 200]]);
+  expect(px[0]).toBeGreaterThan(BLUE[0] + 80);
+});
+
+test('the tone curve dialog keeps the canvas undimmed and can be moved by its title', async ({ page }) => {
+  await rect(page);
+  await addEffect(page, '色の調整', 'トーンカーブ');
+  const dlg = page.getByRole('dialog', { name: 'トーンカーブ' });
+  await expect(page.locator('.dialog-backdrop')).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+  const before = (await dlg.boundingBox())!;
+  const title = (await dlg.locator('.dialog-title').boundingBox())!;
+  await drag(page, { x: title.x + 40, y: title.y + title.height / 2 }, { x: title.x + 240, y: title.y + title.height / 2 + 30 });
+  const after = (await dlg.boundingBox())!;
+  expect(after.x - before.x).toBeCloseTo(200, 0);
+  expect(after.y - before.y).toBeCloseTo(30, 0);
+  await expect(dlg).toBeVisible(); // moving does not close it
+  await dlg.getByRole('button', { name: 'OK' }).click();
+  expect((await effects(page)).map((e) => e.kind)).toEqual(['curves']);
 });

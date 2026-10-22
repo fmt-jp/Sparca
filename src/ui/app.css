@@ -1401,3 +1401,10 @@ kbd {
   flex-direction: column;
   gap: 6px;
 }
+.dialog-backdrop.clear {
+  background: transparent;
+}
+.dialog-title {
+  cursor: move;
+  user-select: none;
+}
