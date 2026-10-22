@@ -159,7 +159,7 @@ export function MenuBar({ onNew }: { onNew: () => void }) {
 
   return (
     <header className="menubar" ref={ref}>
-      <span className="app-name">Sparca</span>
+      <span className="app-name">HANABI</span>
       {menus.map((m) => (
         <div key={m.id} className="menu">
           <button
