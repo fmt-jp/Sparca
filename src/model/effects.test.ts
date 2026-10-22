@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 import { ProjectError, readProject } from '../io/project';
 import { effectsFilter } from '../render/effects';
 import { addObject } from './commands';
+import { defaultCurves } from './curves';
 import { createEffect, EFFECT_GROUPS, migrateLegacyEffects } from './effects';
 import { createDocument, createShape, defaultGeometry } from './factory';
 import type { Effect } from './types';
@@ -30,14 +31,30 @@ async function load(rawEffects: unknown) {
 
 describe('effects', () => {
   it('has defaults for every kind, and each renders a filter', () => {
-    expect(ALL).toHaveLength(13);
+    expect(ALL).toHaveLength(14);
     for (const kind of ALL) {
       const e = createEffect(kind);
       expect(e).toMatchObject({ kind, enabled: true, strength: 1 });
       // At defaults a few are no-ops (0 adjustments); give them something to do.
-      const active = { ...e, ...(kind === 'brightness-contrast' ? { brightness: 20 } : kind === 'hue-saturation' ? { hue: 30 } : {}) } as Effect;
+      const tweak =
+        kind === 'brightness-contrast'
+          ? { brightness: 20 }
+          : kind === 'hue-saturation'
+            ? { hue: 30 }
+            : kind === 'curves'
+              ? { curves: { ...defaultCurves(), rgb: [{ x: 0, y: 30 }, { x: 255, y: 255 }] } }
+              : {};
+      const active = { ...e, ...tweak } as Effect;
       expect(markup([active]), kind).toContain('<filter');
     }
+  });
+
+  it('an untouched tone curve does nothing; a changed one becomes per-channel tables', () => {
+    expect(markup([createEffect('curves')])).toBe('');
+    const e = createEffect('curves') as Extract<Effect, { kind: 'curves' }>;
+    const m = markup([{ ...e, curves: { ...e.curves, g: [{ x: 0, y: 0 }, { x: 255, y: 128 }] } }]);
+    expect(m).toMatch(/<feFuncG type="table" tableValues="0 [^"]*0\.502"/);
+    expect(m).toMatch(/<feFuncR type="table" tableValues="0 0\.0039 /);
   });
 
   it('skips disabled and zero-strength effects; blends partial strength with the input', () => {
@@ -70,6 +87,14 @@ describe('effects', () => {
     const partial = await load([{ id: 'a', kind: 'blur', enabled: true }]);
     expect((partial.doc.layers[0].children[0] as { effects: Effect[] }).effects[0]).toMatchObject({ kind: 'blur', radius: 4, strength: 1 });
     await expect(load([{ id: 'a', kind: 'lens-flare' }])).rejects.toThrow(ProjectError);
+    // Tone curves: points are checked (range, order, count); missing channels are identity.
+    const curve = await load([{ id: 'a', kind: 'curves', enabled: true, strength: 1, curves: { rgb: [{ x: 0, y: 20 }, { x: 255, y: 230 }] } }]);
+    expect((curve.doc.layers[0].children[0] as { effects: Effect[] }).effects[0]).toMatchObject({
+      curves: { rgb: [{ x: 0, y: 20 }, { x: 255, y: 230 }], r: [{ x: 0, y: 0 }, { x: 255, y: 255 }] },
+    });
+    for (const bad of [[{ x: 0, y: 0 }], [{ x: 10, y: 0 }, { x: 5, y: 9 }], [{ x: 0, y: 0 }, { x: 255, y: 300 }]]) {
+      await expect(load([{ id: 'a', kind: 'curves', curves: { rgb: bad } }])).rejects.toThrow(ProjectError);
+    }
     await expect(load([{ id: 'a', kind: 'blur', radius: 'big' }])).rejects.toThrow(ProjectError);
   });
 });

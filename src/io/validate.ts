@@ -1,6 +1,7 @@
 // Structural validation of document.json. Rejects anything that would leave the editor
 // in an inconsistent state; fills in fields added after a file was written.
 import { createEffect, EFFECT_KINDS, migrateLegacyEffects } from '../model/effects';
+import { MAX_CURVE_POINTS } from '../model/curves';
 import { defaultPipeline } from '../model/factory';
 import type { EffectKind } from '../model/types';
 import type { SparcaDocument } from '../model/types';
@@ -153,12 +154,33 @@ function checkEffects(v: unknown, where: string): unknown[] {
       }
       out[k] = e[k];
     }
+    if (out.kind === 'curves') out.curves = checkCurves(e.curves ?? d.curves, `${w}.curves`);
     out.strength = Math.min(1, Math.max(0, out.strength as number));
     // Ids only need to be unique within the object.
     if (ids.has(out.id as string)) out.id = d.id;
     ids.add(out.id as string);
     return out;
   });
+}
+
+function checkCurves(v: unknown, where: string): Obj {
+  if (!isObj(v)) throw new Invalid(`${where} が正しくありません`);
+  const out: Obj = {};
+  for (const ch of ['rgb', 'r', 'g', 'b']) {
+    const pts = v[ch] === undefined ? [{ x: 0, y: 0 }, { x: 255, y: 255 }] : arr(v, ch, where);
+    if (pts.length < 2 || pts.length > MAX_CURVE_POINTS) throw new Invalid(`${where}.${ch} の点の数が正しくありません`);
+    let prev = -1;
+    out[ch] = pts.map((p, i) => {
+      const w = `${where}.${ch}[${i}]`;
+      if (!isObj(p)) throw new Invalid(`${w} が正しくありません`);
+      const x = num(p, 'x', w);
+      const y = num(p, 'y', w);
+      if (x < 0 || x > 255 || y < 0 || y > 255 || x <= prev) throw new Invalid(`${w} が範囲外か順序が正しくありません`);
+      prev = x;
+      return { x, y };
+    });
+  }
+  return out;
 }
 
 const GRADIENT_KINDS = new Set(['linear', 'radial', 'conic']);

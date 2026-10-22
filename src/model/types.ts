@@ -53,6 +53,17 @@ interface BevelParams {
   intensity: number;
 }
 
+/** Tone curve control point; input level x → output level y, both 0..255. */
+export interface CurvePoint {
+  x: number;
+  y: number;
+}
+
+export type CurveChannel = 'rgb' | 'r' | 'g' | 'b';
+
+/** Points sorted by x, at least two each. Each color channel's curve applies first, then rgb. */
+export type Curves = Record<CurveChannel, CurvePoint[]>;
+
 /**
  * Live effect (Fireworks-style live filter). An object's effects are applied in list
  * order, each to the result of the previous ones (docs/design.md §3).
@@ -74,6 +85,8 @@ export type Effect = EffectCommon &
     /** hue -180..180°, saturation and lightness -100..100. */
     | { kind: 'hue-saturation'; hue: number; saturation: number; lightness: number }
     | { kind: 'invert' }
+    /** Tone curve (composite RGB plus red / green / blue). */
+    | { kind: 'curves'; curves: Curves }
     /** Replaces the colors with `color`, keeping the object's transparency. */
     | { kind: 'color-overlay'; color: string }
   );
@@ -186,8 +199,16 @@ export interface AutoColorParams {
   /** Per-channel black and white points (0..255) for the level stretch. */
   black: [number, number, number];
   white: [number, number, number];
-  /** Gray-world white balance gains applied after the stretch. */
+  /**
+   * Per-channel gains applied after the stretch. Files from the older gray-world auto
+   * color use them; new results keep them at 1 and balance with `gamma` instead.
+   */
   gains: [number, number, number];
+  /**
+   * Per-channel gamma (neutral midtones): out = 255·(x/255)^gamma after the stretch.
+   * Missing in older files (= 1).
+   */
+  gamma?: [number, number, number];
 }
 
 export interface ColorAdjust {

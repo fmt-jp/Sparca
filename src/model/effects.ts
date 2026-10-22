@@ -1,4 +1,5 @@
 // Live effects: catalog, defaults and migration of the older fixed glow/shadow pair.
+import { defaultCurves } from './curves';
 import { newId } from './factory';
 import type { Effect, EffectKind } from './types';
 
@@ -32,6 +33,7 @@ export const EFFECT_GROUPS: { label: string; kinds: { kind: EffectKind; label: s
     kinds: [
       { kind: 'brightness-contrast', label: '明るさ・コントラスト' },
       { kind: 'hue-saturation', label: '色相・彩度' },
+      { kind: 'curves', label: 'トーンカーブ' },
       { kind: 'invert', label: '反転' },
       { kind: 'color-overlay', label: 'カラーオーバーレイ' },
     ],
@@ -74,6 +76,8 @@ export function createEffect(kind: EffectKind): Effect {
       return { ...base, kind, brightness: 0, contrast: 0 };
     case 'hue-saturation':
       return { ...base, kind, hue: 0, saturation: 0, lightness: 0 };
+    case 'curves':
+      return { ...base, kind, curves: defaultCurves() };
     case 'invert':
       return { ...base, kind };
     case 'color-overlay':
