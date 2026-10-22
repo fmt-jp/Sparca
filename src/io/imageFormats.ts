@@ -1,4 +1,4 @@
-// Raster formats Sparca can open or place, identified by their leading bytes
+// Raster formats HANABI can open or place, identified by their leading bytes
 // (file extensions and browser-reported MIME types are unreliable, e.g. .dib/.rle/.jpe).
 
 export interface ImageFormat {

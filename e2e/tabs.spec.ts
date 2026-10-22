@@ -91,7 +91,7 @@ test('save applies to the active tab only', async ({ page }) => {
   await page.keyboard.press('Delete');
   const dl = page.waitForEvent('download');
   await page.keyboard.press('Control+s');
-  expect((await dl).suggestedFilename()).toBe('one.sparca');
+  expect((await dl).suggestedFilename()).toBe('one.hnb');
   await expect(page.getByRole('tab').first()).not.toContainText('●');
   await expect(page.getByRole('tab').nth(1)).toContainText('●');
 });

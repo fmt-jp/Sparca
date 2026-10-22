@@ -48,14 +48,14 @@ test('opens a BMP (.bmp / .dib)', async ({ page }) => {
   expect(await state<string>(page, 's => Object.values(s.doc.assets)[0].mimeType')).toBe('image/bmp');
 });
 
-test('opened images can be edited, saved as .sparca and reopened', async ({ page }) => {
+test('opened images can be edited, saved as .hnb and reopened', async ({ page }) => {
   await openFile(page, 'pic.bmp', makeBmp(8, 8, () => [200, 50, 50]));
   await expect.poll(async () => (await opened(page)).width).toBe(8);
   await page.keyboard.press('Delete');
   await page.keyboard.press('Control+z');
   const dl = page.waitForEvent('download');
   await page.keyboard.press('Control+s');
-  expect((await dl).suggestedFilename()).toBe('pic.sparca');
+  expect((await dl).suggestedFilename()).toBe('pic.hnb');
 });
 
 test('unsupported formats are refused with the reason and leave the document as is', async ({ page }) => {

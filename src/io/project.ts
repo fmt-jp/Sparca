@@ -1,11 +1,11 @@
-// .sparca project format: ZIP with document.json + assets/<id>.<ext> (docs/design.md §6).
+// .hnb project format (HANABI): ZIP with document.json + assets/<id>.<ext> (docs/design.md §6).
 import JSZip from 'jszip';
 import { referencedAssets } from '../model/tree';
 import type { AssetId, SparcaDocument } from '../model/types';
 import { validateDocument } from './validate';
 
-export const PROJECT_EXTENSION = '.sparca';
-export const PROJECT_MIME = 'application/x-sparca';
+export const PROJECT_EXTENSION = '.hnb';
+export const PROJECT_MIME = 'application/x-hanabi';
 
 export class ProjectError extends Error {}
 
@@ -39,7 +39,7 @@ export async function writeProject(
     assets[id] = meta;
     zip.file(assetPath(id, meta.mimeType), new Uint8Array(await blob.arrayBuffer()));
   }
-  const json = JSON.stringify({ format: 'sparca', ...doc, assets }, null, 2);
+  const json = JSON.stringify({ format: 'hanabi', ...doc, assets }, null, 2);
   zip.file('document.json', json);
   return zip.generateAsync({ type: 'uint8array', compression: 'DEFLATE', compressionOptions: { level: 6 } });
 }
@@ -55,7 +55,7 @@ export async function readProject(data: ArrayBuffer | Uint8Array): Promise<Loade
   try {
     zip = await JSZip.loadAsync(data);
   } catch {
-    throw new ProjectError('Sparca プロジェクトファイルとして読み込めません（ZIP 形式ではないか、ファイルが壊れています）。');
+    throw new ProjectError('HANABI プロジェクトファイルとして読み込めません（ZIP 形式ではないか、ファイルが壊れています）。');
   }
   const entry = zip.file('document.json');
   if (!entry) throw new ProjectError('プロジェクトファイルに document.json がありません。');

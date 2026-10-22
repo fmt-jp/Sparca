@@ -38,7 +38,7 @@ test('Ctrl+V pastes an image from the system clipboard onto the canvas, centered
   expect(await objects(page)).toHaveLength(0);
 });
 
-test('objects copied in Sparca paste as objects until something newer is copied elsewhere', async ({ page }) => {
+test('objects copied in HANABI paste as objects until something newer is copied elsewhere', async ({ page }) => {
   const c = await canvasBox(page);
   await page.keyboard.press('r');
   await drag(page, { x: c.x + 100, y: c.y + 100 }, { x: c.x + 200, y: c.y + 200 });
@@ -51,7 +51,7 @@ test('objects copied in Sparca paste as objects until something newer is copied 
   await page.keyboard.press('Control+v');
   await expect.poll(async () => (await objects(page)).map((o) => o.type)).toEqual(['shape', 'shape', 'image']);
 
-  // Copying in Sparca again takes over.
+  // Copying in HANABI again takes over.
   await page.keyboard.press('Control+c'); // the pasted image is selected
   await page.keyboard.press('Control+v');
   expect((await objects(page)).map((o) => o.type)).toEqual(['shape', 'shape', 'image', 'image']);

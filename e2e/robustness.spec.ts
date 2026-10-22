@@ -25,7 +25,7 @@ test('an image copied into a new document can be saved and reopened there', asyn
   const chooser = page.waitForEvent('filechooser');
   await page.getByRole('button', { name: 'ファイル' }).click();
   await page.getByRole('menuitem', { name: /開く/ }).click();
-  await (await chooser).setFiles({ name: 'p.sparca', mimeType: 'application/octet-stream', buffer: readFileSync(path!) });
+  await (await chooser).setFiles({ name: 'p.hnb', mimeType: 'application/octet-stream', buffer: readFileSync(path!) });
   await expect(page.locator('[data-testid=canvas] image')).toHaveCount(1);
 });
 
@@ -47,7 +47,7 @@ test('opening a corrupt project shows the reason and keeps the current document'
   const chooser = page.waitForEvent('filechooser');
   await page.getByRole('button', { name: 'ファイル' }).click();
   await page.getByRole('menuitem', { name: /開く/ }).click();
-  await (await chooser).setFiles({ name: 'bad.sparca', mimeType: 'application/octet-stream', buffer: Buffer.from('garbage') });
+  await (await chooser).setFiles({ name: 'bad.hnb', mimeType: 'application/octet-stream', buffer: Buffer.from('garbage') });
   await expect(page.locator('.notice.error')).toContainText('ZIP 形式ではない');
   expect(await state<number>(page, 's => s.doc.layers[0].children.length')).toBe(1);
 });

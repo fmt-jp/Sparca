@@ -1,4 +1,4 @@
-// Sparca document data model. See docs/design.md §2.
+// HANABI document data model. See docs/design.md §2.
 
 export type Id = string;
 export type AssetId = string;

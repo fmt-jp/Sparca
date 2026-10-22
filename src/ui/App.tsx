@@ -39,7 +39,7 @@ export function App() {
   const [sizes, setSizes] = usePanelSizes();
 
   useEffect(() => {
-    document.title = `${dirty ? '● ' : ''}${fileName} — Sparca`;
+    document.title = `${dirty ? '● ' : ''}${fileName} — HANABI`;
   }, [dirty, fileName]);
 
   // Warn before closing the tab with unsaved changes.

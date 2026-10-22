@@ -1,12 +1,12 @@
 // System clipboard integration. Copy/cut/paste go through the browser's clipboard events,
 // so images copied elsewhere (e.g. a Windows+Shift+S screenshot) can be pasted onto the
-// canvas, while objects copied in Sparca still paste as editable objects.
+// canvas, while objects copied in HANABI still paste as editable objects.
 import { copySelection, cutSelection, paste, placeImageFiles } from '../store/actions';
 import { isTextEntry } from './keyboard';
 import { editor } from './useEditor';
 
 /**
- * Marks the system clipboard as holding Sparca objects (the objects themselves stay in
+ * Marks the system clipboard as holding HANABI objects (the objects themselves stay in
  * memory). Whatever is copied later, in any app, replaces it — so on paste we know
  * whether our objects or something newer (an image) is on the clipboard.
  */
@@ -75,7 +75,7 @@ export function menuCopy(cut = false): void {
   } catch {
     ok = false;
   }
-  // Without clipboard access, still copy within Sparca.
+  // Without clipboard access, still copy within HANABI.
   if (!ok) {
     if (cut) cutSelection(editor);
     else copySelection(editor);
@@ -85,7 +85,7 @@ export function menuCopy(cut = false): void {
 /**
  * Menu ペースト: menus cannot trigger a paste event, so read the clipboard directly
  * (the browser may ask for permission). An image there is placed; otherwise — including
- * Sparca's own copies, which the browser does not list — the copied objects are pasted.
+ * HANABI's own copies, which the browser does not list — the copied objects are pasted.
  */
 export async function menuPaste(): Promise<void> {
   try {
@@ -104,7 +104,7 @@ export async function menuPaste(): Promise<void> {
       return;
     }
   } catch {
-    // No permission or nothing readable: fall back to Sparca's own clipboard.
+    // No permission or nothing readable: fall back to HANABI's own clipboard.
   }
   paste(editor);
 }
