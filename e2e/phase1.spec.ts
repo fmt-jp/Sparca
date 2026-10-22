@@ -10,6 +10,12 @@ test.beforeEach(async ({ page }) => {
 const objects = (page: import('@playwright/test').Page) =>
   state<{ type: string; name: string }[]>(page, 's => s.doc.layers.flatMap(l => l.children.map(o => ({ type: o.type, name: o.name, box: o.box })))');
 
+test('the top-left app name reads HANABI in orange', async ({ page }) => {
+  const name = page.locator('header.menubar .app-name');
+  await expect(name).toHaveText('HANABI');
+  await expect(name).toHaveCSS('color', 'rgb(255, 140, 26)');
+});
+
 test('draws shapes and text, then undo/redo restores them', async ({ page }) => {
   const c = await canvasBox(page);
   await page.keyboard.press('r');
