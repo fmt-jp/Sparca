@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { buildTestFont } from '../src/render/testFont';
 import { canvasBox, state } from './helpers';
 
 test.afterEach(async ({ page }) => {
@@ -88,22 +89,38 @@ test('search, keyboard choice, and a typed name not in the list', async ({ page 
   expect(await font(page)).toBe('My Special Font');
 });
 
-test('「この PC のすべてのフォントを表示」 lists every installed family (Local Font Access)', async ({ page }) => {
-  await page.addInitScript(() => {
-    (window as unknown as { queryLocalFonts: () => Promise<{ family: string }[]> }).queryLocalFonts = async () => [
-      { family: 'Zebra Sans' },
-      { family: 'Zebra Sans' }, // several styles of one family
-      { family: 'Aardvark Serif' },
+test('「この PC のすべてのフォントを表示」 lists every installed family, with Japanese names read from the font files', async ({ page }) => {
+  const b64 = (u: Uint8Array) => Buffer.from(u).toString('base64');
+  const fonts = {
+    // Chrome reports English names only; the Japanese name is inside the file.
+    itaitai: b64(buildTestFont([{ id: 1, language: 0x0409, text: 'AR Itaitai E' }, { id: 1, language: 0x0411, text: 'AR板体E' }, { id: 6, language: 0x0409, text: 'ARItaitaiE' }])),
+    zebra: b64(buildTestFont([{ id: 1, language: 0x0409, text: 'Zebra Sans' }])),
+  };
+  await page.addInitScript((f) => {
+    const blob = (s: string) => async () => new Blob([Uint8Array.from(atob(s), (c) => c.charCodeAt(0))]);
+    (window as unknown as { queryLocalFonts: () => Promise<unknown[]> }).queryLocalFonts = async () => [
+      { family: 'Zebra Sans', style: 'Bold', postscriptName: 'ZebraSans-Bold', blob: blob(f.zebra) },
+      { family: 'Zebra Sans', style: 'Regular', postscriptName: 'ZebraSans', blob: blob(f.zebra) }, // several styles of one family
+      { family: 'Aardvark Serif', style: 'Regular', postscriptName: 'Aardvark' },
+      { family: 'AR Itaitai E', style: 'Regular', postscriptName: 'ARItaitaiE', blob: blob(f.itaitai) },
     ];
-  });
+  }, fonts);
   await page.goto('/');
   await addText(page);
   await openPicker(page);
   await page.getByRole('button', { name: 'この PC のすべてのフォントを表示…' }).click();
   const all = list(page).getByRole('group', { name: 'この PC のすべてのフォント' });
-  await expect(all.getByRole('option')).toHaveText([/Aardvark Serif/, /Zebra Sans/]);
-  await all.getByRole('option', { name: /Zebra Sans/ }).click();
-  expect(await font(page)).toBe('Zebra Sans');
+  // Shown and sorted by the Japanese name where the font has one.
+  await expect(all.getByRole('option')).toHaveText([/Aardvark Serif/, /AR板体E/, /Zebra Sans/]);
+  await expect(all.locator('[data-family="AR Itaitai E"]')).toHaveAttribute('title', 'AR板体E（AR Itaitai E）');
+  // Searchable by the Japanese name; the text keeps the family name the browser knows.
+  await page.getByRole('textbox', { name: 'フォントを検索' }).fill('板体');
+  await expect(list(page).getByRole('option', { name: /AR板体E/ })).toBeVisible();
+  await list(page).getByRole('option', { name: /AR板体E/ }).click();
+  expect(await font(page)).toBe('AR Itaitai E');
+  await expect(page.getByRole('button', { name: 'フォント', exact: true })).toContainText('AR板体E');
+  // The names are remembered, so the files are read only once.
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('sparca.fontLabels') ?? '{}'))).toMatchObject({ 'AR Itaitai E': 'AR板体E', 'Zebra Sans': 'Zebra Sans' });
   // The button is not offered again once the list is loaded.
   await openPicker(page);
   await expect(page.getByRole('button', { name: 'この PC のすべてのフォントを表示…' })).toHaveCount(0);

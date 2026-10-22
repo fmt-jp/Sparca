@@ -109,7 +109,7 @@ export function cssFontFamily(family: string): string {
 }
 
 export function fontLabel(family: string): string {
-  return GENERIC_LABELS[family] ?? CANDIDATES.find((c) => c.family === family)?.label ?? family;
+  return GENERIC_LABELS[family] ?? CANDIDATES.find((c) => c.family === family)?.label ?? localFontLabel(family) ?? family;
 }
 
 let measure: CanvasRenderingContext2D | null | undefined;
@@ -151,26 +151,89 @@ export function detectedFonts(): FontEntry[] {
   return [...found, ...GENERIC_FAMILIES.map((f) => ({ family: f, label: GENERIC_LABELS[f], group: 'generic' as const }))];
 }
 
-type LocalFontData = { family: string };
+type LocalFontData = { family: string; postscriptName?: string; style?: string; blob?: () => Promise<Blob> };
 type FontWindow = Window & { queryLocalFonts?: () => Promise<LocalFontData[]> };
 
 export function canListLocalFonts(): boolean {
   return typeof window !== 'undefined' && typeof (window as FontWindow).queryLocalFonts === 'function';
 }
 
-let localFamilies: string[] | null = null;
-
-/** Every installed family via the Local Font Access API (asks for permission the first time). */
-export async function listLocalFonts(): Promise<string[]> {
-  if (localFamilies) return localFamilies;
-  const fonts = await (window as FontWindow).queryLocalFonts!();
-  localFamilies = [...new Set(fonts.map((f) => f.family))].sort((a, b) => a.localeCompare(b, 'ja'));
-  return localFamilies;
+export interface LocalFont {
+  family: string;
+  /** Japanese name from the font file when it has one (Chrome only reports English names). */
+  label: string;
 }
 
-/** Families listed earlier in this session, or after permission was granted before. */
-export async function localFontsIfAllowed(): Promise<string[] | null> {
-  if (localFamilies) return localFamilies;
+let localFonts: LocalFont[] | null = null;
+/** One font per family to read the Japanese name from (the regular style if present). */
+const sample = new Map<string, LocalFontData>();
+const LABELS_KEY = 'sparca.fontLabels';
+
+function loadLabelCache(): Record<string, string> {
+  try {
+    return JSON.parse(localStorage.getItem(LABELS_KEY) ?? '{}') as Record<string, string>;
+  } catch {
+    return {};
+  }
+}
+
+const byLabel = (a: LocalFont, b: LocalFont) => a.label.localeCompare(b.label, 'ja');
+
+/** Every installed family via the Local Font Access API (asks for permission the first time). */
+export async function listLocalFonts(): Promise<LocalFont[]> {
+  if (localFonts) return localFonts;
+  const fonts = await (window as FontWindow).queryLocalFonts!();
+  for (const f of fonts) {
+    const cur = sample.get(f.family);
+    if (!cur || (f.style === 'Regular' && cur.style !== 'Regular')) sample.set(f.family, f);
+  }
+  const cache = loadLabelCache();
+  localFonts = [...sample.keys()].map((family) => ({ family, label: cache[family] ?? family })).sort(byLabel);
+  return localFonts;
+}
+
+let localizing: Promise<LocalFont[]> | null = null;
+
+/**
+ * Read the Japanese names of the listed fonts from their files (only the name table is
+ * read) and remember them. Resolves with the updated, re-sorted list.
+ */
+export function localizeLocalFonts(): Promise<LocalFont[]> {
+  if (!localFonts) return Promise.resolve([]);
+  localizing ??= (async () => {
+    const { japaneseFamilyName } = await import('./fontNames');
+    const cache = loadLabelCache();
+    for (const f of localFonts!) {
+      if (f.family in cache) continue;
+      const data = sample.get(f.family);
+      let name: string | null = null;
+      try {
+        if (data?.blob) name = await japaneseFamilyName(await data.blob(), data.postscriptName);
+      } catch {
+        name = null;
+      }
+      // Remember "no Japanese name" too, so files are read only once.
+      cache[f.family] = name && name !== f.family ? name : f.family;
+    }
+    try {
+      localStorage.setItem(LABELS_KEY, JSON.stringify(cache));
+    } catch {
+      // Not cached; names are read again next time.
+    }
+    localFonts = localFonts!.map((f) => ({ ...f, label: cache[f.family] ?? f.family })).sort(byLabel);
+    return localFonts;
+  })();
+  return localizing;
+}
+
+/** Display name of a family: a curated / generic label, else a Japanese name read from the PC. */
+export function localFontLabel(family: string): string | null {
+  return localFonts?.find((f) => f.family === family)?.label ?? null;
+}
+
+/** Fonts listed earlier in this session, or after permission was granted before. */
+export async function localFontsIfAllowed(): Promise<LocalFont[] | null> {
+  if (localFonts) return localFonts;
   if (!canListLocalFonts() || !navigator.permissions) return null;
   try {
     const st = await navigator.permissions.query({ name: 'local-fonts' as PermissionName });
