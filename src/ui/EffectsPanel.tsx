@@ -1,10 +1,12 @@
 // Effects list in the properties panel (Fireworks-style live filters): add from a menu,
 // turn on/off, set strength, reorder (applied top to bottom), edit settings, remove.
 import { useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { createEffect, EFFECT_GROUPS, effectLabel } from '../model/effects';
 import { updateObject } from '../model/commands';
-import type { Curves, Effect, EffectKind, Id, SceneObject } from '../model/types';
+import type { Effect, EffectKind, Id, SceneObject } from '../model/types';
 import { CurveEditor } from './CurveEditor';
+import { Dialog } from './Dialog';
 import { ColorPicker } from './ColorPicker';
 import { ContextMenu } from './ContextMenu';
 import { PopupSliderInput } from './controls';
@@ -14,8 +16,7 @@ type NumParam = { key: string; label: string; min: number; max: number; sliderMa
 type Param =
   | ({ type: 'number' } & NumParam)
   | { type: 'color'; key: string; label: string }
-  | { type: 'bool'; key: string; label: string }
-  | { type: 'curves'; key: string; label: string };
+  | { type: 'bool'; key: string; label: string };
 
 const SHADOW: Param[] = [
   { type: 'color', key: 'color', label: '色' },
@@ -59,7 +60,8 @@ const PARAMS: Record<EffectKind, Param[]> = {
     { type: 'number', key: 'saturation', label: '彩度', min: -100, max: 100 },
     { type: 'number', key: 'lightness', label: '明度', min: -100, max: 100 },
   ],
-  curves: [{ type: 'curves', key: 'curves', label: 'カーブ' }],
+  // Edited in its own dialog (CurvesDialog), confirmed with OK.
+  curves: [],
   invert: [],
   'color-overlay': [{ type: 'color', key: 'color', label: '色' }],
 };
@@ -149,8 +151,23 @@ export function EffectsPanel({ o }: { o: Exclude<SceneObject, { type: 'group' }>
   /** Where the drop line shows: before row i, or after the last row. */
   const dropSlot = drag && drag.to !== drag.from && drag.to !== drag.from + 1 ? drag.to : null;
 
+  // Tone curve dialog: everything from opening it to OK is one undo step; キャンセル
+  // restores the curve (and, for a just-added curve, removes it again).
+  const [curveDialog, setCurveDialog] = useState<{ id: string; isNew: boolean } | null>(null);
+  const openCurves = (id: string, isNew = false) => {
+    if (!isNew) editor.beginGesture();
+    setCurveDialog({ id, isNew });
+  };
+
   const add = (kind: EffectKind) => {
     const e = createEffect(kind);
+    if (kind === 'curves') {
+      // Like Fireworks: adding a tone curve opens its dialog right away.
+      editor.beginGesture();
+      setEffects(o.id, [...effects, e], `${effectLabel(kind)}の追加`);
+      openCurves(e.id, true);
+      return;
+    }
     setEffects(o.id, [...effects, e], `${effectLabel(kind)}の追加`);
     setOpen((s) => new Set(s).add(e.id));
   };
@@ -218,20 +235,22 @@ export function EffectsPanel({ o }: { o: Exclude<SceneObject, { type: 'group' }>
                     type="button"
                     className="effect-name"
                     aria-expanded={PARAMS[e.kind].length ? expanded : undefined}
+                    aria-haspopup={e.kind === 'curves' ? 'dialog' : undefined}
                     aria-label={`${name}の設定`}
-                    disabled={!PARAMS[e.kind].length}
+                    title={e.kind === 'curves' ? 'クリックでトーンカーブを編集' : undefined}
+                    disabled={!PARAMS[e.kind].length && e.kind !== 'curves'}
                     onClick={() =>
                       !dragged.current &&
-                      setOpen((s) => {
+                      (e.kind === 'curves' ? openCurves(e.id) : setOpen((s) => {
                         const n = new Set(s);
                         if (n.has(e.id)) n.delete(e.id);
                         else n.add(e.id);
                         return n;
-                      })
+                      }))
                     }
                   >
                     <span aria-hidden="true" className="effect-caret">
-                      {PARAMS[e.kind].length ? (expanded ? '▾' : '▸') : ''}
+                      {e.kind === 'curves' ? '⧉' : PARAMS[e.kind].length ? (expanded ? '▾' : '▸') : ''}
                     </span>
                     {name}
                   </button>
@@ -272,6 +291,38 @@ export function EffectsPanel({ o }: { o: Exclude<SceneObject, { type: 'group' }>
           })}
         </ol>
       )}
+      {curveDialog &&
+        (() => {
+          const i = effects.findIndex((x) => x.id === curveDialog.id);
+          const e = effects[i];
+          if (!e || e.kind !== 'curves') return null;
+          const close = (ok: boolean) => {
+            if (ok) editor.endGesture(curveDialog.isNew ? 'トーンカーブの追加' : `${names[i]}の変更`);
+            else editor.cancelGesture();
+            setCurveDialog(null);
+          };
+          return createPortal(
+            <Dialog
+              title={`${names[i]}`}
+              clearBackdrop
+              onClose={() => close(false)}
+              footer={
+                <>
+                  <button type="button" onClick={() => close(false)}>
+                    キャンセル
+                  </button>
+                  <button type="button" className="primary" onClick={() => close(true)}>
+                    OK
+                  </button>
+                </>
+              }
+            >
+              <CurveEditor curves={e.curves} name={names[i]} size={256} gestures={false} onChange={(c) => replace(i, { ...e, curves: c }, `${names[i]}の変更`)} />
+              <p className="hint">変更はキャンバスにすぐ反映されます（プレビュー）。OK で確定、キャンセルで元に戻ります。タイトルをドラッグすると画面を移動できます。</p>
+            </Dialog>,
+            document.body,
+          );
+        })()}
     </div>
   );
 }
@@ -287,9 +338,6 @@ function ParamInput({ p, e, name, onChange }: { p: Param; e: Effect; name: strin
         <ColorPicker label={label} value={v as string} onChange={(c) => c && set(c)} />
       </span>
     );
-  }
-  if (p.type === 'curves') {
-    return <CurveEditor curves={v as Curves} name={name} onChange={(c, key) => set(c, key && `fx-${key}-${e.id}`)} />;
   }
   if (p.type === 'bool') {
     return (

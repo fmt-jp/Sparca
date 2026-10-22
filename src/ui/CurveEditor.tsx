@@ -19,7 +19,21 @@ function pathOf(points: CurvePoint[]): string {
   return d;
 }
 
-export function CurveEditor({ curves, name, onChange }: { curves: Curves; name: string; onChange: (c: Curves, key?: string) => void }) {
+export function CurveEditor({
+  curves,
+  name,
+  onChange,
+  size = SIZE,
+  gestures = true,
+}: {
+  curves: Curves;
+  name: string;
+  onChange: (c: Curves, key?: string) => void;
+  /** Graph size in px. */
+  size?: number;
+  /** Make each drag one undo step. Off when an enclosing dialog already groups the edits. */
+  gestures?: boolean;
+}) {
   const [channel, setChannel] = useState<CurveChannel>('rgb');
   const [selected, setSelected] = useState(0);
   const [removing, setRemoving] = useState<number | null>(null);
@@ -65,7 +79,7 @@ export function CurveEditor({ curves, name, onChange }: { curves: Curves; name: 
         onChange({ ...curves, [channel]: cur.filter((_, k) => k !== i) });
         setSelected(Math.max(0, i - 1));
       }
-      editor.endGesture('トーンカーブの変更');
+      if (gestures) editor.endGesture('トーンカーブの変更');
     };
     el.addEventListener('pointermove', move);
     el.addEventListener('pointerup', up);
@@ -75,7 +89,7 @@ export function CurveEditor({ curves, name, onChange }: { curves: Curves; name: 
   function onGraphDown(e: React.PointerEvent) {
     if (e.button !== 0) return;
     const hit = (e.target as Element).getAttribute('data-curve-point');
-    editor.beginGesture();
+    if (gestures) editor.beginGesture();
     if (hit !== null) {
       const i = Number(hit);
       setSelected(i);
@@ -86,7 +100,7 @@ export function CurveEditor({ curves, name, onChange }: { curves: Curves; name: 
     const p = toLevels(e.clientX, e.clientY);
     const added = addCurvePoint(points, { x: Math.round(Math.min(255, Math.max(0, p.x))), y: Math.round(Math.min(255, Math.max(0, p.y))) });
     if (!added) {
-      editor.cancelGesture();
+      if (gestures) editor.cancelGesture();
       return;
     }
     setPoints(added.points);
@@ -135,8 +149,8 @@ export function CurveEditor({ curves, name, onChange }: { curves: Curves; name: 
       <svg
         ref={svg}
         className="curve-graph"
-        width={SIZE}
-        height={SIZE}
+        width={size}
+        height={size}
         viewBox="-6 -6 267 267"
         tabIndex={0}
         role="group"
