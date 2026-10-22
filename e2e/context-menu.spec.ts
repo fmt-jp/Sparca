@@ -42,7 +42,8 @@ test('object menu: right-click selects the object, then copy / paste / duplicate
   await rightClick(page, c.x + 600, c.y + 400); // empty spot
   const canvasMenu = page.getByRole('menu', { name: 'キャンバスのメニュー' });
   await canvasMenu.getByRole('menuitem', { name: /^ペースト/ }).click();
-  expect(await objects(page)).toHaveLength(4);
+  // Paste first checks the system clipboard for an image (async).
+  await expect.poll(async () => (await objects(page)).length).toBe(4);
 
   await rightClick(page, c.x + 350, c.y + 150);
   await menu.getByRole('menuitem', { name: /^削除/ }).click();
@@ -97,8 +98,8 @@ test('empty canvas menu: select all and grid toggle; Escape closes without actin
   expect(await state<string[]>(page, 's => s.selection')).toHaveLength(0);
   const menu = page.getByRole('menu', { name: 'キャンバスのメニュー' });
   await rightClick(page, c.x + 600, c.y + 400);
-  // Nothing on the clipboard yet.
-  await expect(menu.getByRole('menuitem', { name: /^ペースト/ })).toBeDisabled();
+  // ペースト stays available: the system clipboard may hold an image from another app.
+  await expect(menu.getByRole('menuitem', { name: /^ペースト/ })).toBeEnabled();
   await menu.getByRole('menuitem', { name: /^すべてを選択/ }).click();
   expect(await state<string[]>(page, 's => s.selection')).toHaveLength(2);
 
@@ -124,7 +125,8 @@ test('keyboard: Shift+F10 opens the menu for the selection and arrows move throu
   await expect(menu).toBeVisible();
   await expect(menu.getByRole('menuitem', { name: /^カット/ })).toBeFocused();
   await page.keyboard.press('ArrowDown'); // コピー
-  await page.keyboard.press('ArrowDown'); // ペースト is disabled and skipped → 複製
+  await page.keyboard.press('ArrowDown'); // ペースト
+  await page.keyboard.press('ArrowDown'); // 複製
   await expect(menu.getByRole('menuitem', { name: /^複製/ })).toBeFocused();
   await page.keyboard.press('Enter');
   expect(await objects(page)).toHaveLength(2);

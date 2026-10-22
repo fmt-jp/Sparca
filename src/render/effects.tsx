@@ -66,6 +66,10 @@ class Chain {
       'inv',
     );
   }
+  blurSigma(input: string, sigma: number): string {
+    if (sigma <= 0) return input;
+    return this.add((r) => <feGaussianBlur key={r} in={input} stdDeviation={sigma} result={r} />, 'b');
+  }
   blur(input: string, px: number): string {
     if (px <= 0) return input;
     return this.add((r) => <feGaussianBlur key={r} in={input} stdDeviation={px / 2} result={r} />, 'b');
@@ -109,16 +113,56 @@ function dir(deg: number, rotation: number): { x: number; y: number } {
   return { x: Math.cos(a), y: Math.sin(a) };
 }
 
-/** Highlight and shade inside `alpha` lit from `light` (unit vector toward the light). */
-function bevelLights(c: Chain, alpha: string, e: { width: number; softness: number; intensity: number }, light: { x: number; y: number }) {
-  const soft = c.blur(alpha, e.softness);
-  const w = e.width;
-  // Lit edge: just inside, the shape ends within `w` toward the light.
-  const toward = c.offset(soft, -light.x * w, -light.y * w);
-  const away = c.offset(soft, light.x * w, light.y * w);
-  const hiMask = c.composite(c.composite(soft, toward, 'out'), alpha, 'in');
-  const shMask = c.composite(c.composite(soft, away, 'out'), alpha, 'in');
-  return [c.paint(hiMask, '#ffffff', e.intensity), c.paint(shMask, '#000000', e.intensity)];
+/** Height of the light above the surface; a flat surface gets sin(ELEVATION) of it. */
+const ELEVATION = 50;
+const FLAT = Math.sin((ELEVATION * Math.PI) / 180);
+
+/**
+ * Bevel shading (Fireworks-style "smooth" profile): `height` is a blurred alpha used as a
+ * height map and lit by a distant light from `angle` (direction the light comes from).
+ * Slopes facing the light become lighter, slopes facing away darker, flat areas stay
+ * unchanged. Returns highlight and shade layers clipped to `clip`.
+ */
+function lighting(c: Chain, height: string, sigma: number, angle: number, rotation: number, intensity: number, clip: string): [string, string] {
+  // The lighting's Sobel normal has slope 2·surfaceScale·dh/dx, and a Gaussian edge's
+  // steepest dh/dx is 0.4/σ: this tilts the steepest part about 40° (steeper turns the
+  // shade black). kernelUnitLength keeps the slope in document px at any zoom.
+  const surfaceScale = 1.05 * Math.max(0.5, sigma);
+  const lit = c.add(
+    (r) => (
+      <feDiffuseLighting key={r} in={height} surfaceScale={surfaceScale} diffuseConstant={1} kernelUnitLength={1} lightingColor="#ffffff" result={r}>
+        <feDistantLight azimuth={angle - rotation} elevation={ELEVATION} />
+      </feDiffuseLighting>
+    ),
+    'lit',
+  );
+  // Brightness above / below a flat surface's → white / black alpha.
+  const gHi = intensity / (1 - FLAT);
+  const gSh = intensity / FLAT;
+  const hi = c.add(
+    (r) => <feColorMatrix key={r} in={lit} type="matrix" values={`0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  ${gHi} 0 0 0 ${-gHi * FLAT}`} result={r} />,
+    'hi',
+  );
+  const sh = c.add(
+    (r) => <feColorMatrix key={r} in={lit} type="matrix" values={`0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  ${-gSh} 0 0 0 ${gSh * FLAT}`} result={r} />,
+    'sh',
+  );
+  return [c.composite(hi, clip, 'in'), c.composite(sh, clip, 'in')];
+}
+
+/** The shape grown by about `px` with rounded corners (blurred alpha, thresholded). */
+function grow(c: Chain, alpha: string, px: number): string {
+  if (px <= 0) return alpha;
+  // A Gaussian edge reaches 5% at 1.645σ.
+  const b = c.blurSigma(alpha, px / 1.645);
+  return c.add(
+    (r) => (
+      <feComponentTransfer key={r} in={b} result={r}>
+        <feFuncA type="linear" slope={20} intercept={-1} />
+      </feComponentTransfer>
+    ),
+    'g',
+  );
 }
 
 function linear(slope: number, intercept: number) {
@@ -161,24 +205,29 @@ function applyEffect(c: Chain, e: Effect, input: string, rotation: number): stri
       return c.merge([input, inner]);
     }
     case 'bevel-inner': {
-      const [hi, sh] = bevelLights(c, c.alpha(input), e, dir(e.angle, rotation));
+      // A band `width` wide inside the edge, sloping up toward the inside: the height
+      // map is the shape shrunk by half the width, blurred across the band.
+      const a = c.alpha(input);
+      const sigma = e.width / 4 + e.softness / 2;
+      const mid = c.inverse(grow(c, c.inverse(a), e.width / 2));
+      const [hi, sh] = lighting(c, c.blurSigma(mid, sigma), sigma, e.angle, rotation, e.intensity, a);
       return c.merge([input, hi, sh]);
     }
     case 'bevel-outer': {
-      const light = dir(e.angle, rotation);
+      // A rim of `color` `width` wide around the shape (rounded corners), sloping down
+      // away from the shape across its whole width.
       const a = c.alpha(input);
-      const ring = c.composite(c.dilate(a, e.width), a, 'out');
-      const soft = c.blur(a, e.softness);
-      // Outside the lit edge, the shape lies away from the light (and vice versa).
-      const hiMask = c.composite(ring, c.offset(soft, light.x * e.width, light.y * e.width), 'in');
-      const shMask = c.composite(ring, c.offset(soft, -light.x * e.width, -light.y * e.width), 'in');
-      return c.merge([c.paint(ring, e.color, 1), c.paint(hiMask, '#ffffff', e.intensity), c.paint(shMask, '#000000', e.intensity), input]);
+      const rim = grow(c, a, e.width);
+      const sigma = e.width / 4 + e.softness / 2;
+      const [hi, sh] = lighting(c, c.blurSigma(grow(c, a, e.width / 2), sigma), sigma, e.angle, rotation, e.intensity, rim);
+      return c.merge([c.paint(rim, e.color, 1), hi, sh, input]);
     }
     case 'emboss': {
+      // Relief centered on the edge, shown inside the shape.
       const a = c.alpha(input);
       const base = e.showObject ? input : c.paint(a, '#808080', 1);
-      const light = dir(e.inset ? e.angle + 180 : e.angle, rotation);
-      const [hi, sh] = bevelLights(c, a, e, light);
+      const sigma = e.width / 2 + e.softness / 2;
+      const [hi, sh] = lighting(c, c.blurSigma(a, sigma), sigma, e.inset ? e.angle + 180 : e.angle, rotation, e.intensity, a);
       return c.merge([base, hi, sh]);
     }
     case 'blur':

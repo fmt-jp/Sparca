@@ -4,13 +4,9 @@ import {
   arrangeSelection,
   chooseAndOpenProject,
   chooseAndPlaceImage,
-  copySelection,
-  cutSelection,
   deleteSelection,
   duplicateSelection,
   groupSelection,
-  hasClipboard,
-  paste,
   saveProject,
   selectAll,
   ungroupSelection,
@@ -19,6 +15,7 @@ import { autoColor, pixelTargetImage, selectedImage } from '../store/imageAction
 import { ZOOM_STEPS } from './CanvasView';
 import { openDialog } from './dialogs';
 import { ALIGN } from './PropertiesPanel';
+import { menuCopy, menuPaste } from './clipboard';
 import { editor, useEditor } from './useEditor';
 
 export interface MenuItem {
@@ -101,9 +98,9 @@ export function MenuBar({ onNew }: { onNew: () => void }) {
         { label: undoLabel ? `取り消し: ${undoLabel}` : '取り消し', shortcut: `${mod}Z`, action: () => editor.undo(), disabled: !undoLabel },
         { label: redoLabel ? `やり直し: ${redoLabel}` : 'やり直し', shortcut: `${mod}Shift+Z`, action: () => editor.redo(), disabled: !redoLabel },
         { separator: true, label: '' },
-        { label: 'カット', shortcut: `${mod}X`, action: () => cutSelection(editor), disabled: !hasSel },
-        { label: 'コピー', shortcut: `${mod}C`, action: () => copySelection(editor), disabled: !hasSel },
-        { label: 'ペースト', shortcut: `${mod}V`, action: () => paste(editor), disabled: !hasClipboard() },
+        { label: 'カット', shortcut: `${mod}X`, action: () => menuCopy(true), disabled: !hasSel },
+        { label: 'コピー', shortcut: `${mod}C`, action: () => menuCopy(), disabled: !hasSel },
+        { label: 'ペースト', shortcut: `${mod}V`, action: () => void menuPaste() },
         { label: '複製', shortcut: `${mod}D`, action: () => duplicateSelection(editor), disabled: !hasSel },
         { label: '削除', shortcut: 'Delete', action: () => deleteSelection(editor), disabled: !hasSel },
         { separator: true, label: '' },
