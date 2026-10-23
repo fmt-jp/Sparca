@@ -35,7 +35,7 @@ export function defaultAdjust(): ColorAdjust {
 }
 
 export function defaultPipeline(): ImagePipeline {
-  return { crop: null, resize: null, adjust: defaultAdjust(), blur: 0, localEdits: [] };
+  return { crop: null, resize: null, adjust: defaultAdjust(), localEdits: [] };
 }
 
 export function createDocument(width = 800, height = 600): SparcaDocument {

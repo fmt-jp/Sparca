@@ -1,5 +1,5 @@
 // Non-destructive raster pipeline (docs/design.md §4):
-// crop → resize → color adjust → whole-image blur → local (masked) edits: blur / mosaic.
+// crop → resize → color adjust → local (masked) edits: blur / mosaic. (Whole-object blur is an effect.)
 import type { ImagePipeline } from '../model/types';
 import { blendWithMask, gaussianBlur, mosaic } from './blur';
 import { applyAdjust, isIdentityAdjust } from './color';
@@ -20,7 +20,7 @@ export function pipelineOutputSize(p: ImagePipeline, srcW: number, srcH: number)
  */
 export function runPipeline(src: Raster, p: ImagePipeline, scale = 1, onProgress?: (f: number) => void): Raster {
   let img = src;
-  const steps = 2 + (isIdentityAdjust(p.adjust) ? 0 : 1) + (p.blur > 0 ? 1 : 0) + p.localEdits.length;
+  const steps = 2 + (isIdentityAdjust(p.adjust) ? 0 : 1) + p.localEdits.length;
   let done = 0;
   const tick = () => onProgress?.(++done / steps);
 
@@ -36,10 +36,6 @@ export function runPipeline(src: Raster, p: ImagePipeline, scale = 1, onProgress
   tick();
   if (!isIdentityAdjust(p.adjust)) {
     img = applyAdjust(img, p.adjust);
-    tick();
-  }
-  if (p.blur > 0) {
-    img = gaussianBlur(img, p.blur * scale);
     tick();
   }
   for (const edit of p.localEdits) {

@@ -103,11 +103,12 @@ describe('project format', () => {
     }
   });
 
-  it('turns an image color tone (files of 2026-10-22..23) into the same-named effect', async () => {
+  it('turns an older image tone and whole-image blur into the same-named effects', async () => {
     const raw = JSON.parse(JSON.stringify(sampleDoc()));
     const img = raw.layers[0].children[0];
     img.pipeline.adjust.tone = 'sepia';
     img.pipeline.adjust.toneAmount = 60;
+    img.pipeline.blur = 5; // older whole-image blur
     img.effects = [{ ...createEffect('glow') }];
     const zip = new JSZip();
     zip.file('document.json', JSON.stringify(raw));
@@ -116,8 +117,11 @@ describe('project format', () => {
     const out = loaded.doc.layers[0].children[0] as ImageObject;
     expect(out.effects.map((e) => [e.kind, e.strength])).toEqual([
       ['sepia', 0.6],
+      ['blur', 1],
       ['glow', 1],
     ]);
+    expect(out.effects[1]).toMatchObject({ radius: 5 });
+    expect(out.pipeline).not.toHaveProperty('blur');
     expect(out.pipeline.adjust).not.toHaveProperty('tone');
     expect(out.pipeline.adjust).not.toHaveProperty('toneAmount');
   });

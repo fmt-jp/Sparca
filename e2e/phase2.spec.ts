@@ -1,5 +1,5 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
-import { canvasBox, disableNativePickers, drag, makePng, placePng, processedPixels, state, waitImagesIdle } from './helpers';
+import { addEffect, canvasBox, disableNativePickers, drag, makePng, placePng, processedPixels, state, waitImagesIdle } from './helpers';
 
 test.beforeEach(async ({ page }) => {
   await disableNativePickers(page);
@@ -283,14 +283,18 @@ test('range selection + blur only affects the selected area', async ({ page }) =
   expect(await state<number>(page, 's => s.pixelSelection?.points.length')).toBe(3);
 });
 
-test('whole-image blur and before/after comparison', async ({ page }) => {
+test('whole-image blur (the ぼかし effect) and before/after comparison', async ({ page }) => {
   await placePng(page, 'img.png', testPng());
   const img = await imageObject(page);
-  await setNumber(page, 'ぼかし', '5');
-  await waitImagesIdle(page);
-  const out = await processedPixels(page, img.id, [[100, 50]]);
-  expect(out.px[0][0]).toBeGreaterThan(70);
-  expect(out.px[0][0]).toBeLessThan(170);
+  const props = page.getByRole('region', { name: 'プロパティ' });
+  // No separate blur setting in the image adjustments: the effect does it.
+  await expect(props.locator('input[aria-label="ぼかし"]')).toHaveCount(0);
+  await addEffect(page, 'ぼかしとシャープ', 'ぼかし');
+  await setNumber(page, 'ぼかしのぼかし量', '5');
+  await expect(page.locator('[data-testid=canvas] filter feGaussianBlur')).toHaveCount(1);
+  expect((await imageObject(page) as unknown as { effects: { kind: string; radius: number }[] }).effects).toMatchObject([{ kind: 'blur', radius: 5 }]);
+  // Before/after comparison shows the unprocessed image while pressed.
+  await setNumber(page, '明るさ', '40');
   const compare = page.getByRole('button', { name: /加工前と比較/ });
   await compare.hover();
   await page.mouse.down();

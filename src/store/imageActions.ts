@@ -47,13 +47,6 @@ export function setAdjust(ed: EditorStore, id: Id, patch: Partial<ColorAdjust>, 
   ed.edit(label, (d) => updateObject(d, id, { pipeline } as Partial<SceneObject>), mergeKey ? `${mergeKey}:${id}` : null);
 }
 
-export function setImageBlur(ed: EditorStore, id: Id, blur: number): void {
-  const loc = findObject(ed.getState().doc, id);
-  if (!loc || loc.object.type !== 'image') return;
-  const pipeline = { ...loc.object.pipeline, blur };
-  ed.edit('ぼかし', (d) => updateObject(d, id, { pipeline } as Partial<SceneObject>), `blur:${id}`);
-}
-
 export async function autoColor(ed: EditorStore, id: Id): Promise<void> {
   const loc = findObject(ed.getState().doc, id);
   if (!loc || loc.object.type !== 'image') return;
@@ -74,7 +67,6 @@ export function resetAdjust(ed: EditorStore, id: Id): void {
   const pipeline = {
     ...loc.object.pipeline,
     adjust: defaultAdjust(),
-    blur: 0,
     localEdits: [],
   };
   ed.edit('調整をリセット', (d) => updateObject(d, id, { pipeline } as Partial<SceneObject>));

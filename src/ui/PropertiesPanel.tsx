@@ -5,7 +5,7 @@ import { findObject, isEffectivelyLocked } from '../model/tree';
 import type { ColorAdjust, LocalEdit, SceneObject, ShapeObject, TextObject, ImageObject, PathObject, Id, Box } from '../model/types';
 import { pipelineOutputSize } from '../engine/pipeline';
 import { METHOD_LABELS } from '../engine/resample';
-import { autoColor, cancelCrop, commitCrop, pixelTargetImage, resetAdjust, setAdjust, setCropTarget, setImageBlur } from '../store/imageActions';
+import { autoColor, cancelCrop, commitCrop, pixelTargetImage, resetAdjust, setAdjust, setCropTarget } from '../store/imageActions';
 import { openDialog } from './dialogs';
 import { moveAnchors, pathToDoc } from '../model/pathEdit';
 import { convertSelectedNodes, deleteSelectedNodes, setPathClosed, setPathNodes } from '../store/pathActions';
@@ -371,9 +371,6 @@ function ImageSection({ o }: { o: ImageObject }) {
         {adj('saturation', '彩度')}
         {adj('temperature', '色温度')}
         {adj('tint', '色かぶり補正')}
-        <Field label="ぼかし" group>
-          <PopupSliderInput label="ぼかし" value={o.pipeline.blur} min={0} max={100} step={0.5} precision={1} suffix="px" onChange={(v) => setImageBlur(editor, o.id, v)} />
-        </Field>
       </div>
       <div className="prop-section">
         <button type="button" onClick={() => void autoColor(editor, o.id)}>

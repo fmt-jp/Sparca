@@ -112,13 +112,13 @@ interface ImageObject extends BaseObject {
     crop?: { x; y; width; height }; // 元画像ピクセル座標での切り抜き
     resize?: { width; height; method: ResampleMethod };
     adjust: { brightness; contrast; saturation; temperature; tint; auto?: AutoParams };
-    blur: number;                   // 画像全体へのガウスぼかし半径（px）
     localEdits: LocalEdit[];        // 選択範囲へのぼかし { kind: 'blur', radius } ／モザイク { kind: 'mosaic', size }（マスクは画像内の正規化座標）
   };
 }
 ```
 
-- 適用順は固定：**切り抜き → リサイズ → 色調整 → 全体ぼかし → 部分加工（localEdits：部分ぼかし・部分モザイク。記録順に適用）**。
+- 適用順は固定：**切り抜き → リサイズ → 色調整 → 部分加工（localEdits：部分ぼかし・部分モザイク。記録順に適用）**。
+- 画像全体のぼかしはエフェクト「ぼかし」で行う（2026-10-23 にパイプラインの `blur` を廃止。以前のファイルの `blur` は読み込み時に同じ半径のぼかしエフェクトへ変換する。エフェクトのぼかしは画像の外側へもにじむ）。
 - 範囲選択でのぼかしは、選択形状を画像内の正規化座標（0..1）へ変換したマスクとして `localEdits` に記録する。後でリサイズしてもマスクは追従する。
 - 自動カラー調整は、実行時に解析したパラメータ（チャンネル別の黒点・白点と、ホワイトバランスのガンマ `gamma`。旧ファイルはゲイン `gains`）を `adjust.auto` に**数値として保存**する。開き直しても同じ結果になる。
 - パイプライン結果はパラメータのハッシュでキャッシュする。重い処理は Web Worker で実行し、スライダー操作中は表示サイズに縮小したプロキシで高速プレビューし、確定後に原寸で計算する。
