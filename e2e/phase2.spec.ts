@@ -242,36 +242,11 @@ test('selection blur / mosaic dialogs preview on the canvas before 適用, and t
   expect(out.px[1].slice(0, 3)).toEqual([180, 170, 160]);
 });
 
-test('color adjustment tone: grayscale and sepia, with strength, undoable and saved as a setting', async ({ page }) => {
+test('the image color adjustment has no tone setting (grayscale / sepia are effects)', async ({ page }) => {
   await placePng(page, 'img.png', testPng());
-  const img = await imageObject(page);
   const props = page.getByRole('region', { name: 'プロパティ' });
-  await props.getByLabel('色調', { exact: true }).selectOption('grayscale');
-  await waitImagesIdle(page);
-  let out = await processedPixels(page, img.id, [[150, 50], [50, 50]]);
-  const l = (r: number, g: number, b: number) => Math.round(0.2126 * r + 0.7152 * g + 0.0722 * b);
-  expect(out.px[0].slice(0, 3)).toEqual([l(180, 170, 160), l(180, 170, 160), l(180, 170, 160)]);
-  expect(out.px[1].slice(0, 3)).toEqual([l(60, 70, 80), l(60, 70, 80), l(60, 70, 80)]);
-
-  await props.getByLabel('色調', { exact: true }).selectOption('sepia');
-  await setNumber(page, '色調の強さ', '100');
-  await waitImagesIdle(page);
-  out = await processedPixels(page, img.id, [[150, 50]]);
-  const [r, g, b] = out.px[0];
-  expect(r).toBeGreaterThan(g);
-  expect(g).toBeGreaterThan(b); // warm brown
-  expect((await imageObject(page)).pipeline.adjust).toMatchObject({ tone: 'sepia', toneAmount: 100 });
-
-  await setNumber(page, '色調の強さ', '0');
-  await waitImagesIdle(page);
-  out = await processedPixels(page, img.id, [[150, 50]]);
-  expect(out.px[0].slice(0, 3)).toEqual([180, 170, 160]);
-
-  await page.keyboard.press('Control+z'); // strength back to 100
-  await page.keyboard.press('Control+z'); // back to grayscale
-  expect((await imageObject(page)).pipeline.adjust).toMatchObject({ tone: 'grayscale' });
-  await props.getByRole('button', { name: '調整をリセット' }).click();
-  expect((await imageObject(page)).pipeline.adjust).toMatchObject({ tone: 'none' });
+  await expect(props.locator('input[aria-label="彩度"]')).toBeVisible();
+  await expect(props.getByLabel('色調', { exact: true })).toHaveCount(0);
 });
 
 test('range selection + blur only affects the selected area', async ({ page }) => {
