@@ -9,6 +9,7 @@ export type DialogState =
   | { kind: 'grow-selection'; contract: boolean }
   | { kind: 'export' }
   | { kind: 'grid' }
+  | { kind: 'help'; section?: string }
   | null;
 
 let current: DialogState = null;

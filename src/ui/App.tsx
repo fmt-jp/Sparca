@@ -24,6 +24,7 @@ import { LayersPanel } from './LayersPanel';
 import { MenuBar, zoomIn, zoomOut, zoomToFit } from './MenuBar';
 import { MosaicSelectionDialog } from './MosaicSelectionDialog';
 import { GrowSelectionDialog } from './GrowSelectionDialog';
+import { HelpDialog } from './HelpDialog';
 import { NewDocumentDialog } from './NewDocumentDialog';
 import { ALIGN, DISTRIBUTE, PropertiesPanel } from './PropertiesPanel';
 import { Toolbar } from './Toolbar';
@@ -136,6 +137,7 @@ export function App() {
       {dialog?.kind === 'image-size' && <ImageSizeDialog imageId={dialog.imageId} onClose={closeDialog} />}
       {dialog?.kind === 'blur-selection' && <BlurSelectionDialog onClose={closeDialog} />}
       {dialog?.kind === 'mosaic-selection' && <MosaicSelectionDialog onClose={closeDialog} />}
+      {dialog?.kind === 'help' && <HelpDialog section={dialog.section} onClose={closeDialog} />}
       {dialog?.kind === 'grow-selection' && <GrowSelectionDialog contract={dialog.contract} onClose={closeDialog} />}
       {dialog?.kind === 'export' && <ExportDialog onClose={closeDialog} />}
       {dialog?.kind === 'grid' && <GridDialog onClose={closeDialog} />}
@@ -192,6 +194,10 @@ function handleShortcut(e: KeyboardEvent): boolean {
   if (e.altKey) return false;
   if (e.key === 'F4') {
     togglePanels();
+    return true;
+  }
+  if (e.key === 'F1') {
+    openDialog({ kind: 'help' });
     return true;
   }
   if (k === 'delete' || k === 'backspace') deleteSelection(editor);

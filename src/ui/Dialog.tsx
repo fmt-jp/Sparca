@@ -6,6 +6,7 @@ export function Dialog({
   onClose,
   footer,
   clearBackdrop,
+  className,
 }: {
   title: string;
   children: ReactNode;
@@ -13,6 +14,8 @@ export function Dialog({
   footer: ReactNode;
   /** Don't darken the page (for dialogs that preview colors on the canvas). */
   clearBackdrop?: boolean;
+  /** Extra class on the dialog box (e.g. a wider layout). */
+  className?: string;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   // Dragging the title moves the dialog (e.g. off the object being previewed).
@@ -38,7 +41,7 @@ export function Dialog({
   return (
     <div className={`dialog-backdrop${clearBackdrop ? ' clear' : ''}`} onPointerDown={(e) => e.target === e.currentTarget && onClose()}>
       <div
-        className="dialog"
+        className={`dialog${className ? ` ${className}` : ''}`}
         role="dialog"
         aria-modal="true"
         aria-label={title}
