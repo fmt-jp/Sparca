@@ -283,7 +283,7 @@ export function ungroupSelection(ed: EditorStore): void {
   if (released.length) ed.select(released);
 }
 
-export type AlignOp = 'left' | 'hcenter' | 'right' | 'top' | 'vcenter' | 'bottom';
+export type AlignOp = 'left' | 'hcenter' | 'right' | 'top' | 'vcenter' | 'bottom' | 'distribute-h' | 'distribute-v';
 
 /**
  * Align selected objects. Relative to their common bounds, or to the canvas when
@@ -295,6 +295,10 @@ export function alignSelection(ed: EditorStore, op: AlignOp, toCanvas = false): 
   const objs = ids.map((id) => findObject(doc, id)!.object);
   if (!objs.length) return;
   const target = objs.length === 1 || toCanvas ? { x: 0, y: 0, width: doc.width, height: doc.height } : unionBounds(objs)!;
+  if (op === 'distribute-h' || op === 'distribute-v') {
+    distribute(ed, objs, op === 'distribute-h' ? 'x' : 'y', target, toCanvas);
+    return;
+  }
   ed.edit('整列', (d) => {
     for (const o of objs) {
       const b = unionBounds([o]);
@@ -308,6 +312,34 @@ export function alignSelection(ed: EditorStore, op: AlignOp, toCanvas = false): 
       if (op === 'vcenter') dy = target.y + target.height / 2 - (b.y + b.height / 2);
       if (op === 'bottom') dy = target.y + target.height - (b.y + b.height);
       transformObjects(d, [o.id], { ...IDENTITY_TRANSFORM, dx, dy });
+    }
+  });
+}
+
+/**
+ * Space objects evenly along one axis: the gaps between neighbors become equal. The
+ * first and last stay where they are, or go to the canvas edges with `toCanvas`.
+ */
+function distribute(ed: EditorStore, objs: SceneObject[], axis: 'x' | 'y', target: { x: number; y: number; width: number; height: number }, toCanvas: boolean): void {
+  const min = toCanvas ? 2 : 3;
+  if (objs.length < min) {
+    ed.notify('info', toCanvas ? '均等配置には2つ以上のオブジェクトを選択してください。' : '均等配置には3つ以上のオブジェクトを選択してください（キャンバスに対してなら2つ以上）。');
+    return;
+  }
+  const size = axis === 'x' ? 'width' : 'height';
+  const items = objs
+    .map((o) => ({ o, b: unionBounds([o])! }))
+    .filter((it) => it.b)
+    .sort((a, b) => a.b[axis] + a.b[size] / 2 - (b.b[axis] + b.b[size] / 2));
+  const span = toCanvas ? { start: target[axis], end: target[axis] + target[size] } : { start: items[0].b[axis], end: items[items.length - 1].b[axis] + items[items.length - 1].b[size] };
+  const total = items.reduce((s, it) => s + it.b[size], 0);
+  const gap = (span.end - span.start - total) / (items.length - 1);
+  ed.edit('均等配置', (d) => {
+    let at = span.start;
+    for (const it of items) {
+      const delta = at - it.b[axis];
+      transformObjects(d, [it.o.id], { ...IDENTITY_TRANSFORM, dx: axis === 'x' ? delta : 0, dy: axis === 'y' ? delta : 0 });
+      at += it.b[size] + gap;
     }
   });
 }

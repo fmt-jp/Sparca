@@ -14,7 +14,7 @@ import {
 import { autoColor, pixelTargetImage, selectedImage } from '../store/imageActions';
 import { ZOOM_STEPS } from './CanvasView';
 import { openDialog } from './dialogs';
-import { ALIGN } from './PropertiesPanel';
+import { ALIGN, alignShortcut, DISTRIBUTE } from './PropertiesPanel';
 import { setPanelSizes, togglePanels, usePanelSizes } from './usePanelSizes';
 import { menuCopy, menuPaste } from './clipboard';
 import { editor, useEditor } from './useEditor';
@@ -124,8 +124,15 @@ export function MenuBar({ onNew }: { onNew: () => void }) {
         { separator: true, label: '' },
         ...ALIGN.map((a) => ({
           label: `整列：${a.label}`,
+          shortcut: alignShortcut(a.digit),
           action: () => alignSelection(editor, a.op, alignToCanvas),
           disabled: !hasSel,
+        })),
+        ...DISTRIBUTE.map((a) => ({
+          label: `整列：${a.label}`,
+          shortcut: alignShortcut(a.digit),
+          action: () => alignSelection(editor, a.op, alignToCanvas),
+          disabled: selection.length < (alignToCanvas ? 2 : 3),
         })),
         { label: '整列：キャンバスに対して', checked: alignToCanvas, action: () => editor.set({ alignToCanvas: !alignToCanvas }) },
         { separator: true, label: '' },

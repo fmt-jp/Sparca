@@ -12,7 +12,7 @@ import {
 } from '../store/actions';
 import { convertSelectedNodes, deleteSelectedNodes, editablePath, insertNode } from '../store/pathActions';
 import type { MenuItem } from './MenuBar';
-import { ALIGN } from './PropertiesPanel';
+import { ALIGN, alignShortcut, DISTRIBUTE } from './PropertiesPanel';
 import { menuCopy, menuPaste } from './clipboard';
 import { editor } from './useEditor';
 
@@ -42,7 +42,14 @@ export function objectMenu(): MenuItem[] {
       label: '整列',
       disabled: !has,
       children: [
-        ...ALIGN.map((a) => ({ label: a.label, action: () => alignSelection(editor, a.op, alignToCanvas) })),
+        ...ALIGN.map((a) => ({ label: a.label, shortcut: alignShortcut(a.digit), action: () => alignSelection(editor, a.op, alignToCanvas) })),
+        SEP,
+        ...DISTRIBUTE.map((a) => ({
+          label: a.label,
+          shortcut: alignShortcut(a.digit),
+          action: () => alignSelection(editor, a.op, alignToCanvas),
+          disabled: selection.length < (alignToCanvas ? 2 : 3),
+        })),
         SEP,
         { label: 'キャンバスに対して', checked: alignToCanvas, action: () => editor.set({ alignToCanvas: !alignToCanvas }) },
       ],
