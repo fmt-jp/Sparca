@@ -12,7 +12,6 @@ export function isIdentityPipeline(p: ImagePipeline): boolean {
   return (
     !p.crop &&
     !p.resize &&
-    p.blur <= 0 &&
     p.localEdits.length === 0 &&
     a.brightness === 0 &&
     a.contrast === 0 &&

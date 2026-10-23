@@ -255,8 +255,6 @@ export interface ImagePipeline {
   crop: { x: number; y: number; width: number; height: number } | null;
   resize: { width: number; height: number; method: ResampleMethod } | null;
   adjust: ColorAdjust;
-  /** Whole-image gaussian blur radius in px. */
-  blur: number;
   localEdits: LocalEdit[];
 }
 

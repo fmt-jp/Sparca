@@ -129,6 +129,8 @@ function checkObject(o: unknown, where: string, ids: Set<string>, assets: Obj): 
       if (!isObj(assets[assetId])) throw new Invalid(`${where} が参照する画像 ${assetId} がありません`);
       o.pipeline = mergeDefaults(defaultPipeline(), o.pipeline);
       checkLocalEdits((o.pipeline as Obj).localEdits, `${where}.pipeline.localEdits`);
+      // Blur first, so the tone (applied before the blur in the old pipeline) ends up first.
+      migrateImageBlur(o);
       migrateImageTone(o);
       break;
     }
@@ -199,6 +201,17 @@ function migrateImageTone(o: Obj) {
   if ((tone === 'grayscale' || tone === 'sepia') && amount > 0) {
     (o.effects as unknown[]).unshift({ ...createEffect(tone), strength: Math.min(1, amount / 100) });
   }
+}
+
+/**
+ * Older files had a whole-image blur in the image pipeline; the ぼかし effect does it now
+ * (for every kind of object), so it becomes that effect, ahead of the others.
+ */
+function migrateImageBlur(o: Obj) {
+  const p = o.pipeline as Obj;
+  const radius = typeof p.blur === 'number' ? p.blur : 0;
+  delete p.blur;
+  if (radius > 0) (o.effects as unknown[]).unshift({ ...createEffect('blur'), radius });
 }
 
 /** Masked image edits: blur (radius) or mosaic (block size), each with a mask shape. */
