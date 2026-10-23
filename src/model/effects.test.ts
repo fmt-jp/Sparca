@@ -86,7 +86,10 @@ describe('effects', () => {
     // n copies of the overlay-filtered shape, all inside the inverting filter.
     expect(svg.match(/filter="url\(#t-fx-[^)]*\)"><path/g)).toHaveLength(n);
     expect(svg.indexOf('filter="url(#t-fx-' )).toBeLessThan(svg.indexOf('data-zoom-blur'));
-    expect(svg).toMatch(/<g filter="url\(#t-fx-[^"]*-1\)"><g data-zoom-blur/);
+    // The inverting filter wraps the copies, which are clipped to the canvas
+    // (a canvas-sized rect moved into the object's own coordinates).
+    expect(svg).toMatch(/<g filter="url\(#t-fx-[^"]*-1\)"><g clip-path="url\(#t-fx-[^"]*-z0-clip\)"><g data-zoom-blur/);
+    expect(svg).toMatch(/<clipPath id="t-fx-[^"]*-z0-clip" clipPathUnits="userSpaceOnUse"><rect x="0" y="0" width="200" height="200" transform="translate\(-50 -50\)">/);
   });
 
   it('skips disabled and zero-strength effects; blends partial strength with the input', () => {
