@@ -15,6 +15,7 @@ import { autoColor, pixelTargetImage, selectedImage } from '../store/imageAction
 import { ZOOM_STEPS } from './CanvasView';
 import { openDialog } from './dialogs';
 import { ALIGN } from './PropertiesPanel';
+import { setPanelSizes, togglePanels, usePanelSizes } from './usePanelSizes';
 import { menuCopy, menuPaste } from './clipboard';
 import { editor, useEditor } from './useEditor';
 
@@ -70,6 +71,7 @@ export function MenuBar({ onNew }: { onNew: () => void }) {
   const pixelSel = useEditor((s) => s.pixelSelection);
   const grid = useEditor((s) => s.grid);
   const alignToCanvas = useEditor((s) => s.alignToCanvas);
+  const [panels] = usePanelSizes();
   const image = selectedImage(editor);
   const undoLabel = history.past[history.past.length - 1]?.label;
   const redoLabel = history.future[0]?.label;
@@ -154,6 +156,14 @@ export function MenuBar({ onNew }: { onNew: () => void }) {
         { label: 'グリッドを表示', checked: grid.visible, action: () => editor.setGrid({ visible: !grid.visible }) },
         { label: 'グリッドにスナップ', checked: grid.snap, action: () => editor.setGrid({ snap: !grid.snap }) },
         { label: 'グリッド設定…', action: () => openDialog({ kind: 'grid' }) },
+        { separator: true, label: '' },
+        { label: 'レイヤーパネル', checked: !panels.layersHidden, action: () => setPanelSizes({ layersHidden: !panels.layersHidden }) },
+        { label: 'プロパティパネル', checked: !panels.propsHidden, action: () => setPanelSizes({ propsHidden: !panels.propsHidden }) },
+        {
+          label: panels.layersHidden && panels.propsHidden ? 'パネルをすべて表示' : 'パネルをすべて隠す',
+          shortcut: 'F4',
+          action: togglePanels,
+        },
       ],
     },
   ];

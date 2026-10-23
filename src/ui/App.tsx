@@ -28,7 +28,7 @@ import { Toolbar } from './Toolbar';
 import { installClipboardHandlers } from './clipboard';
 import { isTextEntry } from './keyboard';
 import { TOOL_GROUPS } from './tools';
-import { startSplitterDrag, usePanelSizes } from './usePanelSizes';
+import { startSplitterDrag, togglePanels, usePanelSizes } from './usePanelSizes';
 import { editor, useEditor } from './useEditor';
 
 export function App() {
@@ -67,16 +67,43 @@ export function App() {
     return () => window.removeEventListener('keydown', onKey);
   }, [dialog]);
 
+  const layersW = sizes.layersHidden ? 0 : sizes.layersWidth;
+  const propsH = sizes.propsHidden ? 0 : sizes.propsHeight;
+
   return (
     <div
       className="app"
-      style={{ gridTemplateColumns: `48px minmax(0, 1fr) ${sizes.layersWidth}px`, gridTemplateRows: `38px minmax(0, 1fr) ${sizes.propsHeight}px` }}
+      style={{ gridTemplateColumns: `48px minmax(0, 1fr) ${layersW}px`, gridTemplateRows: `38px minmax(0, 1fr) ${propsH}px` }}
     >
       <MenuBar onNew={() => openDialog({ kind: 'new' })} />
       <Toolbar />
       <CanvasView />
-      <LayersPanel />
-      <PropertiesPanel />
+      {!sizes.layersHidden && <LayersPanel />}
+      {!sizes.propsHidden && <PropertiesPanel />}
+      {/* Tabs on the panel edges: hide a panel to give the canvas more room, or bring it back. */}
+      <button
+        type="button"
+        className={`panel-toggle panel-toggle-v${sizes.layersHidden ? ' hidden' : ''}`}
+        style={{ right: layersW }}
+        aria-label={sizes.layersHidden ? 'レイヤーパネルを表示' : 'レイヤーパネルを隠す'}
+        aria-expanded={!sizes.layersHidden}
+        title={`${sizes.layersHidden ? 'レイヤーパネルを表示' : 'レイヤーパネルを隠す'}（F4 で両方のパネル）`}
+        onClick={() => setSizes({ layersHidden: !sizes.layersHidden })}
+      >
+        {sizes.layersHidden ? '‹' : '›'}
+      </button>
+      <button
+        type="button"
+        className={`panel-toggle panel-toggle-h${sizes.propsHidden ? ' hidden' : ''}`}
+        style={{ bottom: propsH, left: `calc(48px + (100% - 48px - ${layersW}px) / 2)` }}
+        aria-label={sizes.propsHidden ? 'プロパティパネルを表示' : 'プロパティパネルを隠す'}
+        aria-expanded={!sizes.propsHidden}
+        title={`${sizes.propsHidden ? 'プロパティパネルを表示' : 'プロパティパネルを隠す'}（F4 で両方のパネル）`}
+        onClick={() => setSizes({ propsHidden: !sizes.propsHidden })}
+      >
+        {sizes.propsHidden ? '˄' : '˅'}
+      </button>
+      {!sizes.layersHidden && (
       <div
         className="splitter splitter-v"
         role="separator"
@@ -88,17 +115,20 @@ export function App() {
           startSplitterDrag(e, (dx) => setSizes({ layersWidth: w0 - dx }));
         }}
       />
+      )}
+      {!sizes.propsHidden && (
       <div
         className="splitter splitter-h"
         role="separator"
         aria-orientation="horizontal"
         aria-label="プロパティパネルの高さ"
-        style={{ bottom: sizes.propsHeight - 3, right: sizes.layersWidth }}
+        style={{ bottom: sizes.propsHeight - 3, right: layersW }}
         onPointerDown={(e) => {
           const h0 = sizes.propsHeight;
           startSplitterDrag(e, (_dx, dy) => setSizes({ propsHeight: h0 - dy }));
         }}
       />
+      )}
       {dialog?.kind === 'new' && <NewDocumentDialog onClose={closeDialog} />}
       {dialog?.kind === 'canvas-size' && <CanvasSizeDialog onClose={closeDialog} />}
       {dialog?.kind === 'image-size' && <ImageSizeDialog imageId={dialog.imageId} onClose={closeDialog} />}
@@ -148,6 +178,10 @@ function handleShortcut(e: KeyboardEvent): boolean {
     return true;
   }
   if (e.altKey) return false;
+  if (e.key === 'F4') {
+    togglePanels();
+    return true;
+  }
   if (k === 'delete' || k === 'backspace') deleteSelection(editor);
   else if (k === 'escape') {
     if (editor.getState().pixelSelection) editor.set({ pixelSelection: null });
