@@ -123,8 +123,29 @@ export function CanvasView() {
     }
     el.scrollLeft = (el.scrollWidth - el.clientWidth) / 2;
     el.scrollTop = (el.scrollHeight - el.clientHeight) / 2;
+    viewCenter.current = { x: el.scrollLeft + el.clientWidth / 2, y: el.scrollTop + el.clientHeight / 2 };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [doc.width, doc.height, activeTabId]);
+
+  // When the workspace changes size (panels hidden / shown, window resized), keep the
+  // same spot of the canvas in the middle of the view. The spot is remembered on every
+  // scroll, so intermediate sizes during a layout change don't add up to a drift.
+  const viewCenter = useRef<Point | null>(null);
+  /** Workspace size the center was measured with; scrolls during a resize are the browser's, not the user's. */
+  const viewSize = useRef<Point | null>(null);
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(() => {
+      const c = viewCenter.current;
+      viewSize.current = { x: el.clientWidth, y: el.clientHeight };
+      if (!c) return;
+      el.scrollLeft = c.x - el.clientWidth / 2;
+      el.scrollTop = c.y - el.clientHeight / 2;
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   // Zooming at the pointer (zoom tool, Ctrl+wheel) keeps the point under the cursor fixed.
   // Other zooming (buttons, menu, shortcuts) keeps the view centered: the whole canvas is
@@ -968,7 +989,14 @@ export function CanvasView() {
     <div
       className="workspace"
       ref={scrollRef}
-      onScroll={(e) => tabScroll.current.set(activeTabId, { x: e.currentTarget.scrollLeft, y: e.currentTarget.scrollTop })}
+      onScroll={(e) => {
+        const el = e.currentTarget;
+        tabScroll.current.set(activeTabId, { x: el.scrollLeft, y: el.scrollTop });
+        const size = viewSize.current;
+        if (!size || (size.x === el.clientWidth && size.y === el.clientHeight)) {
+          viewCenter.current = { x: el.scrollLeft + el.clientWidth / 2, y: el.scrollTop + el.clientHeight / 2 };
+        }
+      }}
       onDragOver={(e) => e.preventDefault()}
       onDrop={onDrop}
       data-testid="workspace"

@@ -1,13 +1,16 @@
-import { useCallback, useState } from 'react';
+import { useSyncExternalStore } from 'react';
 
 const KEY = 'sparca.panelSizes';
 
 export interface PanelSizes {
   layersWidth: number;
   propsHeight: number;
+  /** Temporarily hidden to give the canvas more room (sizes are kept for when shown again). */
+  layersHidden: boolean;
+  propsHidden: boolean;
 }
 
-const DEFAULTS: PanelSizes = { layersWidth: 260, propsHeight: 190 };
+const DEFAULTS: PanelSizes = { layersWidth: 260, propsHeight: 190, layersHidden: false, propsHidden: false };
 export const LIMITS = { layersWidth: [180, 520], propsHeight: [80, 520] } as const;
 
 function load(): PanelSizes {
@@ -19,23 +22,42 @@ function load(): PanelSizes {
   }
 }
 
-/** Panel sizes, remembered per browser (a viewer convenience only). */
+// Shared by the layout, the toggle tabs and the 表示 menu; remembered per browser.
+let current: PanelSizes = load();
+const listeners = new Set<() => void>();
+
+export function setPanelSizes(p: Partial<PanelSizes>): void {
+  const next = { ...current, ...p };
+  next.layersWidth = Math.min(LIMITS.layersWidth[1], Math.max(LIMITS.layersWidth[0], next.layersWidth));
+  next.propsHeight = Math.min(LIMITS.propsHeight[1], Math.max(LIMITS.propsHeight[0], next.propsHeight));
+  current = next;
+  try {
+    localStorage.setItem(KEY, JSON.stringify(next));
+  } catch {
+    // Storage unavailable (private mode etc.): sizes just aren't remembered.
+  }
+  listeners.forEach((l) => l());
+}
+
+export function getPanelSizes(): PanelSizes {
+  return current;
+}
+
+/** F4 (as in Fireworks): hide both panels, or show both when either is hidden. */
+export function togglePanels(): void {
+  const hide = !current.layersHidden || !current.propsHidden;
+  setPanelSizes({ layersHidden: hide, propsHidden: hide });
+}
+
 export function usePanelSizes(): [PanelSizes, (p: Partial<PanelSizes>) => void] {
-  const [sizes, setSizes] = useState(load);
-  const update = useCallback((p: Partial<PanelSizes>) => {
-    setSizes((prev) => {
-      const next = { ...prev, ...p };
-      next.layersWidth = Math.min(LIMITS.layersWidth[1], Math.max(LIMITS.layersWidth[0], next.layersWidth));
-      next.propsHeight = Math.min(LIMITS.propsHeight[1], Math.max(LIMITS.propsHeight[0], next.propsHeight));
-      try {
-        localStorage.setItem(KEY, JSON.stringify(next));
-      } catch {
-        // Storage unavailable (private mode etc.): sizes just aren't remembered.
-      }
-      return next;
-    });
-  }, []);
-  return [sizes, update];
+  const sizes = useSyncExternalStore(
+    (l) => {
+      listeners.add(l);
+      return () => listeners.delete(l);
+    },
+    () => current,
+  );
+  return [sizes, setPanelSizes];
 }
 
 /** Pointer-drag helper for a splitter: reports the pointer delta from the drag start. */
