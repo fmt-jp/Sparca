@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import {
+  alignSelection,
   arrangeSelection,
   chooseAndOpenProject,
   chooseAndPlaceImage,
@@ -23,7 +24,7 @@ import { LayersPanel } from './LayersPanel';
 import { MenuBar, zoomIn, zoomOut, zoomToFit } from './MenuBar';
 import { MosaicSelectionDialog } from './MosaicSelectionDialog';
 import { NewDocumentDialog } from './NewDocumentDialog';
-import { PropertiesPanel } from './PropertiesPanel';
+import { ALIGN, DISTRIBUTE, PropertiesPanel } from './PropertiesPanel';
 import { Toolbar } from './Toolbar';
 import { installClipboardHandlers } from './clipboard';
 import { isTextEntry } from './keyboard';
@@ -156,6 +157,15 @@ export function App() {
 function handleShortcut(e: KeyboardEvent): boolean {
   const mod = e.ctrlKey || e.metaKey;
   const k = e.key.toLowerCase();
+  if (mod && e.altKey) {
+    // Ctrl+Alt+1..6: align, 7 / 9: distribute (as in Fireworks). By physical key, since
+    // Alt can change the character (and AltGr = Ctrl+Alt on some layouts).
+    const digit = /^Digit(\d)$/.exec(e.code)?.[1];
+    const a = [...ALIGN, ...DISTRIBUTE].find((x) => x.digit === digit);
+    if (!a) return false;
+    alignSelection(editor, a.op, editor.getState().alignToCanvas);
+    return true;
+  }
   if (mod) {
     if (k === 'z' && !e.shiftKey) editor.undo();
     else if ((k === 'z' && e.shiftKey) || k === 'y') editor.redo();

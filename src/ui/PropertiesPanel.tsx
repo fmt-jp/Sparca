@@ -595,13 +595,26 @@ function PixelSelectionSection() {
   );
 }
 
-export const ALIGN: { op: AlignOp; label: string; icon: string }[] = [
-  { op: 'left', label: '左揃え', icon: 'M2 1 V15 M4 4 H13 V7 H4 Z M4 9 H9 V12 H4 Z' },
-  { op: 'hcenter', label: '横中央（左右）', icon: 'M8 1 V15 M3 4 H13 V7 H3 Z M5 9 H11 V12 H5 Z' },
-  { op: 'right', label: '右揃え', icon: 'M14 1 V15 M3 4 H12 V7 H3 Z M7 9 H12 V12 H7 Z' },
-  { op: 'top', label: '上揃え', icon: 'M1 2 H15 M4 4 V13 H7 V4 Z M9 4 V9 H12 V4 Z' },
-  { op: 'vcenter', label: '縦中央（上下）', icon: 'M1 8 H15 M4 3 V13 H7 V3 Z M9 5 V11 H12 V5 Z' },
-  { op: 'bottom', label: '下揃え', icon: 'M1 14 H15 M4 3 V12 H7 V3 Z M9 7 V12 H12 V7 Z' },
+const IS_MAC = /Mac|iPhone|iPad/.test(navigator.platform);
+
+/** Ctrl+Alt+digit (⌘⌥digit on a Mac), the same keys as Fireworks. */
+export function alignShortcut(digit: string): string {
+  return IS_MAC ? `⌘⌥${digit}` : `Ctrl+Alt+${digit}`;
+}
+
+export const ALIGN: { op: AlignOp; label: string; icon: string; digit: string }[] = [
+  { op: 'left', label: '左揃え', icon: 'M2 1 V15 M4 4 H13 V7 H4 Z M4 9 H9 V12 H4 Z', digit: '1' },
+  { op: 'hcenter', label: '横中央（左右）', icon: 'M8 1 V15 M3 4 H13 V7 H3 Z M5 9 H11 V12 H5 Z', digit: '2' },
+  { op: 'right', label: '右揃え', icon: 'M14 1 V15 M3 4 H12 V7 H3 Z M7 9 H12 V12 H7 Z', digit: '3' },
+  { op: 'top', label: '上揃え', icon: 'M1 2 H15 M4 4 V13 H7 V4 Z M9 4 V9 H12 V4 Z', digit: '4' },
+  { op: 'vcenter', label: '縦中央（上下）', icon: 'M1 8 H15 M4 3 V13 H7 V3 Z M9 5 V11 H12 V5 Z', digit: '5' },
+  { op: 'bottom', label: '下揃え', icon: 'M1 14 H15 M4 3 V12 H7 V3 Z M9 7 V12 H12 V7 Z', digit: '6' },
+];
+
+/** Even spacing (needs 3+ objects, or 2+ relative to the canvas). */
+export const DISTRIBUTE: { op: AlignOp; label: string; icon: string; digit: string }[] = [
+  { op: 'distribute-h', label: '均等配置（幅）', icon: 'M1 1 V15 M15 1 V15 M3 5 H5 V11 H3 Z M7 4 H9 V12 H7 Z M11 5 H13 V11 H11 Z', digit: '7' },
+  { op: 'distribute-v', label: '均等配置（高さ）', icon: 'M1 1 H15 M1 15 H15 M5 3 V5 H11 V3 Z M4 7 V9 H12 V7 Z M5 11 V13 H11 V11 Z', digit: '9' },
 ];
 
 export function AlignButtons({ single }: { single: boolean }) {
@@ -613,13 +626,26 @@ export function AlignButtons({ single }: { single: boolean }) {
           key={a.op}
           type="button"
           className="align-btn"
-          title={`${a.label}（${single || toCanvas ? 'キャンバスに対して' : '選択範囲に対して'}）`}
+          title={`${a.label}（${single || toCanvas ? 'キャンバスに対して' : '選択範囲に対して'}） ${alignShortcut(a.digit)}`}
           onClick={() => alignSelection(editor, a.op, toCanvas)}
         >
           <SmallIcon d={a.icon} />
           {a.label}
         </button>
       ))}
+      {!single &&
+        DISTRIBUTE.map((a) => (
+          <button
+            key={a.op}
+            type="button"
+            className="align-btn"
+            title={`${a.label}：間隔を等しくする（${toCanvas ? 'キャンバスの端から端まで' : '両端のオブジェクトの間で'}） ${alignShortcut(a.digit)}`}
+            onClick={() => alignSelection(editor, a.op, toCanvas)}
+          >
+            <SmallIcon d={a.icon} />
+            {a.label}
+          </button>
+        ))}
       {!single && (
         <Toggle checked={toCanvas} onChange={(v) => editor.set({ alignToCanvas: v })}>
           キャンバスに対して

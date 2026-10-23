@@ -112,3 +112,67 @@ test('align multiple shapes on their horizontal and vertical centers, or to the 
   b = await boxes(page);
   expect(b[0].y + b[0].height / 2).toBeCloseTo(300);
 });
+
+test('align shortcuts Ctrl+Alt+1..6 and distribute Ctrl+Alt+7 / 9 (equal gaps)', async ({ page }) => {
+  const c = await canvasBox(page);
+  // Three rectangles of different sizes, unevenly spaced.
+  for (const [x, y, w, h] of [[50, 50, 60, 40], [200, 150, 100, 80], [500, 300, 40, 120]]) {
+    await page.keyboard.press('r');
+    await drag(page, { x: c.x + x, y: c.y + y }, { x: c.x + x + w, y: c.y + y + h });
+  }
+  await page.keyboard.press('Control+a');
+
+  await page.keyboard.press('Control+Alt+7');
+  let b = await boxes(page);
+  const gaps = (bs: Box[], ax: 'x' | 'y', sz: 'width' | 'height') => {
+    const s = [...bs].sort((p, q) => p[ax] - q[ax]);
+    return s.slice(1).map((q, i) => q[ax] - (s[i][ax] + s[i][sz]));
+  };
+  const [g1, g2] = gaps(b, 'x', 'width');
+  expect(g1).toBeCloseTo(g2, 5);
+  expect(Math.min(...b.map((q) => q.x))).toBe(50); // the outer ones stay
+  expect(Math.max(...b.map((q) => q.x + q.width))).toBe(540);
+  expect(await state<string>(page, 's => s.history.past[s.history.past.length - 1].label')).toBe('均等配置');
+
+  await page.keyboard.press('Control+Alt+9');
+  b = await boxes(page);
+  const [v1, v2] = gaps(b, 'y', 'height');
+  expect(v1).toBeCloseTo(v2, 5);
+
+  await page.keyboard.press('Control+Alt+1');
+  b = await boxes(page);
+  expect(new Set(b.map((q) => q.x))).toEqual(new Set([50]));
+  await page.keyboard.press('Control+Alt+6');
+  b = await boxes(page);
+  expect(new Set(b.map((q) => q.y + q.height)).size).toBe(1);
+  await page.keyboard.press('Control+Alt+2');
+  b = await boxes(page);
+  expect(new Set(b.map((q) => q.x + q.width / 2)).size).toBe(1);
+  await page.keyboard.press('Control+z');
+  b = await boxes(page);
+  expect(new Set(b.map((q) => q.x))).toEqual(new Set([50])); // one undo step per command
+
+  // Menus show the shortcuts; distributing two objects needs 「キャンバスに対して」.
+  await page.getByRole('button', { name: '変更', exact: true }).click();
+  await expect(page.getByRole('menuitem', { name: /整列：左揃え/ })).toContainText('Ctrl+Alt+1');
+  await expect(page.getByRole('menuitem', { name: /整列：均等配置（高さ）/ })).toContainText('Ctrl+Alt+9');
+  await page.keyboard.press('Escape');
+});
+
+test('distributing two objects across the canvas puts them at its edges', async ({ page }) => {
+  const c = await canvasBox(page);
+  for (const [x, y] of [[100, 100], [300, 200]]) {
+    await page.keyboard.press('r');
+    await drag(page, { x: c.x + x, y: c.y + y }, { x: c.x + x + 50, y: c.y + y + 50 });
+  }
+  await page.keyboard.press('Control+a');
+  // Without 「キャンバスに対して」 two objects can't be distributed.
+  await page.keyboard.press('Control+Alt+7');
+  await expect(page.locator('.notice')).toContainText('3つ以上');
+  await page.getByRole('button', { name: '変更', exact: true }).click();
+  await expect(page.getByRole('menuitem', { name: /整列：均等配置（幅）/ })).toBeDisabled();
+  await page.getByRole('menuitemcheckbox', { name: '整列：キャンバスに対して' }).click();
+  await page.keyboard.press('Control+Alt+7');
+  const b = await boxes(page);
+  expect(b.map((q) => q.x).sort((p, q) => p - q)).toEqual([0, 750]); // canvas 800 wide
+});
