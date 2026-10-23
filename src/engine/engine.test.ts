@@ -3,7 +3,7 @@ import { defaultAdjust, defaultPipeline } from '../model/factory';
 import type { ResampleMethod } from '../model/types';
 import { blendWithMask, boxesForGauss, gaussianBlur, mosaic } from './blur';
 import { applyAdjust, computeAutoColor } from './color';
-import { rasterizeMask } from './mask';
+import { contours, distanceTransform, edgeOutline, rasterizeMask } from './mask';
 import { runPipeline } from './pipeline';
 import { createRaster, fillRaster, pixel, type Raster } from './raster';
 import { keys, lanczos, mitchell, resample } from './resample';
@@ -273,6 +273,66 @@ describe('mask and pipeline', () => {
     expect(total).toBeCloseTo(Math.PI * 100, -1);
     const tri = rasterizeMask({ kind: 'polygon', points: [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 0, y: 1 }] }, 10, 10);
     expect(tri.reduce((s, v) => s + v, 0)).toBeCloseTo(50, 0);
+  });
+
+  it('grows and shrinks masks by a pixel distance', () => {
+    const rect = { kind: 'rect' as const, x: 0.4, y: 0.4, width: 0.2, height: 0.2 }; // 40..60 on 100×100
+    const sum = (m: Float32Array) => m.reduce((s, v) => s + v, 0);
+    const grown = rasterizeMask({ ...rect, grow: 5 }, 100, 100);
+    // Grown rect: 30×30 with rounded corners (area 900 − (4 − π)·25).
+    expect(sum(grown)).toBeCloseTo(900 - (4 - Math.PI) * 25, -1);
+    expect(grown[50 * 100 + 36]).toBe(1);
+    expect(grown[50 * 100 + 34]).toBe(0);
+    const shrunk = rasterizeMask({ ...rect, grow: -5 }, 100, 100);
+    expect(sum(shrunk)).toBeCloseTo(100, -1);
+    expect(shrunk[50 * 100 + 46]).toBe(1);
+    expect(shrunk[50 * 100 + 44]).toBe(0);
+    // A selection reaching past the image edge does not shrink away from that edge.
+    const edge = rasterizeMask({ kind: 'rect', x: -0.5, y: -0.5, width: 1, height: 1, grow: -5 }, 100, 100);
+    expect(edge[0]).toBe(1);
+    expect(edge[44 * 100 + 44]).toBe(1);
+    expect(edge[46 * 100 + 10]).toBe(0);
+  });
+
+  it('makes hard edges and feathered edges', () => {
+    const rect = { kind: 'rect' as const, x: 0.255, y: -10, width: 0.5, height: 21 };
+    const hard = rasterizeMask({ ...rect, antialias: false }, 100, 4);
+    expect([...hard].every((v) => v === 0 || v === 1)).toBe(true);
+    const aa = rasterizeMask(rect, 100, 4);
+    expect(aa[25]).toBeGreaterThan(0);
+    expect(aa[25]).toBeLessThan(1);
+    const soft = rasterizeMask({ ...rect, feather: 10 }, 100, 4);
+    // The edge fades over several pixels and is about half at the edge.
+    expect(soft[1 * 100 + 25]).toBeGreaterThan(0.35);
+    expect(soft[1 * 100 + 25]).toBeLessThan(0.65);
+    expect(soft[1 * 100 + 20]).toBeGreaterThan(0.05);
+    expect(soft[1 * 100 + 20]).toBeLessThan(0.4);
+    expect(soft[1 * 100 + 50]).toBeCloseTo(1, 2);
+    // Preview scale shrinks the pixel lengths along with the image.
+    const half = rasterizeMask({ ...rect, grow: 10 }, 50, 2, 0.5);
+    expect(half[1 * 50 + 9]).toBe(1);
+    expect(half[1 * 50 + 6]).toBe(0);
+  });
+
+  it('distance transform and contours', () => {
+    const set = new Uint8Array(25);
+    set[12] = 1;
+    const d = distanceTransform(set, 5, 5, 1);
+    expect(d[12]).toBe(0);
+    expect(d[0]).toBe(8);
+    const field = new Float32Array(100);
+    for (let y = 3; y < 7; y++) for (let x = 3; x < 7; x++) field[y * 10 + x] = 1;
+    const lines = contours(field, 10, 10, 0.5);
+    expect(lines).toHaveLength(1);
+    const xs = lines[0].map((p) => p.x);
+    expect(Math.min(...xs)).toBeCloseTo(3, 1);
+    expect(Math.max(...xs)).toBeCloseTo(7, 1);
+    expect(edgeOutline({ kind: 'rect', x: 0, y: 0, width: 10, height: 10 })).toBeNull();
+    const out = edgeOutline({ kind: 'rect', x: 100, y: 100, width: 50, height: 20, grow: 10 })!;
+    expect(out).toHaveLength(1);
+    const ox = out[0].map((p) => p.x);
+    expect(Math.min(...ox)).toBeCloseTo(90, 0);
+    expect(Math.max(...ox)).toBeCloseTo(160, 0);
   });
 
   it('blendWithMask only changes covered pixels', () => {

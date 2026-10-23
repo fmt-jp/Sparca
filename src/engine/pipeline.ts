@@ -39,7 +39,7 @@ export function runPipeline(src: Raster, p: ImagePipeline, scale = 1, onProgress
     tick();
   }
   for (const edit of p.localEdits) {
-    const mask = rasterizeMask(edit.mask, img.width, img.height);
+    const mask = rasterizeMask(edit.mask, img.width, img.height, scale);
     const processed = edit.kind === 'mosaic' ? mosaic(img, edit.size * scale) : gaussianBlur(img, edit.radius * scale);
     img = blendWithMask(img, processed, mask);
     tick();

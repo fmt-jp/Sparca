@@ -7,6 +7,7 @@ import { pipelineOutputSize } from '../engine/pipeline';
 import { METHOD_LABELS } from '../engine/resample';
 import { autoColor, cancelCrop, commitCrop, pixelTargetImage, resetAdjust, setAdjust, setCropTarget } from '../store/imageActions';
 import { openDialog } from './dialogs';
+import { FEATHER_LIMITS, type SelectionEdge } from '../store/editor';
 import { moveAnchors, pathToDoc } from '../model/pathEdit';
 import { convertSelectedNodes, deleteSelectedNodes, setPathClosed, setPathNodes } from '../store/pathActions';
 import { fitTextBox } from '../render/text';
@@ -73,6 +74,7 @@ export function PropertiesPanel() {
 
   return (
     <section className="properties" aria-label="プロパティ">
+      {SELECTION_TOOLS.has(tool) && <SelectionEdgeSection />}
       {tool !== 'crop' && <PixelSelectionSection />}
       {tool === 'eyedropper' && <EyedropperSection />}
       {content}
@@ -588,9 +590,45 @@ function PixelSelectionSection() {
       <button type="button" disabled={!target} onClick={() => openDialog({ kind: 'mosaic-selection' })}>
         選択範囲にモザイク…
       </button>
+      <button type="button" onClick={() => openDialog({ kind: 'grow-selection', contract: false })}>
+        拡張…
+      </button>
+      <button type="button" onClick={() => openDialog({ kind: 'grow-selection', contract: true })}>
+        縮小…
+      </button>
       <button type="button" onClick={() => editor.set({ pixelSelection: null })}>
         選択解除
       </button>
+    </div>
+  );
+}
+
+const SELECTION_TOOLS = new Set(['marquee-rect', 'marquee-ellipse', 'lasso', 'polygon-lasso']);
+
+/** Edge of the selection tools (Fireworks 「エッジ」): used for new selections and the current one. */
+function SelectionEdgeSection() {
+  const edge = useEditor((s) => s.selectionEdge);
+  return (
+    <div className="prop-section" data-testid="selection-edge">
+      <Field label="エッジ">
+        <select aria-label="エッジ" value={edge.mode} onChange={(e) => editor.setSelectionEdge({ mode: e.target.value as SelectionEdge['mode'] })}>
+          <option value="hard">ハード（アンチエイリアスなし）</option>
+          <option value="antialias">アンチエイリアス</option>
+          <option value="feather">ぼかし</option>
+        </select>
+      </Field>
+      {edge.mode === 'feather' && (
+        <Field label="ぼかしの幅">
+          <PopupSliderInput
+            label="ぼかしの幅"
+            value={edge.feather}
+            min={FEATHER_LIMITS[0]}
+            max={FEATHER_LIMITS[1]}
+            suffix="px"
+            onChange={(feather) => editor.setSelectionEdge({ feather })}
+          />
+        </Field>
+      )}
     </div>
   );
 }

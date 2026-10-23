@@ -61,3 +61,34 @@ describe('editor tabs', () => {
     expect(ed.getState().tabs[0]).toMatchObject({ fileName: 'a.hnb', dirty: false });
   });
 });
+
+describe('pixel selection edge', () => {
+  it('applies the tools edge setting to new and current selections', () => {
+    const ed = new EditorStore();
+    ed.setPixelSelection({ kind: 'rect', x: 0, y: 0, width: 50, height: 50 });
+    expect(ed.getState().pixelSelection).toEqual({ kind: 'rect', x: 0, y: 0, width: 50, height: 50 });
+    ed.setSelectionEdge({ mode: 'feather', feather: 12 });
+    expect(ed.getState().pixelSelection).toMatchObject({ feather: 12 });
+    ed.setSelectionEdge({ mode: 'hard' });
+    expect(ed.getState().pixelSelection).toMatchObject({ antialias: false });
+    expect(ed.getState().pixelSelection!.feather).toBeUndefined();
+    ed.setPixelSelection({ kind: 'ellipse', x: 0, y: 0, width: 5, height: 5 });
+    expect(ed.getState().pixelSelection).toMatchObject({ kind: 'ellipse', antialias: false });
+  });
+
+  it('expands and contracts the selection, refusing to contract it away', async () => {
+    const { growSelection, pixelSelectionBounds } = await import('./imageActions');
+    const ed = new EditorStore();
+    ed.setSelectionEdge({ mode: 'feather', feather: 4 });
+    ed.setPixelSelection({ kind: 'rect', x: 10, y: 10, width: 40, height: 40 });
+    expect(growSelection(ed, 10)).toBe(true);
+    expect(growSelection(ed, -4)).toBe(true);
+    expect(ed.getState().pixelSelection).toMatchObject({ grow: 6, feather: 4 });
+    expect(pixelSelectionBounds(ed.getState().pixelSelection!)).toEqual({ x: 0, y: 0, width: 60, height: 60 });
+    expect(growSelection(ed, -6)).toBe(true);
+    expect(ed.getState().pixelSelection!.grow).toBeUndefined();
+    expect(growSelection(ed, -30)).toBe(false);
+    expect(ed.getState().notices.at(-1)?.kind).toBe('error');
+    expect(ed.getState().pixelSelection!.grow).toBeUndefined();
+  });
+});
