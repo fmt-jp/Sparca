@@ -2,7 +2,7 @@
 // document crop) and per-image operations (image crop, image resize) are kept separate.
 import { boxCenter, objectBounds, rotatePoint, toLocal, transformObject, IDENTITY_TRANSFORM, type Rect } from './geometry';
 import { findObject } from './tree';
-import type { Id, ImageObject, LocalEdit, MaskShape, Point, ResampleMethod, SparcaDocument } from './types';
+import type { Id, ImageObject, LocalEdit, MaskEdge, MaskShape, Point, ResampleMethod, SparcaDocument } from './types';
 
 /** Anchor as fractions: (0,0) = top-left … (1,1) = bottom-right. */
 export interface Anchor {
@@ -105,7 +105,7 @@ export function cropImage(doc: SparcaDocument, id: Id, f: Rect, srcW: number, sr
 function remapMask(m: MaskShape, fx: number, fy: number, fw: number, fh: number): MaskShape {
   const px = (x: number) => (x - fx) / fw;
   const py = (y: number) => (y - fy) / fh;
-  if (m.kind === 'polygon') return { kind: 'polygon', points: m.points.map((p) => ({ x: px(p.x), y: py(p.y) })) };
+  if (m.kind === 'polygon') return { ...m, points: m.points.map((p) => ({ x: px(p.x), y: py(p.y) })) };
   return { ...m, x: px(m.x), y: py(m.y), width: m.width / fw, height: m.height / fh };
 }
 
@@ -126,8 +126,24 @@ export function resizeImagePixels(doc: SparcaDocument, id: Id, width: number, he
   o.pipeline = { ...o.pipeline, resize };
 }
 
-/** Convert a pixel selection (document coordinates) into a mask in the image's normalized frame. */
-export function selectionToImageMask(o: ImageObject, sel: MaskShape): MaskShape {
+/**
+ * Convert a pixel selection (document coordinates) into a mask in the image's normalized
+ * frame. Edge lengths (grow, feather) become px of the processed image: `pxPerDoc` image
+ * px per document px.
+ */
+export function selectionToImageMask(o: ImageObject, sel: MaskShape, pxPerDoc = 1): MaskShape {
+  return { ...maskGeometry(o, sel), ...scaleEdge(sel, pxPerDoc) };
+}
+
+function scaleEdge(e: MaskEdge, k: number): MaskEdge {
+  const out: MaskEdge = {};
+  if (e.grow) out.grow = e.grow * k;
+  if (e.antialias === false) out.antialias = false;
+  if (e.feather) out.feather = e.feather * k;
+  return out;
+}
+
+function maskGeometry(o: ImageObject, sel: MaskShape): MaskShape {
   const b = o.box;
   const norm = (p: Point): Point => {
     const l = toLocal(b, p);

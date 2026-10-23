@@ -7,7 +7,9 @@ import { defaultAdjust } from '../model/factory';
 import type { ColorAdjust, Id, ImageObject, MaskShape, ResampleMethod, SceneObject } from '../model/types';
 import { imageCache } from '../render/imageCache';
 import { validateDimensions } from './assets';
-import type { EditorStore, PixelSelection } from './editor';
+import { GROW_LIMIT, type EditorStore, type PixelSelection } from './editor';
+import { edgeOutline } from '../engine/mask';
+import { pipelineOutputSize } from '../engine/pipeline';
 
 /** The selected image object, if exactly one editable image is selected. */
 export function selectedImage(ed: EditorStore): ImageObject | null {
@@ -35,9 +37,33 @@ export function pixelTargetImage(ed: EditorStore): ImageObject | null {
   return null;
 }
 
+/** Bounds of a pixel selection, including how far grow and feather reach. */
 export function pixelSelectionBounds(s: PixelSelection): Rect {
-  if (s.kind === 'polygon') return boundsOfPoints(s.points);
-  return { x: s.x, y: s.y, width: s.width, height: s.height };
+  const b = s.kind === 'polygon' ? boundsOfPoints(s.points) : { x: s.x, y: s.y, width: s.width, height: s.height };
+  const m = Math.max(0, s.grow ?? 0) + (s.feather ?? 0);
+  return m > 0 ? { x: b.x - m, y: b.y - m, width: b.width + m * 2, height: b.height + m * 2 } : b;
+}
+
+/**
+ * Expand (px > 0) or contract (px < 0) the pixel selection by a distance in document px
+ * (Fireworks 選択範囲を拡張／縮小). Repeated calls add up. Returns false (with an error
+ * shown) when there is no selection or nothing would be left of it.
+ */
+export function growSelection(ed: EditorStore, px: number): boolean {
+  const sel = ed.getState().pixelSelection;
+  if (!sel) {
+    ed.notify('error', '範囲選択がありません。範囲選択ツールで範囲を指定してください。');
+    return false;
+  }
+  const grow = Math.max(-GROW_LIMIT, Math.min(GROW_LIMIT, (sel.grow ?? 0) + px));
+  const next: PixelSelection = { ...sel, grow };
+  if (Math.abs(grow) < 0.01) delete next.grow;
+  else if (!edgeOutline({ ...next, feather: 0 })?.length) {
+    ed.notify('error', `${Math.abs(px)} px 縮小すると選択範囲がなくなります。`);
+    return false;
+  }
+  ed.set({ pixelSelection: next });
+  return true;
 }
 
 export function setAdjust(ed: EditorStore, id: Id, patch: Partial<ColorAdjust>, label: string, mergeKey?: string): void {
@@ -84,7 +110,11 @@ function selectionTarget(ed: EditorStore, quiet = false): { img: ImageObject; ma
     if (!quiet) ed.notify('error', '選択範囲に重なる編集可能な画像がありません。');
     return null;
   }
-  return { img, mask: selectionToImageMask(img, pixelSelection) };
+  // Edge lengths are document px; the mask needs px of the processed image.
+  const asset = ed.getState().doc.assets[img.assetId];
+  const size = asset ? pipelineOutputSize(img.pipeline, asset.width, asset.height) : img.box;
+  const pxPerDoc = (size.width / img.box.width + size.height / img.box.height) / 2;
+  return { img, mask: selectionToImageMask(img, pixelSelection, pxPerDoc) };
 }
 
 /** Apply a gaussian blur to the pixel selection on the target image. */

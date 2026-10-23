@@ -3,7 +3,7 @@ import { emptyHistory, record, redo as historyRedo, undo as historyUndo, type Hi
 import { createDocument } from '../model/factory';
 import type { FileSystemFileHandleLike } from '../io/files';
 import { newId } from '../model/factory';
-import type { Id, Point, SparcaDocument } from '../model/types';
+import type { Id, MaskShape, Point, SparcaDocument } from '../model/types';
 
 export type ToolId =
   | 'select'
@@ -26,11 +26,30 @@ export type ToolId =
   | 'star'
   | 'text';
 
-/** Pixel (area) selection, kept in document coordinates. Distinct from object selection. */
-export type PixelSelection =
-  | { kind: 'rect'; x: number; y: number; width: number; height: number }
-  | { kind: 'ellipse'; x: number; y: number; width: number; height: number }
-  | { kind: 'polygon'; points: Point[] };
+/** Pixel (area) selection, kept in document coordinates (edge lengths in document px). Distinct from object selection. */
+export type PixelSelection = MaskShape;
+
+/** Edge setting of the selection tools (Fireworks 「エッジ」): applied to new selections. */
+export interface SelectionEdge {
+  mode: 'hard' | 'antialias' | 'feather';
+  /** Feather width in px (mode 'feather'). */
+  feather: number;
+}
+
+export const DEFAULT_SELECTION_EDGE: SelectionEdge = { mode: 'antialias', feather: 10 };
+export const FEATHER_LIMITS = [0, 100] as const;
+/** Largest expand / contract amount in px. */
+export const GROW_LIMIT = 500;
+
+/** The selection with the edge setting applied (its grow is kept). */
+export function withSelectionEdge(sel: PixelSelection, edge: SelectionEdge): PixelSelection {
+  const out: PixelSelection = { ...sel };
+  delete out.antialias;
+  delete out.feather;
+  if (edge.mode === 'hard') out.antialias = false;
+  else if (edge.mode === 'feather' && edge.feather > 0) out.feather = edge.feather;
+  return out;
+}
 
 export interface CropState {
   /** 'document' crops the canvas; 'image' crops only the given image object. */
@@ -118,6 +137,8 @@ export interface EditorState {
   grid: GridSettings;
   /** Align multiple objects to the canvas instead of to each other. */
   alignToCanvas: boolean;
+  /** Edge setting of the marquee / lasso tools. */
+  selectionEdge: SelectionEdge;
   notices: Notice[];
   /** Non-null while a long-running task is in progress. */
   busy: string | null;
@@ -143,6 +164,7 @@ export class EditorStore {
       tool: 'select',
       eyedropperTarget: 'fill',
       grid: DEFAULT_GRID,
+      selectionEdge: DEFAULT_SELECTION_EDGE,
       alignToCanvas: false,
       pickedColor: null,
       notices: [],
@@ -327,6 +349,18 @@ export class EditorStore {
   select(ids: Id[]): void {
     const same = ids.length === this.state.selection.length && ids.every((id, i) => id === this.state.selection[i]);
     this.set(same ? { selection: ids } : { selection: ids, nodeSelection: [] });
+  }
+
+  /** Change the selection edge setting; the current selection takes it too. */
+  setSelectionEdge(patch: Partial<SelectionEdge>): void {
+    const selectionEdge = { ...this.state.selectionEdge, ...patch };
+    const sel = this.state.pixelSelection;
+    this.set({ selectionEdge, pixelSelection: sel && withSelectionEdge(sel, selectionEdge) });
+  }
+
+  /** Set a newly drawn pixel selection, with the tools' edge setting. */
+  setPixelSelection(sel: PixelSelection | null): void {
+    this.set({ pixelSelection: sel && withSelectionEdge(sel, this.state.selectionEdge) });
   }
 
   setGrid(patch: Partial<GridSettings>): void {

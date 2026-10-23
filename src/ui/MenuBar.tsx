@@ -148,6 +148,8 @@ export function MenuBar({ onNew }: { onNew: () => void }) {
         { label: '自動カラー調整', action: () => image && void autoColor(editor, image.id), disabled: !image },
         { label: '選択範囲にぼかし…', action: () => openDialog({ kind: 'blur-selection' }), disabled: !pixelSel || !pixelTargetImage(editor) },
         { label: '選択範囲にモザイク…', action: () => openDialog({ kind: 'mosaic-selection' }), disabled: !pixelSel || !pixelTargetImage(editor) },
+        { label: '選択範囲を拡張…', action: () => openDialog({ kind: 'grow-selection', contract: false }), disabled: !pixelSel },
+        { label: '選択範囲を縮小…', action: () => openDialog({ kind: 'grow-selection', contract: true }), disabled: !pixelSel },
         { label: '範囲選択を解除', shortcut: 'Esc', action: () => editor.set({ pixelSelection: null }), disabled: !pixelSel },
       ],
     },

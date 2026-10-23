@@ -6,6 +6,7 @@ export type DialogState =
   | { kind: 'image-size'; imageId: string }
   | { kind: 'blur-selection' }
   | { kind: 'mosaic-selection' }
+  | { kind: 'grow-selection'; contract: boolean }
   | { kind: 'export' }
   | { kind: 'grid' }
   | null;

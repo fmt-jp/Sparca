@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { edgeOutline } from '../engine/mask';
 import { addObject, removeObjects, updateObject } from '../model/commands';
 import { createPath, createShape, createText, defaultGeometry } from '../model/factory';
 import { boxCenter, boxCorners, unionBounds, transformObject, rectsIntersect, objectBounds, type Rect } from '../model/geometry';
@@ -311,7 +312,7 @@ export function CanvasView() {
 
   function finishPolygon(points: Point[]) {
     setPolyPoints(null);
-    if (points.length >= 3) editor.set({ pixelSelection: { kind: 'polygon', points } });
+    if (points.length >= 3) editor.setPixelSelection({ kind: 'polygon', points });
   }
 
   // Ctrl/Cmd + wheel zooms around the cursor.
@@ -633,13 +634,13 @@ export function CanvasView() {
       }
       case 'select-area': {
         const r = dragRect(g.start, p, e.shiftKey, e.altKey);
-        editor.set({ pixelSelection: r.width > 0 && r.height > 0 ? { kind: g.shape, ...r } : null });
+        editor.setPixelSelection(r.width > 0 && r.height > 0 ? { kind: g.shape, ...r } : null);
         break;
       }
       case 'lasso': {
         const last = g.points[g.points.length - 1];
         if (Math.hypot(last.x - p.x, last.y - p.y) * zoom >= 2) g.points.push(p);
-        editor.set({ pixelSelection: g.points.length >= 3 ? { kind: 'polygon', points: [...g.points] } : null });
+        editor.setPixelSelection(g.points.length >= 3 ? { kind: 'polygon', points: [...g.points] } : null);
         break;
       }
       case 'pan': {
@@ -1173,17 +1174,23 @@ function pointInRect(p: Point, r: Rect): boolean {
 
 function PixelSelectionOutline({ sel, zoom }: { sel: PixelSelection; zoom: number }) {
   const k = 1 / zoom;
+  // Grown / shrunk or feathered selections show where their edge really is (50% contour).
+  const outline = useMemo(() => edgeOutline(sel), [sel]);
+  const d = outline?.map((line) => `M${line.map((q) => `${q.x},${q.y}`).join(' L')} Z`).join(' ');
   const shape = (cls: string) =>
-    sel.kind === 'rect' ? (
+    outline ? (
+      <path className={cls} d={d} strokeWidth={k} />
+    ) : sel.kind === 'rect' ? (
       <rect className={cls} x={sel.x} y={sel.y} width={sel.width} height={sel.height} strokeWidth={k} />
     ) : sel.kind === 'ellipse' ? (
       <ellipse className={cls} cx={sel.x + sel.width / 2} cy={sel.y + sel.height / 2} rx={sel.width / 2} ry={sel.height / 2} strokeWidth={k} />
     ) : (
       <polygon className={cls} points={sel.points.map((q) => `${q.x},${q.y}`).join(' ')} strokeWidth={k} />
     );
+  const edge = sel.antialias === false ? 'hard' : sel.feather ? 'feather' : 'antialias';
   // Two dashed strokes offset against each other = "marching ants" visible on any background.
   return (
-    <g data-testid="pixel-selection">
+    <g data-testid="pixel-selection" data-edge={edge} data-feather={sel.feather ?? 0} data-grow={sel.grow ?? 0}>
       {shape('ants-a')}
       {shape('ants-b')}
     </g>

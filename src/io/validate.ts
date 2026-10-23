@@ -220,11 +220,22 @@ function checkLocalEdits(v: unknown, where: string) {
   v.forEach((e, i) => {
     const w = `${where}[${i}]`;
     if (!isObj(e) || !isObj(e.mask)) throw new Invalid(`${w} が正しくありません`);
+    checkMaskEdge(e.mask, `${w}.mask`);
     if (e.kind === 'blur') num(e, 'radius', w);
     else if (e.kind === 'mosaic') {
       if (num(e, 'size', w) < 1) throw new Invalid(`${w}.size が小さすぎます`);
     } else throw new Invalid(`${w} の種類が正しくありません`);
   });
+}
+
+/** Optional edge fields of a mask: grow / feather in px, antialias flag. */
+function checkMaskEdge(m: Obj, where: string) {
+  for (const k of ['grow', 'feather'] as const) {
+    if (m[k] === undefined) continue;
+    if (typeof m[k] !== 'number' || !Number.isFinite(m[k])) throw new Invalid(`${where}.${k} が正しくありません`);
+  }
+  if (typeof m.feather === 'number' && m.feather < 0) throw new Invalid(`${where}.feather が負の値です`);
+  if (m.antialias !== undefined && typeof m.antialias !== 'boolean') throw new Invalid(`${where}.antialias が正しくありません`);
 }
 
 const GRADIENT_KINDS = new Set(['linear', 'radial', 'conic']);

@@ -229,10 +229,26 @@ export interface ColorAdjust {
 }
 
 /** Selection mask shape in image-normalized coordinates (0..1). */
-export type MaskShape =
+/**
+ * Edge treatment of a selection / mask (Fireworks 「エッジ」 and 選択範囲を拡張／縮小).
+ * Lengths are in px of the frame the shape lives in: document px for a pixel selection,
+ * px of the processed image for an image mask. Missing fields mean the defaults.
+ */
+export interface MaskEdge {
+  /** Outline moved outwards (+) or inwards (−). Default 0. */
+  grow?: number;
+  /** Anti-aliased (true, default) or hard (false) edge. */
+  antialias?: boolean;
+  /** Feather width: the edge fades out over this many px. Default 0. */
+  feather?: number;
+}
+
+export type MaskShape = (
   | { kind: 'rect'; x: number; y: number; width: number; height: number }
   | { kind: 'ellipse'; x: number; y: number; width: number; height: number }
-  | { kind: 'polygon'; points: Point[] };
+  | { kind: 'polygon'; points: Point[] }
+) &
+  MaskEdge;
 
 export interface LocalBlur {
   kind: 'blur';
