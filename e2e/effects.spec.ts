@@ -410,3 +410,19 @@ test('グレースケール and セピア effects, with strength', async ({ page
   await page.keyboard.press('Control+z');
   expect(await effects(page)).toEqual([]);
 });
+
+test('ぼかし（ズーム） stays inside the canvas, also on screen', async ({ page }) => {
+  const c = await canvasBox(page);
+  // A rectangle touching the canvas's right edge (canvas 800 wide).
+  await page.keyboard.press('r');
+  await drag(page, { x: c.x + 650, y: c.y + 250 }, { x: c.x + 800, y: c.y + 350 });
+  await addEffect(page, 'ぼかしとシャープ', 'ぼかし（ズーム）');
+  await setNum(page, 'ぼかし（ズーム）の量', '60');
+  await page.keyboard.press('Escape'); // hide the selection outline
+  const shot = await page.screenshot({ clip: { x: c.x + 700, y: c.y + 300, width: 150, height: 1 } });
+  const px = (await decodePixels(page, shot, 'image/png', [[60, 0], [130, 0]])).px;
+  // Inside the canvas: blue streaks; just outside it: the plain workspace.
+  expect(px[0][2]).toBeGreaterThan(px[0][0] + 40);
+  const workspace = (await decodePixels(page, await page.screenshot({ clip: { x: c.x + 830, y: c.y + 500, width: 1, height: 1 } }), 'image/png', [[0, 0]])).px[0];
+  expect(px[1]).toEqual(workspace);
+});

@@ -56,7 +56,7 @@ export function DocumentSvg({
       {doc.layers.map((layer) =>
         layer.visible ? (
           <g key={layer.id} data-layer-id={layer.id}>
-            {layer.children.map((o) => renderObject(o, options, prefix))}
+            {layer.children.map((o) => renderObject(o, options, prefix, doc))}
           </g>
         ) : null,
       )}
@@ -64,12 +64,12 @@ export function DocumentSvg({
   );
 }
 
-function renderObject(o: SceneObject, opts: RenderOptions, prefix: string): ReactElement | null {
+function renderObject(o: SceneObject, opts: RenderOptions, prefix: string, canvas: { width: number; height: number }): ReactElement | null {
   if (!o.visible || o.id === opts.hiddenId) return null;
   if (o.type === 'group') {
     return (
       <g key={o.id} data-object-id={o.id} opacity={o.opacity}>
-        {o.children.map((c) => renderObject(c, opts, prefix))}
+        {o.children.map((c) => renderObject(c, opts, prefix, canvas))}
       </g>
     );
   }
@@ -111,7 +111,24 @@ function renderObject(o: SceneObject, opts: RenderOptions, prefix: string): Reac
       const zid = `${filterId}-z${i}`;
       const z = zoomBlurLayers(content, seg.zoom, w, h, zid);
       if (z.def) defs.push(<defs key={zid}>{z.def}</defs>);
-      content = z.layers;
+      // The streaks stay inside the canvas (also on screen, where the workspace around
+      // the canvas is otherwise visible). The clip is the canvas rectangle expressed in
+      // the object's own (translated, rotated) coordinates.
+      const cid = `${zid}-clip`;
+      defs.push(
+        <defs key={cid}>
+          <clipPath id={cid} clipPathUnits="userSpaceOnUse">
+            <rect
+              x={0}
+              y={0}
+              width={canvas.width}
+              height={canvas.height}
+              transform={(rotation ? `rotate(${-rotation} ${w / 2} ${h / 2}) ` : '') + `translate(${-x} ${-y})`}
+            />
+          </clipPath>
+        </defs>,
+      );
+      content = <g clipPath={`url(#${cid})`}>{z.layers}</g>;
       reach += zoomBlurReach(seg.zoom, w, h);
     }
   });
