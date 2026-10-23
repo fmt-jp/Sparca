@@ -100,10 +100,17 @@ kbd {
   border-bottom: 1px solid var(--border);
 }
 .app-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-weight: 700;
   color: #ff8c1a;
   margin-right: 10px;
   letter-spacing: 0.04em;
+}
+.app-icon {
+  display: block;
+  border-radius: 4px;
 }
 .menu {
   position: relative;
