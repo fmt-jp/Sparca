@@ -3,7 +3,7 @@ import { produce } from 'immer';
 import { describe, expect, it } from 'vitest';
 import { addLayer, addObject, groupObjects } from '../model/commands';
 import { createDocument, createImage, createShape, createText, defaultGeometry } from '../model/factory';
-import type { AssetMeta, SparcaDocument } from '../model/types';
+import type { AssetMeta, ImageObject, SparcaDocument } from '../model/types';
 import { createEffect } from '../model/effects';
 import { ProjectError, readProject, writeProject } from './project';
 
@@ -17,8 +17,6 @@ function sampleDoc(): SparcaDocument {
     l2.locked = true;
     const img = createImage(asset, { x: 1, y: 2, width: 20, height: 20, rotation: 15 });
     img.pipeline.adjust.brightness = 30;
-    img.pipeline.adjust.tone = 'sepia';
-    img.pipeline.adjust.toneAmount = 60;
     img.pipeline.localEdits = [
       { kind: 'blur', radius: 4, mask: { kind: 'rect', x: 0, y: 0, width: 0.5, height: 0.5 } },
       { kind: 'mosaic', size: 8, mask: { kind: 'ellipse', x: 0.2, y: 0.2, width: 0.5, height: 0.5 } },
@@ -103,6 +101,25 @@ describe('project format', () => {
       zip.file('assets/a_1.png', bytes);
       await expect(readProject(await zip.generateAsync({ type: 'uint8array' }))).rejects.toThrow(ProjectError);
     }
+  });
+
+  it('turns an image color tone (files of 2026-10-22..23) into the same-named effect', async () => {
+    const raw = JSON.parse(JSON.stringify(sampleDoc()));
+    const img = raw.layers[0].children[0];
+    img.pipeline.adjust.tone = 'sepia';
+    img.pipeline.adjust.toneAmount = 60;
+    img.effects = [{ ...createEffect('glow') }];
+    const zip = new JSZip();
+    zip.file('document.json', JSON.stringify(raw));
+    zip.file('assets/a_1.png', bytes);
+    const loaded = await readProject(await zip.generateAsync({ type: 'uint8array' }));
+    const out = loaded.doc.layers[0].children[0] as ImageObject;
+    expect(out.effects.map((e) => [e.kind, e.strength])).toEqual([
+      ['sepia', 0.6],
+      ['glow', 1],
+    ]);
+    expect(out.pipeline.adjust).not.toHaveProperty('tone');
+    expect(out.pipeline.adjust).not.toHaveProperty('toneAmount');
   });
 
   it('refuses to save when image data is missing', async () => {

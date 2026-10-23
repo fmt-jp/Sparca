@@ -226,9 +226,6 @@ export interface ColorAdjust {
   temperature: number; // -100..100
   tint: number; // -100..100
   auto: AutoColorParams | null;
-  /** Monochrome tone applied last: grayscale or sepia, blended by toneAmount (0..100). */
-  tone: 'none' | 'grayscale' | 'sepia';
-  toneAmount: number;
 }
 
 /** Selection mask shape in image-normalized coordinates (0..1). */

@@ -346,7 +346,7 @@ function ImageSection({ o }: { o: ImageObject }) {
   const meta = useEditor((s) => s.doc.assets[o.assetId]);
   const comparing = useEditor((s) => s.compareImageId === o.id);
   const a = o.pipeline.adjust;
-  const adj = (key: keyof Omit<ColorAdjust, 'auto' | 'tone' | 'toneAmount'>, label: string) => (
+  const adj = (key: keyof Omit<ColorAdjust, 'auto'>, label: string) => (
     <Field label={label} group>
       <PopupSliderInput label={label} value={a[key]} min={-100} max={100} onChange={(v) => setAdjust(editor, o.id, { [key]: v }, `${label}の変更`, key)} />
     </Field>
@@ -371,24 +371,6 @@ function ImageSection({ o }: { o: ImageObject }) {
         {adj('saturation', '彩度')}
         {adj('temperature', '色温度')}
         {adj('tint', '色かぶり補正')}
-        <Field label="色調">
-          <select
-            aria-label="色調"
-            value={a.tone ?? 'none'}
-            onChange={(e) =>
-              setAdjust(editor, o.id, { tone: e.target.value as ColorAdjust['tone'] }, { none: '色調を通常に', grayscale: 'グレースケール', sepia: 'セピア' }[e.target.value as ColorAdjust['tone']])
-            }
-          >
-            <option value="none">通常（カラー）</option>
-            <option value="grayscale">グレースケール</option>
-            <option value="sepia">セピア</option>
-          </select>
-        </Field>
-        {a.tone && a.tone !== 'none' && (
-          <Field label="色調の強さ" group>
-            <PopupSliderInput label="色調の強さ" value={a.toneAmount ?? 100} min={0} max={100} suffix="%" onChange={(v) => setAdjust(editor, o.id, { toneAmount: v }, '色調の強さの変更', 'toneAmount')} />
-          </Field>
-        )}
         <Field label="ぼかし" group>
           <PopupSliderInput label="ぼかし" value={o.pipeline.blur} min={0} max={100} step={0.5} precision={1} suffix="px" onChange={(v) => setImageBlur(editor, o.id, v)} />
         </Field>

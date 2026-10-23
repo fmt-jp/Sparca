@@ -129,11 +129,7 @@ function checkObject(o: unknown, where: string, ids: Set<string>, assets: Obj): 
       if (!isObj(assets[assetId])) throw new Invalid(`${where} が参照する画像 ${assetId} がありません`);
       o.pipeline = mergeDefaults(defaultPipeline(), o.pipeline);
       checkLocalEdits((o.pipeline as Obj).localEdits, `${where}.pipeline.localEdits`);
-      {
-        const adj = (o.pipeline as Obj).adjust as Obj;
-        if (!['none', 'grayscale', 'sepia'].includes(adj.tone as string)) throw new Invalid(`${where}.pipeline.adjust.tone が正しくありません`);
-        num(adj, 'toneAmount', `${where}.pipeline.adjust`);
-      }
+      migrateImageTone(o);
       break;
     }
   }
@@ -187,6 +183,22 @@ function checkCurves(v: unknown, where: string): Obj {
     });
   }
   return out;
+}
+
+/**
+ * Files saved 2026-10-22..23 could hold a grayscale / sepia tone in the image color
+ * adjustment; it is now done with the effects of the same name (same math), so the tone
+ * becomes the first effect, its amount the effect's strength.
+ */
+function migrateImageTone(o: Obj) {
+  const adj = (o.pipeline as Obj).adjust as Obj;
+  const tone = adj.tone;
+  const amount = typeof adj.toneAmount === 'number' ? adj.toneAmount : 100;
+  delete adj.tone;
+  delete adj.toneAmount;
+  if ((tone === 'grayscale' || tone === 'sepia') && amount > 0) {
+    (o.effects as unknown[]).unshift({ ...createEffect(tone), strength: Math.min(1, amount / 100) });
+  }
 }
 
 /** Masked image edits: blur (radius) or mosaic (block size), each with a mask shape. */
