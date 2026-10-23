@@ -220,6 +220,7 @@ export function copySelection(ed: EditorStore): void {
   const { doc, selection } = ed.getState();
   clipboard = selection.map((id) => findObject(doc, id)?.object).filter((o): o is SceneObject => !!o);
   clipboardAssets = {};
+  pixelCopySize = null;
   walkObjects(clipboard, (o) => {
     if (o.type === 'image' && doc.assets[o.assetId]) clipboardAssets[o.assetId] = doc.assets[o.assetId];
   });
@@ -245,6 +246,26 @@ export function paste(ed: EditorStore): void {
     ids = pasteObjects(d, layerId, objs, offset, offset);
   });
   ed.select(ids);
+}
+
+/** Size of the image a selection copy put on the clipboard (null when the clipboard holds objects). */
+let pixelCopySize: { width: number; height: number } | null = null;
+
+/**
+ * Put copied selection pixels on HANABI's clipboard as a new image object at the place
+ * they came from; the first paste puts it back in place (like Fireworks), later ones offset.
+ */
+export async function setPixelClipboard(copy: { png: Blob; rect: { x: number; y: number; width: number; height: number }; source: string }): Promise<void> {
+  const meta = await importImageFile(copy.png, `${copy.source}（選択範囲）`);
+  clipboard = [createImage(meta, { ...copy.rect, rotation: 0 })];
+  clipboardAssets = { [meta.id]: meta };
+  pasteCount = -1;
+  pixelCopySize = { width: meta.width, height: meta.height };
+}
+
+/** Whether an image of this size on the system clipboard is HANABI's own latest selection copy. */
+export function isPixelCopy(width: number, height: number): boolean {
+  return !!pixelCopySize && pixelCopySize.width === width && pixelCopySize.height === height;
 }
 
 export function hasClipboard(): boolean {

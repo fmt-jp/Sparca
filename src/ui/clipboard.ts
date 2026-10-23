@@ -1,7 +1,8 @@
 // System clipboard integration. Copy/cut/paste go through the browser's clipboard events,
 // so images copied elsewhere (e.g. a Windows+Shift+S screenshot) can be pasted onto the
 // canvas, while objects copied in HANABI still paste as editable objects.
-import { copySelection, cutSelection, paste, placeImageFiles } from '../store/actions';
+import { copySelection, cutSelection, isPixelCopy, paste, placeImageFiles, setPixelClipboard } from '../store/actions';
+import { canCopyPixels, copySelectionPixels } from '../store/pixelCopy';
 import { isTextEntry } from './keyboard';
 import { editor } from './useEditor';
 
@@ -33,8 +34,53 @@ function named(files: File[]): File[] {
   return files.map((f, i) => new File([f], `${IMAGE_NAME}${files.length > 1 ? ` ${i + 1}` : ''}.${f.type.split('/')[1] || 'png'}`, { type: f.type }));
 }
 
+/**
+ * Copy the pixels inside the pixel selection: to HANABI's clipboard (pastes back in place)
+ * and, where the browser allows, to the system clipboard as a PNG for other apps.
+ */
+async function copyPixels(cut: boolean): Promise<void> {
+  const copying = copySelectionPixels(editor);
+  let written: Promise<void> | null = null;
+  try {
+    // Started right away so it still counts as part of the user's copy; the PNG follows.
+    const png = copying.then((c) => c?.png ?? Promise.reject(new Error('nothing copied')));
+    written = navigator.clipboard.write([new ClipboardItem({ 'image/png': png })]);
+  } catch {
+    written = null;
+  }
+  const copy = await copying;
+  await written?.catch(() => undefined); // No clipboard access: HANABI's own clipboard still has it.
+  if (!copy) return;
+  await setPixelClipboard(copy);
+  if (cut) editor.notify('info', '選択範囲の画素の切り取り（削除）には未対応のため、コピーのみ行いました。');
+}
+
+/** Whether pasted image files are HANABI's own latest selection copy (same size). */
+async function ownPixelCopy(files: File[]): Promise<boolean> {
+  if (files.length !== 1) return false;
+  try {
+    const bmp = await createImageBitmap(files[0]);
+    const own = isPixelCopy(bmp.width, bmp.height);
+    bmp.close();
+    return own;
+  } catch {
+    return false;
+  }
+}
+
+async function pasteImages(files: File[]): Promise<void> {
+  if (await ownPixelCopy(files)) paste(editor);
+  else await placeImageFiles(editor, named(files));
+}
+
 function onCopyOrCut(e: ClipboardEvent, cut: boolean) {
-  if (!forEditor(e) || !editor.getState().selection.length) return;
+  if (!forEditor(e)) return;
+  if (canCopyPixels(editor)) {
+    e.preventDefault();
+    void copyPixels(cut);
+    return;
+  }
+  if (!editor.getState().selection.length) return;
   e.preventDefault();
   if (cut) cutSelection(editor);
   else copySelection(editor);
@@ -50,7 +96,7 @@ function onPaste(e: ClipboardEvent) {
     return;
   }
   const images = imageFiles(dt);
-  if (images.length) void placeImageFiles(editor, named(images));
+  if (images.length) void pasteImages(images);
   else paste(editor);
 }
 
@@ -77,7 +123,8 @@ export function menuCopy(cut = false): void {
   }
   // Without clipboard access, still copy within HANABI.
   if (!ok) {
-    if (cut) cutSelection(editor);
+    if (canCopyPixels(editor)) void copyPixels(cut);
+    else if (cut) cutSelection(editor);
     else copySelection(editor);
   }
 }
@@ -100,7 +147,7 @@ export async function menuPaste(): Promise<void> {
       if (type) files.push(new File([await item.getType(type)], 'image', { type }));
     }
     if (files.length) {
-      await placeImageFiles(editor, named(files));
+      await pasteImages(files);
       return;
     }
   } catch {

@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { canvasBox, drag, makePng, state } from './helpers';
+import { canvasBox, drag, makePng, processedPixels, state } from './helpers';
 
 test.use({ permissions: ['clipboard-read', 'clipboard-write'] });
 
@@ -92,4 +92,59 @@ test('text fields keep normal copy and paste', async ({ page }) => {
   await page.keyboard.press('Control+v');
   await expect(w).toHaveValue('123');
   expect(await objects(page)).toHaveLength(1);
+});
+
+/** Size of the image on the system clipboard, or null. */
+async function clipboardImageSize(page: Page) {
+  return page.evaluate(async () => {
+    for (const item of await navigator.clipboard.read()) {
+      const type = item.types.find((t) => t.startsWith('image/'));
+      if (!type) continue;
+      const bmp = await createImageBitmap(await item.getType(type));
+      return [bmp.width, bmp.height];
+    }
+    return null;
+  });
+}
+
+test('Ctrl+C with a range selection copies the selected pixels; Ctrl+V pastes them in place', async ({ page }) => {
+  // 120×80 image, left half red / right half blue, pasted at (340, 260).
+  await screenshotToClipboard(page, makePng(120, 80, (x) => (x < 60 ? [255, 0, 0, 255] : [0, 0, 255, 255])));
+  await page.keyboard.press('Control+v');
+  await expect.poll(async () => (await objects(page)).length).toBe(1);
+  const c = await canvasBox(page);
+  await page.keyboard.press('Escape');
+  // Select document 350..410 × 270..300 (image columns 10..70, across the color boundary).
+  await page.keyboard.press('m');
+  await drag(page, { x: c.x + 350, y: c.y + 270 }, { x: c.x + 410, y: c.y + 300 });
+  await page.keyboard.press('Control+c');
+  // The PNG goes to the system clipboard too (for other apps).
+  await expect.poll(() => clipboardImageSize(page)).toEqual([60, 30]);
+  await page.keyboard.press('Control+v');
+  await expect.poll(async () => (await objects(page)).length).toBe(2);
+  const pasted = (await objects(page))[1];
+  expect(pasted.type).toBe('image');
+  expect(pasted.name).toContain('（選択範囲）');
+  expect(pasted.box).toMatchObject({ x: 350, y: 270, width: 60, height: 30 });
+  const id = await state<string>(page, 's => s.doc.layers[0].children[1].id');
+  const out = await processedPixels(page, id, [[5, 5], [45, 25], [55, 15]]);
+  expect(out.px[0]).toEqual([255, 0, 0, 255]);
+  expect(out.px[1]).toEqual([255, 0, 0, 255]);
+  expect(out.px[2]).toEqual([0, 0, 255, 255]);
+  // The original image is unchanged.
+  expect((await objects(page))[0].box).toMatchObject({ x: 340, y: 260, width: 120, height: 80 });
+
+  // An ellipse selection copies only its shape (transparent corners).
+  await page.keyboard.press('Control+z');
+  await page.keyboard.press('m'); // M again: the ellipse marquee
+  expect(await state<string>(page, 's => s.tool')).toBe('marquee-ellipse');
+  await drag(page, { x: c.x + 350, y: c.y + 270 }, { x: c.x + 390, y: c.y + 310 });
+  await page.keyboard.press('Control+c');
+  await expect.poll(() => clipboardImageSize(page)).toEqual([40, 40]);
+  await page.keyboard.press('Control+v');
+  await expect.poll(async () => (await objects(page)).length).toBe(2);
+  const id2 = await state<string>(page, 's => s.doc.layers[0].children[1].id');
+  const o2 = await processedPixels(page, id2, [[0, 0], [20, 20]]);
+  expect(o2.px[0][3]).toBe(0);
+  expect(o2.px[1]).toEqual([255, 0, 0, 255]);
 });
