@@ -179,7 +179,10 @@ export function MenuBar({ onNew }: { onNew: () => void }) {
 
   return (
     <header className="menubar" ref={ref}>
-      <span className="app-name">HANABI</span>
+      <span className="app-name">
+        <img className="app-icon" src={`${import.meta.env.BASE_URL}icon.svg`} alt="" width={20} height={20} />
+        HANABI
+      </span>
       {menus.map((m) => (
         <div key={m.id} className="menu">
           <button

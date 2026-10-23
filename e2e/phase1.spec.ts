@@ -10,11 +10,21 @@ test.beforeEach(async ({ page }) => {
 const objects = (page: import('@playwright/test').Page) =>
   state<{ type: string; name: string }[]>(page, 's => s.doc.layers.flatMap(l => l.children.map(o => ({ type: o.type, name: o.name, box: o.box })))');
 
-test('the app is called HANABI: top-left name in orange and the browser tab title', async ({ page }) => {
+test('the app is called HANABI: top-left icon and name in orange, the browser tab title and icon', async ({ page }) => {
   const name = page.locator('header.menubar .app-name');
   await expect(name).toHaveText('HANABI');
   await expect(name).toHaveCSS('color', 'rgb(255, 140, 26)');
   await expect(page).toHaveTitle('名称未設定 — HANABI');
+  // The fireworks icon: next to the name and as the browser tab icon.
+  const icon = name.locator('img.app-icon');
+  await expect(icon).toBeVisible();
+  expect(await icon.evaluate((i: HTMLImageElement) => i.naturalWidth)).toBeGreaterThan(0);
+  const tabIcon = await page.evaluate(async () => {
+    const res = await fetch(document.querySelector<HTMLLinkElement>('link[rel="icon"]')!.href);
+    return [res.status, res.headers.get('content-type')];
+  });
+  expect(tabIcon[0]).toBe(200);
+  expect(tabIcon[1]).toContain('svg');
   await page.getByRole('button', { name: 'ファイル' }).click();
   await expect(page.getByRole('menuitem', { name: /^開く…（\.hnb／/ })).toBeVisible();
 });
