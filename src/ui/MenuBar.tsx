@@ -175,6 +175,14 @@ export function MenuBar({ onNew }: { onNew: () => void }) {
         },
       ],
     },
+    {
+      id: 'help',
+      label: 'ヘルプ',
+      items: [
+        { label: '操作ガイド…', shortcut: 'F1', action: () => openDialog({ kind: 'help' }) },
+        { label: 'キーボードショートカット…', action: () => openDialog({ kind: 'help', section: 'shortcuts' }) },
+      ],
+    },
   ];
 
   return (
