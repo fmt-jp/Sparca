@@ -14,6 +14,7 @@ import { convertSelectedNodes, deleteSelectedNodes, editablePath, insertNode } f
 import type { MenuItem } from './MenuBar';
 import { ALIGN, alignShortcut, DISTRIBUTE } from './PropertiesPanel';
 import { menuCopy, menuPaste } from './clipboard';
+import { canCopyPixels } from '../store/pixelCopy';
 import { editor } from './useEditor';
 
 const mod = /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘' : 'Ctrl+';
@@ -27,7 +28,7 @@ export function objectMenu(): MenuItem[] {
   const isGroup = selection.some((id) => findObject(doc, id)?.object.type === 'group');
   const items: MenuItem[] = [
     { label: 'カット', shortcut: `${mod}X`, action: () => menuCopy(true), disabled: !has },
-    { label: 'コピー', shortcut: `${mod}C`, action: () => menuCopy(), disabled: !has },
+    { label: 'コピー', shortcut: `${mod}C`, action: () => menuCopy(), disabled: !has && !canCopyPixels(editor) },
     { label: 'ペースト', shortcut: `${mod}V`, action: () => void menuPaste() },
     { label: '複製', shortcut: `${mod}D`, action: () => duplicateSelection(editor), disabled: !has },
     { label: '削除', shortcut: 'Delete', action: () => deleteSelection(editor), disabled: !has },
@@ -71,6 +72,7 @@ export function objectMenu(): MenuItem[] {
 export function canvasMenu(): MenuItem[] {
   const { grid } = editor.getState();
   return [
+    ...(canCopyPixels(editor) ? [{ label: '選択範囲をコピー', shortcut: `${mod}C`, action: () => menuCopy() }] : []),
     { label: 'ペースト', shortcut: `${mod}V`, action: () => void menuPaste() },
     { label: 'すべてを選択', shortcut: `${mod}A`, action: () => selectAll(editor) },
     SEP,

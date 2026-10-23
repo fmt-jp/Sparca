@@ -101,7 +101,7 @@ export function MenuBar({ onNew }: { onNew: () => void }) {
         { label: redoLabel ? `やり直し: ${redoLabel}` : 'やり直し', shortcut: `${mod}Shift+Z`, action: () => editor.redo(), disabled: !redoLabel },
         { separator: true, label: '' },
         { label: 'カット', shortcut: `${mod}X`, action: () => menuCopy(true), disabled: !hasSel },
-        { label: 'コピー', shortcut: `${mod}C`, action: () => menuCopy(), disabled: !hasSel },
+        { label: 'コピー', shortcut: `${mod}C`, action: () => menuCopy(), disabled: !hasSel && !(pixelSel && pixelTargetImage(editor)) },
         { label: 'ペースト', shortcut: `${mod}V`, action: () => void menuPaste() },
         { label: '複製', shortcut: `${mod}D`, action: () => duplicateSelection(editor), disabled: !hasSel },
         { label: '削除', shortcut: 'Delete', action: () => deleteSelection(editor), disabled: !hasSel },
