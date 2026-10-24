@@ -159,6 +159,16 @@ export function moveObjectAbove(doc: SparcaDocument, id: Id, targetId: Id): void
   target.siblings.splice(target.index + 1, 0, obj);
 }
 
+/** Move an object directly below a target object (possibly in another layer). */
+export function moveObjectBelow(doc: SparcaDocument, id: Id, targetId: Id): void {
+  if (id === targetId) return;
+  const loc = findObject(doc, id);
+  if (!loc || !findObject(doc, targetId)) return;
+  const [obj] = loc.siblings.splice(loc.index, 1);
+  const target = findObject(doc, targetId)!;
+  target.siblings.splice(target.index, 0, obj);
+}
+
 // ---- Layers ----
 
 export function addLayer(doc: SparcaDocument, aboveLayerId?: Id): Layer {
@@ -195,6 +205,16 @@ export function updateLayer(doc: SparcaDocument, id: Id, patch: Partial<Pick<Lay
 }
 
 /** Move a layer to a new index (0 = bottom). */
+/** Move a layer directly above (in front of) or below (behind) another layer. */
+export function moveLayerNextTo(doc: SparcaDocument, id: Id, targetId: Id, above: boolean): void {
+  if (id === targetId) return;
+  const i = doc.layers.findIndex((l) => l.id === id);
+  if (i < 0 || !doc.layers.some((l) => l.id === targetId)) return;
+  const [l] = doc.layers.splice(i, 1);
+  const t = doc.layers.findIndex((x) => x.id === targetId);
+  doc.layers.splice(above ? t + 1 : t, 0, l);
+}
+
 export function moveLayer(doc: SparcaDocument, id: Id, toIndex: number): void {
   const i = doc.layers.findIndex((l) => l.id === id);
   if (i < 0) return;

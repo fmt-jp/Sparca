@@ -137,8 +137,8 @@ test('layers: add, hide, lock and reorder', async ({ page }) => {
   await page.keyboard.press('r');
   await drag(page, { x: c.x + 300, y: c.y + 300 }, { x: c.x + 350, y: c.y + 350 });
   await expect(page.locator('.notice.error')).toContainText('ロック');
-  // Reorder: drag layer 1 onto layer 2's row.
-  await row1.dragTo(page.locator('[data-layer-row="レイヤー 2"]'));
+  // Reorder: drag layer 1 onto the upper half of layer 2's row (= above layer 2).
+  await row1.dragTo(page.locator('[data-layer-row="レイヤー 2"]'), { targetPosition: { x: 40, y: 3 } });
   expect(await state<string[]>(page, 's => s.doc.layers.map(l => l.name)')).toEqual(['レイヤー 2', 'レイヤー 1']);
 });
 
