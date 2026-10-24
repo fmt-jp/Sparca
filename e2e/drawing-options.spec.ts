@@ -108,10 +108,25 @@ test('drawing tools have settings for new objects (color, width, line style, fon
   await expect(page.getByRole('region', { name: 'プロパティ' })).toBeVisible();
   await page.keyboard.press('r');
   await expect(page.getByRole('group', { name: '新しい図形の設定' }).getByLabel('線種')).toHaveValue('dashed');
-  // Not shown while an object is selected (the panel edits that object then).
+  // Also shown while an object is selected, above that object's own settings.
   await drag(page, { x: c.x + 50, y: c.y + 50 }, { x: c.x + 150, y: c.y + 150 });
+  expect(await state<string[]>(page, 's => s.selection')).toHaveLength(1);
   await page.keyboard.press('r');
+  const settings = page.getByRole('group', { name: '新しい図形の設定' });
+  await expect(settings).toBeVisible();
+  const selected = page.getByRole('group', { name: '選択中のオブジェクト' });
+  await expect(selected).toBeVisible();
+  // Each part changes only its own target.
+  await settings.getByLabel('線種').selectOption('solid');
+  expect(await state(page, 's => s.toolDefaults.shape.strokeStyle')).toBe('solid');
+  expect(await state(page, 's => s.doc.layers[0].children[0].strokeStyle')).toBe('dashed');
+  await selected.getByLabel('線種').selectOption('dotted');
+  expect(await state(page, 's => s.doc.layers[0].children[0].strokeStyle')).toBe('dotted');
+  expect(await state(page, 's => s.toolDefaults.shape.strokeStyle')).toBe('solid');
+  // The select tool shows only the object.
+  await page.keyboard.press('v');
   await expect(page.getByTestId('tool-defaults')).toHaveCount(0);
+  await expect(page.getByRole('group', { name: '選択中のオブジェクト' })).toHaveCount(0);
 });
 
 test('lines are paths: the subselect tool moves their points freely, and old line shapes convert', async ({ page }) => {

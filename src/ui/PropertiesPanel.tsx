@@ -52,7 +52,6 @@ export function PropertiesPanel() {
           </span>
         </div>
         {tool === 'select' && <DocumentSection />}
-        {toolCategory(tool) && <ToolDefaultsSection category={toolCategory(tool)!} />}
       </>
     );
   } else if (locs.length === 1 && locs[0].object.type !== 'group') {
@@ -74,12 +73,25 @@ export function PropertiesPanel() {
     content = <MultiSection ids={locs.map((l) => l.object.id)} objects={locs.map((l) => l.object)} />;
   }
 
+  // A drawing tool always shows the settings for what it will draw; a selected object's
+  // own settings follow under their own heading.
+  const category = toolCategory(tool);
   return (
     <section className="properties" aria-label="プロパティ">
       {SELECTION_TOOLS.has(tool) && <SelectionEdgeSection />}
       {tool !== 'crop' && <PixelSelectionSection />}
       {tool === 'eyedropper' && <EyedropperSection />}
-      {content}
+      {category && <ToolDefaultsSection category={category} />}
+      {category && locs.length > 0 ? (
+        <div className="selected-object-props" role="group" aria-label="選択中のオブジェクト">
+          <div className="prop-section">
+            <span className="section-title">選択中のオブジェクト</span>
+          </div>
+          {content}
+        </div>
+      ) : (
+        content
+      )}
     </section>
   );
 }
