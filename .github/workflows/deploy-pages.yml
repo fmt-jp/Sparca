@@ -30,6 +30,12 @@ jobs:
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
+      # The same build, for the copy published on fmt-jp/open (job publish-open).
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hanabi-dist
+          path: dist
+          retention-days: 1
 
   deploy:
     needs: build
@@ -40,3 +46,49 @@ jobs:
     steps:
       - id: deployment
         uses: actions/deploy-pages@v4
+
+  # Also publish the build to https://fmt-jp.github.io/open/hanabi/ (repository fmt-jp/open,
+  # folder hanabi/). Needs the secret OPEN_REPO_TOKEN: a fine-grained personal access token
+  # with "Contents: Read and write" on fmt-jp/open. Without it this job is skipped.
+  publish-open:
+    needs: build
+    runs-on: ubuntu-latest
+    concurrency:
+      group: publish-open
+      cancel-in-progress: false
+    steps:
+      - id: token
+        env:
+          TOKEN: ${{ secrets.OPEN_REPO_TOKEN }}
+        run: |
+          if [ -z "$TOKEN" ]; then
+            echo "OPEN_REPO_TOKEN が未設定のため、fmt-jp/open への公開をスキップしました。" >> "$GITHUB_STEP_SUMMARY"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.token.outputs.skip != 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: fmt-jp/open
+          token: ${{ secrets.OPEN_REPO_TOKEN }}
+          path: open
+      - if: steps.token.outputs.skip != 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: hanabi-dist
+          path: dist
+      - if: steps.token.outputs.skip != 'true'
+        name: Update hanabi/ in fmt-jp/open
+        run: |
+          rm -rf open/hanabi
+          cp -r dist open/hanabi
+          cd open
+          git config user.name "github-actions[bot]"
+          git config user.email "41898299+github-actions[bot]@users.noreply.github.com"
+          git add -A hanabi
+          if git diff --cached --quiet; then
+            echo "変更なし" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          git commit -m "HANABI を更新（fmt-jp/Sparca ${GITHUB_SHA::7}）"
+          git push
+          echo "fmt-jp/open の hanabi/ を更新しました。" >> "$GITHUB_STEP_SUMMARY"
