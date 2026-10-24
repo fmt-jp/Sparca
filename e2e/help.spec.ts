@@ -11,6 +11,10 @@ test('ヘルプ → 操作ガイド shows the basics by topic', async ({ page })
   await expect(dialog).toBeVisible();
   // Starts with the overview.
   await expect(dialog.getByRole('article')).toContainText('基本の流れ');
+  // The HANABI logo heads the introduction.
+  const logo = dialog.getByRole('img', { name: '花火 HANABI' });
+  await expect(logo).toBeVisible();
+  expect(await logo.evaluate((i: HTMLImageElement) => i.naturalWidth)).toBeGreaterThan(0);
   const nav = dialog.getByRole('navigation', { name: '項目' });
   for (const t of ['画面の見かた', '選択・移動・変形', '図形・テキスト・パス', 'レイヤー', '画像の加工', '範囲選択', 'エフェクト', '保存・書き出し', 'キーボードショートカット', '動作環境']) {
     await expect(nav.getByRole('button', { name: t })).toBeVisible();
