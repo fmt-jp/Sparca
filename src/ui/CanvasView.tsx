@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { edgeOutline } from '../engine/mask';
-import { addObject, removeObjects, updateObject } from '../model/commands';
+import { addObject, duplicateObjects, removeObjects, updateObject } from '../model/commands';
 import { createPath, createShape, createText, defaultGeometry } from '../model/factory';
 import { boxCenter, boxCorners, unionBounds, transformObject, rectsIntersect, objectBounds, type Rect } from '../model/geometry';
 import {
@@ -16,7 +16,8 @@ import {
   type Handle,
 } from '../model/handles';
 import { findObject, isEffectivelyLocked } from '../model/tree';
-import type { Box, Id, PathNode, Point, SceneObject, ShapeGeometry, SparcaDocument, TextObject } from '../model/types';
+import type { Box, Id, Paint, PathNode, PathObject, Point, SceneObject, ShapeGeometry, ShapeObject, SparcaDocument, TextObject } from '../model/types';
+import type { PaintCategory } from '../model/toolDefaults';
 import { DocumentSvg } from '../render/DocumentSvg';
 import { imageCache } from '../render/imageCache';
 import { cssFontFamily } from '../render/fonts';
@@ -26,7 +27,7 @@ import { placeImageFiles, writableLayer } from '../store/actions';
 import type { PixelSelection, ToolId } from '../store/editor';
 import { pickColorAt } from '../store/colorActions';
 import { docToPath, isSmooth, moveAnchors, moveHandle, nearestOnPath, pathToDoc, type DocNode } from '../model/pathEdit';
-import { deleteSelectedNodes, editablePath, insertNode, nudgeNodes, selectedNodes, toggleNodeType } from '../store/pathActions';
+import { deleteSelectedNodes, editablePath, editLineAsPath, insertNode, isLineShape, nudgeNodes, selectedNodes, toggleNodeType } from '../store/pathActions';
 import { cancelCrop, commitCrop, startCrop } from '../store/imageActions';
 import { hasImageExtension } from '../io/imageFormats';
 import { anchorMenu, canvasMenu, objectMenu, segmentNextTo } from './canvasMenu';
@@ -53,7 +54,7 @@ const SHAPE_TOOLS: Partial<Record<ToolId, ShapeGeometry['kind']>> = {
 const BLOCK_ARROW_ASPECT = 0.55;
 
 type Gesture =
-  | { kind: 'move'; start: Point; originals: Map<Id, SceneObject>; moved: boolean }
+  | { kind: 'move'; start: Point; originals: Map<Id, SceneObject>; moved: boolean; duplicate: boolean }
   | { kind: 'gradient'; id: Id; which: 'start' | 'end' }
   | { kind: 'resize'; handle: Handle; originals: Map<Id, SceneObject>; single: Box | null; bounds: Rect }
   | { kind: 'rotate'; center: Point; startAngle: number; originals: Map<Id, SceneObject> }
@@ -293,11 +294,16 @@ export function CanvasView() {
     const w = Math.max(1, Math.max(...xs) - x0);
     const h = Math.max(1, Math.max(...ys) - y0);
     const norm = (q: Point | null) => (q ? { x: (q.x - x0) / w, y: (q.y - y0) / h } : null);
-    const path = createPath(
-      clean.map((n) => ({ anchor: norm(n.anchor)!, in: norm(n.in), out: norm(n.out) })),
-      closed,
-      { x: x0, y: y0, width: w, height: h, rotation: 0 },
-    );
+    const pen = newPaint('pen');
+    const path: PathObject = {
+      ...createPath(
+        clean.map((n) => ({ anchor: norm(n.anchor)!, in: norm(n.in), out: norm(n.out) })),
+        closed,
+        { x: x0, y: y0, width: w, height: h, rotation: 0 },
+      ),
+      ...pen,
+      fill: closed ? pen.fill : null,
+    };
     const layerId = writableLayer(editor, editor.getState().activeLayerId);
     if (!layerId) return;
     editor.edit('パスの作成', (d) => addObject(d, layerId, path));
@@ -466,6 +472,7 @@ export function CanvasView() {
       if (hit) {
         // Selecting another object; paths show their anchors for editing.
         if (editor.getState().selection[0] !== hit || editor.getState().selection.length !== 1) editor.select([hit]);
+        editLineAsPath(editor);
         return;
       }
       if (path) {
@@ -497,7 +504,9 @@ export function CanvasView() {
         const ids = sel.includes(hit) ? sel : [hit];
         if (!sel.includes(hit)) editor.select(ids);
         editor.beginGesture();
-        gesture.current = { kind: 'move', start: p, originals: originalsOf(ids), moved: false };
+        // Ctrl (or Alt, as in Fireworks / on a Mac) + drag moves copies, leaving the originals.
+        const duplicate = e.ctrlKey || e.metaKey || e.altKey;
+        gesture.current = { kind: 'move', start: p, originals: originalsOf(ids), moved: false, duplicate };
         return;
       }
       gesture.current = {
@@ -531,7 +540,7 @@ export function CanvasView() {
       const layerId = writableLayer(editor, editor.getState().activeLayerId);
       if (!layerId) return;
       const tp = editor.snap(p);
-      const t = createText('', { x: tp.x, y: tp.y, width: 10, height: 10, rotation: 0 });
+      const t: TextObject = { ...createText('', { x: tp.x, y: tp.y, width: 10, height: 10, rotation: 0 }), ...structuredClone(editor.getState().toolDefaults.text) };
       const size = measureText({ ...t, text: 'M' });
       // Text is centered vertically on the click; with snapping its top-left sits on the grid.
       const top = editor.getState().grid.snap ? tp.y : p.y - size.height / 2;
@@ -657,6 +666,15 @@ export function CanvasView() {
           else dx = 0;
         }
         if (!g.moved && Math.hypot(dx, dy) * zoom < 2) return;
+        if (!g.moved && g.duplicate) {
+          // Copies go right above their originals and are what moves from here on.
+          let copies: Id[] = [];
+          editor.preview((d) => {
+            copies = duplicateObjects(d, [...g.originals.keys()], 0, 0);
+          });
+          editor.select(copies);
+          g.originals = originalsOf(copies);
+        }
         g.moved = true;
         // With grid snapping, the top-left of the moved objects lands on the grid.
         const b = unionBounds([...g.originals.values()]);
@@ -730,7 +748,7 @@ export function CanvasView() {
     if (!g) return;
     switch (g.kind) {
       case 'move':
-        editor.endGesture('移動');
+        editor.endGesture(g.duplicate && g.moved ? '複製' : '移動');
         break;
       case 'gradient':
         editor.endGesture('グラデーションの調整');
@@ -829,13 +847,33 @@ export function CanvasView() {
       const r = dragRect(g.start, g.current, shift, alt);
       box = { ...r, width: Math.max(1, r.width), height: Math.max(1, r.height), rotation: 0 };
     }
+    // The line tool draws an open two-anchor path, so the subselect tool can edit it freely.
+    if (kind === 'line') {
+      const g2 = geometry as { from: Point; to: Point };
+      const nodes: PathNode[] = [g2.from, g2.to].map((anchor) => ({ anchor, in: null, out: null }));
+      if (!g.id) {
+        const layerId = writableLayer(editor, editor.getState().activeLayerId);
+        if (!layerId) {
+          gesture.current = null;
+          return;
+        }
+        const line: PathObject = { ...createPath(nodes, false, box), name: '直線', ...newPaint('line'), fill: null };
+        g.id = line.id;
+        editor.beginGesture();
+        editor.preview((d) => addObject(d, layerId, line));
+      } else {
+        const id = g.id;
+        editor.preview((d) => updateObject(d, id, { box, nodes } as Partial<SceneObject>));
+      }
+      return;
+    }
     if (!g.id) {
       const layerId = writableLayer(editor, editor.getState().activeLayerId);
       if (!layerId) {
         gesture.current = null;
         return;
       }
-      const shape = createShape(geometry, box);
+      const shape: ShapeObject = { ...createShape(geometry, box), ...newPaint(g.tool === 'arrow' ? 'arrow' : 'shape') };
       g.id = shape.id;
       editor.beginGesture();
       editor.preview((d) => addObject(d, layerId, shape));
@@ -879,9 +917,10 @@ export function CanvasView() {
     if (!hit) return;
     const loc = findObject(editor.getState().doc, hit);
     if (loc?.object.type === 'text') setEditingText({ id: hit, isNew: false });
-    // Double-clicking a path switches to anchor editing.
-    if (loc?.object.type === 'path' && !isEffectivelyLocked(loc)) {
+    // Double-clicking a path (or a line) switches to anchor editing.
+    if ((loc?.object.type === 'path' || isLineShape(loc?.object)) && !isEffectivelyLocked(loc!)) {
       editor.select([hit]);
+      editLineAsPath(editor);
       editor.setTool('subselect');
     }
   }
@@ -1166,6 +1205,11 @@ function PenPreview({ nodes, cursor, zoom }: { nodes: PathNode[]; cursor: Point 
       ))}
     </g>
   );
+}
+
+/** Paint for a new object from the settings of its drawing tool (see toolDefaults). */
+function newPaint(category: PaintCategory): Paint {
+  return structuredClone(editor.getState().toolDefaults[category]);
 }
 
 function pointInRect(p: Point, r: Rect): boolean {

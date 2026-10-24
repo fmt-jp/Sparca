@@ -3,6 +3,7 @@ import { emptyHistory, record, redo as historyRedo, undo as historyUndo, type Hi
 import { createDocument } from '../model/factory';
 import type { FileSystemFileHandleLike } from '../io/files';
 import { newId } from '../model/factory';
+import { DEFAULT_TOOL_DEFAULTS, type ToolCategory, type ToolDefaults } from '../model/toolDefaults';
 import type { Id, MaskShape, Point, SparcaDocument } from '../model/types';
 
 export type ToolId =
@@ -139,6 +140,8 @@ export interface EditorState {
   alignToCanvas: boolean;
   /** Edge setting of the marquee / lasso tools. */
   selectionEdge: SelectionEdge;
+  /** Settings for new objects, per kind of drawing tool. */
+  toolDefaults: ToolDefaults;
   notices: Notice[];
   /** Non-null while a long-running task is in progress. */
   busy: string | null;
@@ -165,6 +168,7 @@ export class EditorStore {
       eyedropperTarget: 'fill',
       grid: DEFAULT_GRID,
       selectionEdge: DEFAULT_SELECTION_EDGE,
+      toolDefaults: DEFAULT_TOOL_DEFAULTS,
       alignToCanvas: false,
       pickedColor: null,
       notices: [],
@@ -356,6 +360,12 @@ export class EditorStore {
     const selectionEdge = { ...this.state.selectionEdge, ...patch };
     const sel = this.state.pixelSelection;
     this.set({ selectionEdge, pixelSelection: sel && withSelectionEdge(sel, selectionEdge) });
+  }
+
+  /** Change the settings new objects of one kind of drawing tool get. */
+  setToolDefaults<K extends ToolCategory>(category: K, patch: Partial<ToolDefaults[K]>): void {
+    const toolDefaults = { ...this.state.toolDefaults, [category]: { ...this.state.toolDefaults[category], ...patch } };
+    this.set({ toolDefaults });
   }
 
   /** Set a newly drawn pixel selection, with the tools' edge setting. */

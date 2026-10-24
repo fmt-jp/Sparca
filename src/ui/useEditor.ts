@@ -1,5 +1,7 @@
 import { useSyncExternalStore } from 'react';
 import { imageCache } from '../render/imageCache';
+import { editLineAsPath } from '../store/pathActions';
+import { sanitizeToolDefaults } from '../model/toolDefaults';
 import { EditorStore, FEATHER_LIMITS, GRID_SIZE_LIMITS, type EditorState, type GridSettings, type SelectionEdge } from '../store/editor';
 
 export const editor = new EditorStore();
@@ -58,6 +60,35 @@ function sanitizeEdge(e: Partial<SelectionEdge>): Partial<SelectionEdge> {
   if (typeof e.feather === 'number' && e.feather >= FEATHER_LIMITS[0] && e.feather <= FEATHER_LIMITS[1]) out.feather = e.feather;
   return out;
 }
+
+// Settings for new objects (per drawing tool) are a per-browser preference too.
+const DEFAULTS_KEY = 'sparca.toolDefaults';
+try {
+  const saved = localStorage.getItem(DEFAULTS_KEY);
+  if (saved) editor.set({ toolDefaults: sanitizeToolDefaults(JSON.parse(saved)) });
+} catch {
+  // Storage unavailable or corrupt: defaults apply.
+}
+let lastDefaults = editor.getState().toolDefaults;
+editor.subscribe(() => {
+  const d = editor.getState().toolDefaults;
+  if (d === lastDefaults) return;
+  lastDefaults = d;
+  try {
+    localStorage.setItem(DEFAULTS_KEY, JSON.stringify(d));
+  } catch {
+    // Not remembered; harmless.
+  }
+});
+
+// Switching to the subselect tool with an old line shape selected makes it an editable path.
+let lastTool = editor.getState().tool;
+editor.subscribe(() => {
+  const tool = editor.getState().tool;
+  if (tool === lastTool) return;
+  lastTool = tool;
+  if (tool === 'subselect') editLineAsPath(editor);
+});
 
 imageCache.onError((message) => editor.notify('error', message));
 

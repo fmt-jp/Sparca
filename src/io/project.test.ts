@@ -23,6 +23,7 @@ function sampleDoc(): SparcaDocument {
     ];
     addObject(d, d.layers[0].id, img);
     const star = createShape({ kind: 'star', points: 7, innerRatio: 0.3 }, { x: 5, y: 5, width: 50, height: 50, rotation: 0 });
+    star.strokeStyle = 'dashed';
     star.effects = [createEffect('drop-shadow'), { ...createEffect('bevel-outer'), strength: 0.5, enabled: false }];
     addObject(d, l2.id, star);
     const t = createText('こんにちは\n2行目', { x: 0, y: 0, width: 100, height: 40, rotation: 0 });
@@ -89,6 +90,17 @@ describe('project format', () => {
       zip.file('document.json', JSON.stringify(raw));
       await expect(readProject(await zip.generateAsync({ type: 'uint8array' }))).rejects.toThrow(ProjectError);
     }
+  });
+
+  it('rejects an unknown line style', async () => {
+    const doc = produce(createDocument(10, 10), (d) => {
+      addObject(d, d.layers[0].id, createShape(defaultGeometry('rect'), { x: 0, y: 0, width: 5, height: 5, rotation: 0 }));
+    });
+    const raw = JSON.parse(JSON.stringify(doc));
+    raw.layers[0].children[0].strokeStyle = 'wavy';
+    const zip = new JSZip();
+    zip.file('document.json', JSON.stringify(raw));
+    await expect(readProject(await zip.generateAsync({ type: 'uint8array' }))).rejects.toThrow(ProjectError);
   });
 
   it('rejects image edits of unknown kinds or with a broken mosaic size', async () => {

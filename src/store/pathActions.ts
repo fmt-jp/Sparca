@@ -12,8 +12,38 @@ import {
   type DocNode,
 } from '../model/pathEdit';
 import { findObject, isEffectivelyLocked } from '../model/tree';
-import type { Id, PathObject, SceneObject } from '../model/types';
+import type { Id, PathNode, PathObject, SceneObject, ShapeObject } from '../model/types';
 import type { EditorStore } from './editor';
+
+/** A straight line shape as an equivalent open path with two anchors (same id, box, paint and effects). */
+export function lineToPath(o: ShapeObject): PathObject | null {
+  if (o.shape.kind !== 'line') return null;
+  const node = (anchor: { x: number; y: number }): PathNode => ({ anchor: { ...anchor }, in: null, out: null });
+  const { shape: _shape, type: _type, ...rest } = o;
+  return { ...rest, type: 'path', nodes: [node(o.shape.from), node(o.shape.to)], closed: false };
+}
+
+/** Whether the object is a line shape (older documents) that anchor editing turns into a path. */
+export function isLineShape(o: SceneObject | undefined): o is ShapeObject {
+  return o?.type === 'shape' && o.shape.kind === 'line';
+}
+
+/**
+ * Lines drawn before lines became paths (2026-10-24) are line shapes: turn the single
+ * selected one into a path so its anchors can be edited. One undo step.
+ */
+export function editLineAsPath(ed: EditorStore): boolean {
+  const { doc, selection } = ed.getState();
+  if (selection.length !== 1) return false;
+  const loc = findObject(doc, selection[0]);
+  if (!loc || !isLineShape(loc.object) || isEffectivelyLocked(loc)) return false;
+  const path = lineToPath(loc.object)!;
+  ed.edit('パスに変換', (d) => {
+    const l = findObject(d, path.id);
+    if (l) l.siblings[l.index] = path;
+  });
+  return true;
+}
 
 /** The selected path if exactly one editable path is selected. */
 export function editablePath(ed: EditorStore): PathObject | null {

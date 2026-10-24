@@ -266,6 +266,9 @@ function checkPaint(o: Obj, where: string) {
   checkFill(o.fill, `${where}.fill`, true);
   if (o.stroke !== null && typeof o.stroke !== 'string') throw new Invalid(`${where}.stroke が正しくありません`);
   num(o, 'strokeWidth', where);
+  if (o.strokeStyle !== undefined && !['solid', 'dashed', 'dotted'].includes(o.strokeStyle as string)) {
+    throw new Invalid(`${where}.strokeStyle が正しくありません`);
+  }
 }
 
 /** Fill missing keys from defaults (one level of nesting for plain objects). */
