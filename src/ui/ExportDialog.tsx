@@ -1,4 +1,4 @@
-// Export dialog (spec §13.2): PNG / JPEG / WebP, quality, transparency handling.
+// Export dialog (spec §13.2): PNG / JPEG / WebP / SVG, quality, transparency handling.
 import { useState } from 'react';
 import { exportImage, ExportError, FORMAT_INFO, type ExportFormat } from '../io/export';
 import { isAbort, saveBlob } from '../io/files';
@@ -55,10 +55,17 @@ export function ExportDialog({ onClose }: { onClose: () => void }) {
         </>
       }
     >
-      <div className="notice-inline" role="note">
-        書き出した画像は1枚に合成され、レイヤー構造や編集情報（テキスト・図形・調整値）は含まれません。
-        後から編集するには「ファイル → 保存」で .hnb プロジェクトとして保存してください。
-      </div>
+      {format === 'svg' ? (
+        <div className="notice-inline" role="note">
+          SVG は図形・パス・テキストをベクターのまま書き出します（Web ページなどにそのまま使えます）。HANABI で読み込み直して編集することはできないため、
+          後から編集するには「ファイル → 保存」で .hnb プロジェクトとして保存してください。
+        </div>
+      ) : (
+        <div className="notice-inline" role="note">
+          書き出した画像は1枚に合成され、レイヤー構造や編集情報（テキスト・図形・調整値）は含まれません。
+          後から編集するには「ファイル → 保存」で .hnb プロジェクトとして保存してください。
+        </div>
+      )}
       <Field label="ファイル名">
         <input aria-label="ファイル名" value={name} onChange={(e) => setName(e.target.value)} />
         <span className="suffix">.{info.ext}</span>
@@ -77,6 +84,14 @@ export function ExportDialog({ onClose }: { onClose: () => void }) {
       )}
       {format === 'png' && <div className="hint">{transparent ? '透明な背景は透明のまま書き出します。' : '背景色で塗りつぶした状態で書き出します。'}</div>}
       {format === 'webp' && <div className="hint">透明部分は透明のまま書き出します。</div>}
+      {format === 'svg' && (
+        <ul className="hint export-svg-notes">
+          <li>テキストは文字のまま書き出します。見る PC にそのフォントがないと、別のフォントで表示されます。</li>
+          <li>写真などの画像は SVG の中に埋め込みます（カラー調整・部分加工を反映）。画像が多いとファイルが大きくなります。</li>
+          <li>エフェクトは SVG のフィルターとして書き出します。ブラウザでは同じ見た目になりますが、ほかのソフトでは一部が異なって表示されることがあります。</li>
+          <li>レイヤーはレイヤー名付きのグループになります。非表示のレイヤー・オブジェクトは含みません。{transparent ? '背景は透明のままです。' : '背景色は四角形として入ります。'}</li>
+        </ul>
+      )}
       {format === 'jpeg' && (
         <>
           <div className="hint">JPEG は透明に対応していないため、透明な部分を次の色で塗りつぶします。</div>

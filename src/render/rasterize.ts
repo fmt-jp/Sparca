@@ -18,13 +18,25 @@ function blobToDataUrl(blob: Blob): Promise<string> {
   });
 }
 
+/** Image types every SVG viewer shows as a still image; others (BMP, possibly animated GIF) become PNG. */
+const PORTABLE_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/webp'];
+
+async function portableImage(blob: Blob): Promise<Blob> {
+  if (PORTABLE_IMAGE_TYPES.includes(blob.type)) return blob;
+  const bmp = await createImageBitmap(blob);
+  const c = new OffscreenCanvas(bmp.width, bmp.height);
+  c.getContext('2d')!.drawImage(bmp, 0, 0);
+  bmp.close();
+  return c.convertToBlob({ type: 'image/png' });
+}
+
 /** Standalone SVG markup of the document with every image embedded as a data URL. */
 export async function documentSvgMarkup(doc: SparcaDocument, scale = 1): Promise<string> {
   const hrefs = new Map<string, string>();
   for (const o of allObjects(doc)) {
     if (o.type !== 'image' || !o.visible) continue;
     try {
-      hrefs.set(o.id, await blobToDataUrl(await imageCache.fullBlob(o)));
+      hrefs.set(o.id, await blobToDataUrl(await portableImage(await imageCache.fullBlob(o))));
     } catch (e) {
       throw new RenderError(`画像「${o.name}」の処理に失敗しました: ${e instanceof Error ? e.message : String(e)}`);
     }

@@ -90,7 +90,7 @@ export function MenuBar({ onNew }: { onNew: () => void }) {
         { separator: true, label: '' },
         { label: '画像を配置…', shortcut: `${mod}Shift+I`, action: () => void chooseAndPlaceImage(editor) },
         { separator: true, label: '' },
-        { label: '画像として書き出し…（PNG / JPEG / WebP）', shortcut: `${mod}Shift+E`, action: () => openDialog({ kind: 'export' }) },
+        { label: '画像として書き出し…（PNG / JPEG / WebP / SVG）', shortcut: `${mod}Shift+E`, action: () => openDialog({ kind: 'export' }) },
       ],
     },
     {
