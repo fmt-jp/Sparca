@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import {
   duplicateLayer,
-  moveLayer,
+  moveLayerNextTo,
   moveObjectAbove,
+  moveObjectBelow,
   moveObjectToLayer,
   removeLayer,
   updateLayer,
@@ -14,6 +15,22 @@ import { ICON, SmallIcon } from './icons';
 import { editor, useEditor } from './useEditor';
 
 type DragItem = { kind: 'layer'; id: Id } | { kind: 'object'; id: Id };
+
+/**
+ * Where a dragged item will go: the line above ('before') or below ('after') a row, as in
+ * most layer panels. `id` is the row's layer or object id.
+ */
+type DropPos = { id: Id; pos: 'before' | 'after' };
+
+/** Upper or lower half of the row under the pointer. */
+function halfOf(e: React.DragEvent): 'before' | 'after' {
+  const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+  return e.clientY < r.top + r.height / 2 ? 'before' : 'after';
+}
+
+function dropClass(drop: DropPos | null, id: Id): string {
+  return drop?.id === id ? ` drop-${drop.pos}` : '';
+}
 
 const TYPE_LABEL: Record<SceneObject['type'], string> = {
   shape: '図形',
@@ -29,7 +46,7 @@ export function LayersPanel() {
   const selection = useEditor((s) => s.selection);
   const [collapsed, setCollapsed] = useState<Set<Id>>(new Set());
   const [drag, setDrag] = useState<DragItem | null>(null);
-  const [dropTarget, setDropTarget] = useState<string | null>(null);
+  const [dropTarget, setDropTarget] = useState<DropPos | null>(null);
 
   const layersTopFirst = [...doc.layers].reverse();
 
@@ -40,21 +57,30 @@ export function LayersPanel() {
     setCollapsed(next);
   }
 
-  function dropOnLayer(layer: Layer, layerIndex: number) {
+  /**
+   * Drop on a layer's header row. A layer goes above / below that layer. An object dropped
+   * on the lower half goes to the top of that layer (just under its header); on the upper
+   * half, to the bottom of the layer listed above it (the line between the two layers), or
+   * to the top of the topmost layer.
+   */
+  function dropOnLayer(layer: Layer, layerIndex: number, pos: 'before' | 'after') {
     if (!drag) return;
-    if (drag.kind === 'layer' && drag.id !== layer.id) {
-      editor.edit('レイヤーの並べ替え', (d) => moveLayer(d, drag.id, layerIndex));
-    } else if (drag.kind === 'object') {
-      const id = drag.id;
-      editor.edit('オブジェクトの移動', (d) => moveObjectToLayer(d, id, layer.id));
-      editor.set({ activeLayerId: layer.id });
+    if (drag.kind === 'layer') {
+      if (drag.id !== layer.id) editor.edit('レイヤーの並べ替え', (d) => moveLayerNextTo(d, drag.id, layer.id, pos === 'before'));
+      return;
     }
+    const id = drag.id;
+    const above = pos === 'before' ? doc.layers[layerIndex + 1] : undefined;
+    const target = above ?? layer;
+    editor.edit('オブジェクトの移動', (d) => moveObjectToLayer(d, id, target.id, above ? 0 : undefined));
+    editor.set({ activeLayerId: target.id });
   }
 
-  function dropOnObject(layer: Layer, targetId: Id) {
-    if (!drag || drag.kind !== 'object') return;
+  /** Drop on an object row: just above or below that object, in its layer. */
+  function dropOnObject(layer: Layer, targetId: Id, pos: 'before' | 'after') {
+    if (!drag || drag.kind !== 'object' || drag.id === targetId) return;
     const id = drag.id;
-    editor.edit('重ね順の変更', (d) => moveObjectAbove(d, id, targetId));
+    editor.edit('重ね順の変更', (d) => (pos === 'before' ? moveObjectAbove(d, id, targetId) : moveObjectBelow(d, id, targetId)));
     editor.set({ activeLayerId: layer.id });
   }
 
@@ -105,7 +131,7 @@ export function LayersPanel() {
           return (
             <li key={layer.id} role="treeitem" aria-expanded={!collapsed.has(layer.id)}>
               <div
-                className={`layer-row${isActive ? ' active' : ''}${dropTarget === layer.id ? ' drop' : ''}`}
+                className={`layer-row${isActive ? ' active' : ''}${dropClass(dropTarget, layer.id)}`}
                 data-layer-row={layer.name}
                 draggable
                 onDragStart={(e) => {
@@ -116,13 +142,14 @@ export function LayersPanel() {
                 onDragOver={(e) => {
                   if (!drag) return;
                   e.preventDefault();
-                  setDropTarget(layer.id);
+                  const pos = halfOf(e);
+                  if (dropTarget?.id !== layer.id || dropTarget.pos !== pos) setDropTarget({ id: layer.id, pos });
                 }}
                 onDragLeave={() => setDropTarget(null)}
                 onDrop={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
-                  dropOnLayer(layer, layerIndex);
+                  dropOnLayer(layer, layerIndex, halfOf(e));
                   setDrag(null);
                   setDropTarget(null);
                 }}
@@ -164,8 +191,8 @@ export function LayersPanel() {
                   depth={1}
                   selection={selection}
                   onDragStart={(id) => setDrag({ kind: 'object', id })}
-                  onDrop={(targetId) => {
-                    dropOnObject(layer, targetId);
+                  onDrop={(targetId, pos) => {
+                    dropOnObject(layer, targetId, pos);
                     setDrag(null);
                     setDropTarget(null);
                   }}
@@ -188,10 +215,10 @@ function ObjectList(props: {
   depth: number;
   selection: Id[];
   onDragStart: (id: Id) => void;
-  onDrop: (targetId: Id) => void;
+  onDrop: (targetId: Id, pos: 'before' | 'after') => void;
   dragging: boolean;
-  dropTarget: string | null;
-  setDropTarget: (id: string | null) => void;
+  dropTarget: DropPos | null;
+  setDropTarget: (d: DropPos | null) => void;
 }) {
   const { objects, layer, depth, selection } = props;
   const topFirst = [...objects].reverse();
@@ -200,7 +227,7 @@ function ObjectList(props: {
       {topFirst.map((o) => (
         <li key={o.id} role="treeitem">
           <div
-            className={`object-row${selection.includes(o.id) ? ' selected' : ''}${props.dropTarget === o.id ? ' drop' : ''}`}
+            className={`object-row${selection.includes(o.id) ? ' selected' : ''}${dropClass(props.dropTarget, o.id)}`}
             style={{ paddingLeft: 8 + depth * 14 }}
             data-object-row={o.name}
             draggable={depth === 1}
@@ -214,13 +241,14 @@ function ObjectList(props: {
               if (!props.dragging || depth !== 1) return;
               e.preventDefault();
               e.stopPropagation();
-              props.setDropTarget(o.id);
+              const pos = halfOf(e);
+              if (props.dropTarget?.id !== o.id || props.dropTarget.pos !== pos) props.setDropTarget({ id: o.id, pos });
             }}
             onDrop={(e) => {
               if (depth !== 1) return;
               e.preventDefault();
               e.stopPropagation();
-              props.onDrop(o.id);
+              props.onDrop(o.id, halfOf(e));
             }}
             onClick={(e) => {
               e.stopPropagation();

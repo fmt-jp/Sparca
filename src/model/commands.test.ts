@@ -1,7 +1,7 @@
 import { produce } from 'immer';
 import { describe, expect, it } from 'vitest';
 import {
-  addLayer, addObject, duplicateObjects, groupObjects, moveLayer, removeLayer, removeObjects,
+  addLayer, addObject, duplicateObjects, groupObjects, moveLayer, moveLayerNextTo, moveObjectAbove, moveObjectBelow, removeLayer, removeObjects,
   reorderObjects, transformObjects, ungroupObjects, updateLayer,
 } from './commands';
 import { createDocument, createShape, defaultGeometry } from './factory';
@@ -88,5 +88,22 @@ describe('layer commands', () => {
     after = produce(after, (d) => { removeLayer(d, id); });
     expect(after.layers).toHaveLength(1);
     expect(produce(after, (d) => { removeLayer(d, d.layers[0].id); }).layers).toHaveLength(1);
+  });
+
+  it('moves objects above / below a target and layers next to a layer', () => {
+    const { doc, ids } = docWith(3); // bottom → top: 0, 1, 2
+    const order = (d: SparcaDocument) => d.layers[0].children.map((o) => ids.indexOf(o.id));
+    expect(order(produce(doc, (d) => moveObjectBelow(d, ids[2], ids[0])))).toEqual([2, 0, 1]);
+    expect(order(produce(doc, (d) => moveObjectAbove(d, ids[0], ids[2])))).toEqual([1, 2, 0]);
+    expect(order(produce(doc, (d) => moveObjectBelow(d, ids[1], ids[1])))).toEqual([0, 1, 2]);
+    let l = doc;
+    const names: string[] = [];
+    l = produce(l, (d) => { names.push(addLayer(d).id, addLayer(d).id); });
+    const first = l.layers[0].id;
+    const ids3 = () => l.layers.map((x) => x.id);
+    l = produce(l, (d) => moveLayerNextTo(d, first, names[1], true));
+    expect(ids3()).toEqual([names[0], names[1], first]);
+    l = produce(l, (d) => moveLayerNextTo(d, first, names[0], false));
+    expect(ids3()).toEqual([first, names[0], names[1]]);
   });
 });
