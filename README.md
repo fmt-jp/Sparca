@@ -26,11 +26,13 @@ npm run preview    # ビルド結果の確認
 `main` ブランチに push すると `.github/workflows/deploy-pages.yml` が型チェック・単体テスト・ビルドを実行し、GitHub Pages に公開します（Actions タブから手動実行も可能）。
 初回のみ、リポジトリの Settings → Pages → Build and deployment → Source を「GitHub Actions」に設定してください。
 
-同じビルドを [fmt-jp/open](https://github.com/fmt-jp/open) の `hanabi/` フォルダにも公開する（https://fmt-jp.github.io/open/hanabi/ 、トップページのアプリ一覧にも掲載）。ワークフローの `publish-open` ジョブが、`main` への push のたびに `hanabi/` を最新のビルドに置き換えてコミットする。これにはシークレット `OPEN_REPO_TOKEN` が必要（未設定ならこのジョブは何もせずスキップ）：
+同じビルドを [fmt-jp/open](https://github.com/fmt-jp/open) の `hanabi/` フォルダにも公開する（https://fmt-jp.github.io/open/hanabi/ 、トップページのアプリ一覧にも掲載）。ワークフローの `publish-open` ジョブが、`main` への push のたびに `hanabi/` を最新のビルドに置き換えてコミットする（ビルドが同じなら何もしない）。書き込みにはデプロイキーを使う（2026-10-24 にユーザーの判断で個人用アクセストークンから切り替え。期限切れがなく、効く範囲が `fmt-jp/open` だけに限られるため）：
 
-1. GitHub の Settings → Developer settings → Personal access tokens → Fine-grained tokens で新しいトークンを作る。Repository access は「Only select repositories」で `fmt-jp/open` だけを選び、Permissions の「Contents」を「Read and write」にする。
-2. Sparca リポジトリの Settings → Secrets and variables → Actions → New repository secret で、名前 `OPEN_REPO_TOKEN`、値に作成したトークンを登録する。
-3. トークンの有効期限が切れたら作り直して登録し直す（切れると `publish-open` が失敗して知らせる）。
+1. PC で鍵を作る：`ssh-keygen -t ed25519 -C "sparca-to-open" -f open_deploy -N ""`（`open_deploy` が秘密鍵、`open_deploy.pub` が公開鍵）。
+2. `fmt-jp/open` の Settings → Deploy keys → Add deploy key に `open_deploy.pub` の中身を登録し、「Allow write access」にチェックを入れる。
+3. Sparca の Settings → Secrets and variables → Actions に、名前 `OPEN_DEPLOY_KEY`、値 `open_deploy` の中身全体でシークレットを登録する。PC の鍵ファイルはその後削除してよい。
+
+`OPEN_DEPLOY_KEY` がないときは、以前のシークレット `OPEN_REPO_TOKEN`（`fmt-jp/open` に「Contents: Read and write」の fine-grained トークン）があればそれを使い、どちらもなければスキップする。どちらを使ったかは実行結果の概要に表示される。デプロイキーは期限がないため、不要になったら `fmt-jp/open` の Deploy keys から削除する。
 ビルドは相対パス（`base: './'`）なので、`https://<owner>.github.io/<repo>/` のようなサブパスでも動作します。
 
 公開し直すとサーバー上のファイルはすべて新しいものに置き換わるため、更新前から開いているページは、必要になったときに読み込む分割ファイル（描画・書き出し用の `rasterize`、`svgExport`、フォント名の `fontNames`、画像処理の Worker）を取得できなくなる。これを避けるため、起動直後に分割ファイルをすべて読み込み、Worker も起動しておく（`src/lazy.ts`）。それでも読み込めなかった場合は「アプリが更新されたため…保存してから再読み込みしてください」と表示する（`e2e/app-update.spec.ts`）。
