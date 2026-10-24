@@ -1630,3 +1630,10 @@ kbd {
     padding: 0 0 8px;
   }
 }
+
+/* Drawing tool settings shown above the selected object's settings. */
+.selected-object-props {
+  border-top: 1px solid var(--border);
+  margin-top: 4px;
+  padding-top: 2px;
+}
