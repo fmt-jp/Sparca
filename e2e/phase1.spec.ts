@@ -40,7 +40,7 @@ test('draws shapes and text, then undo/redo restores them', async ({ page }) => 
   await expect(page.locator('textarea.text-editor')).toBeFocused();
   await page.keyboard.type('Hello');
   await page.keyboard.press('Escape');
-  expect((await objects(page)).map((o) => o.type)).toEqual(['shape', 'shape', 'text']);
+  expect((await objects(page)).map((o) => o.type)).toEqual(['shape', 'path', 'text']);
   await expect(page.locator('[data-testid=canvas] text')).toHaveText('Hello');
 
   await page.keyboard.press('v');

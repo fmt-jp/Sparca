@@ -137,10 +137,14 @@ export interface Gradient {
 /** A solid color (#rrggbb) or a gradient. */
 export type Fill = string | Gradient;
 
+/** Line style of a stroke. Missing = solid (documents before 2026-10-24). */
+export type StrokeStyle = 'solid' | 'dashed' | 'dotted';
+
 export interface Paint {
   fill: Fill | null;
   stroke: string | null;
   strokeWidth: number;
+  strokeStyle?: StrokeStyle;
 }
 
 export type ShapeGeometry =

@@ -2,7 +2,7 @@
 import { transformObjects, updateObject } from '../model/commands';
 import { boxCenter, unionBounds } from '../model/geometry';
 import { findObject, isEffectivelyLocked } from '../model/tree';
-import type { ColorAdjust, LocalEdit, SceneObject, ShapeObject, TextObject, ImageObject, PathObject, Id, Box } from '../model/types';
+import type { ColorAdjust, LocalEdit, SceneObject, ShapeObject, TextObject, ImageObject, PathObject, Id, Box, Paint, StrokeStyle } from '../model/types';
 import { pipelineOutputSize } from '../engine/pipeline';
 import { METHOD_LABELS } from '../engine/resample';
 import { autoColor, cancelCrop, commitCrop, pixelTargetImage, resetAdjust, setAdjust, setCropTarget } from '../store/imageActions';
@@ -21,6 +21,7 @@ import { ColorInput, Field, NumberInput, PopupSliderInput, Toggle } from './cont
 import { editor, useEditor } from './useEditor';
 import { useState } from 'react';
 import { toolDef } from './tools';
+import { CATEGORY_LABELS, toolCategory, type TextStyle, type ToolCategory } from '../model/toolDefaults';
 import { SmallIcon } from './icons';
 
 
@@ -51,6 +52,7 @@ export function PropertiesPanel() {
           </span>
         </div>
         {tool === 'select' && <DocumentSection />}
+        {toolCategory(tool) && <ToolDefaultsSection category={toolCategory(tool)!} />}
       </>
     );
   } else if (locs.length === 1 && locs[0].object.type !== 'group') {
@@ -162,37 +164,76 @@ function PaintSection({ o }: { o: ShapeObject | PathObject }) {
   const lineLike = o.type === 'shape' ? o.shape.kind === 'line' || o.shape.kind === 'arrow' : !o.closed;
   return (
     <div className="prop-section">
+      <PaintFields paint={o} lineLike={lineLike} size={o.box} onChange={(patch, label, key) => set(o.id, patch as Partial<SceneObject>, label, key)} />
+    </div>
+  );
+}
+
+export const STROKE_STYLES: { value: StrokeStyle; label: string }[] = [
+  { value: 'solid', label: '実線' },
+  { value: 'dashed', label: '破線' },
+  { value: 'dotted', label: '点線' },
+];
+
+/**
+ * Fill / stroke / stroke width / line style fields. Used for a selected shape or path and
+ * for the drawing tools' settings for new objects.
+ */
+export function PaintFields({
+  paint,
+  lineLike,
+  size,
+  onChange,
+}: {
+  paint: Paint;
+  /** Open lines have no fill and always a stroke. */
+  lineLike: boolean;
+  /** Box size for the gradient editor. */
+  size: { width: number; height: number };
+  onChange: (patch: Partial<Paint>, label: string, mergeKey?: string) => void;
+}) {
+  return (
+    <>
       {!lineLike && (
-        <Field label="塗り" group wide={isGradient(o.fill)}>
-          <FillInput label="塗り" allowNone value={o.fill} size={o.box} onChange={(fill, l, k) => set(o.id, { fill } as Partial<SceneObject>, l, k)} />
+        <Field label="塗り" group wide={isGradient(paint.fill)}>
+          <FillInput label="塗り" allowNone value={paint.fill} size={size} onChange={(fill, l, k) => onChange({ fill }, l, k)} />
         </Field>
       )}
       <Field label="線">
         <ColorInput
           label="線"
           allowNone={!lineLike}
-          value={o.stroke}
+          value={paint.stroke}
           onChange={(stroke) => {
-            const patch: Partial<ShapeObject> = { stroke };
-            if (stroke && o.strokeWidth === 0) patch.strokeWidth = 2;
-            set(o.id, patch as Partial<SceneObject>, '線の色の変更', 'stroke');
+            const patch: Partial<Paint> = { stroke };
+            if (stroke && paint.strokeWidth === 0) patch.strokeWidth = 2;
+            onChange(patch, '線の色の変更', 'stroke');
           }}
         />
       </Field>
       <Field label="線幅" group>
         <PopupSliderInput
           label="線幅"
-          value={o.strokeWidth}
+          value={paint.strokeWidth}
           min={0}
           max={500}
           sliderMax={50}
           precision={1}
           suffix="px"
           undoLabel="線幅の変更"
-          onChange={(strokeWidth) => set(o.id, { strokeWidth } as Partial<SceneObject>, '線幅の変更', 'strokeWidth')}
+          onChange={(strokeWidth) => onChange({ strokeWidth }, '線幅の変更', 'strokeWidth')}
         />
       </Field>
-    </div>
+      <Field label="線種">
+        <select aria-label="線種" value={paint.strokeStyle ?? 'solid'} onChange={(e) => onChange({ strokeStyle: e.target.value as StrokeStyle }, '線種の変更')}>
+          {STROKE_STYLES.map((st) => (
+            <option key={st.value} value={st.value}>
+              {st.label}
+            </option>
+          ))}
+        </select>
+      </Field>
+    </>
   );
 }
 
@@ -309,38 +350,82 @@ function TextSection({ o }: { o: TextObject }) {
             }}
           />
         </Field>
-        <Field label="フォント" group>
-          <FontPicker value={o.fontFamily} onChange={(fontFamily) => setText(o, { fontFamily }, 'フォントの変更')} />
-        </Field>
-        <Field label="サイズ">
-          <NumberInput label="フォントサイズ" value={o.fontSize} min={1} max={2000} precision={1} suffix="px" onCommit={(fontSize) => setText(o, { fontSize }, 'フォントサイズの変更')} />
-        </Field>
-        <Field label="スタイル" group>
-          <span className="button-row">
-            <button type="button" className={`style-btn${o.bold ? ' on' : ''}`} aria-pressed={o.bold} title="太字" onClick={() => setText(o, { bold: !o.bold }, '太字の切り替え')}>
-              <b>B</b>
-            </button>
-            <button type="button" className={`style-btn${o.italic ? ' on' : ''}`} aria-pressed={o.italic} title="斜体" onClick={() => setText(o, { italic: !o.italic }, '斜体の切り替え')}>
-              <i>I</i>
-            </button>
-            {(['left', 'center', 'right'] as const).map((a) => (
-              <button key={a} type="button" className={`style-btn${o.align === a ? ' on' : ''}`} aria-pressed={o.align === a} title={{ left: '左揃え', center: '中央揃え', right: '右揃え' }[a]} onClick={() => setText(o, { align: a }, '揃えの変更')}>
-                {{ left: '左', center: '中', right: '右' }[a]}
-              </button>
-            ))}
-          </span>
-        </Field>
-        <Field label="色" group wide={isGradient(o.color)}>
-          <FillInput label="文字色" value={o.color} size={o.box} onChange={(c, l, k) => set(o.id, { color: c ?? '#000000' } as Partial<SceneObject>, l, k)} />
-        </Field>
-        <Field label="文字間隔">
-          <NumberInput label="文字間隔" value={o.letterSpacing} min={-100} max={1000} precision={1} suffix="px" onCommit={(letterSpacing) => setText(o, { letterSpacing }, '文字間隔の変更')} />
-        </Field>
-        <Field label="行間">
-          <NumberInput label="行間" value={o.lineHeight} min={0.5} max={5} step={0.1} precision={2} suffix="倍" onCommit={(lineHeight) => setText(o, { lineHeight }, '行間の変更')} />
-        </Field>
+        <TextStyleFields style={o} size={o.box} onChange={(patch, label, key) => setText(o, patch, label, key)} />
       </div>
     </>
+  );
+}
+
+/** Font, size, style, color and spacing fields, for a selected text or for new text. */
+function TextStyleFields({
+  style: o,
+  size,
+  onChange,
+}: {
+  style: TextStyle;
+  size: { width: number; height: number };
+  onChange: (patch: Partial<TextStyle>, label: string, mergeKey?: string) => void;
+}) {
+  return (
+    <>
+      <Field label="フォント" group>
+        <FontPicker value={o.fontFamily} onChange={(fontFamily) => onChange({ fontFamily }, 'フォントの変更')} />
+      </Field>
+      <Field label="サイズ">
+        <NumberInput label="フォントサイズ" value={o.fontSize} min={1} max={2000} precision={1} suffix="px" onCommit={(fontSize) => onChange({ fontSize }, 'フォントサイズの変更')} />
+      </Field>
+      <Field label="スタイル" group>
+        <span className="button-row">
+          <button type="button" className={`style-btn${o.bold ? ' on' : ''}`} aria-pressed={o.bold} title="太字" onClick={() => onChange({ bold: !o.bold }, '太字の切り替え')}>
+            <b>B</b>
+          </button>
+          <button type="button" className={`style-btn${o.italic ? ' on' : ''}`} aria-pressed={o.italic} title="斜体" onClick={() => onChange({ italic: !o.italic }, '斜体の切り替え')}>
+            <i>I</i>
+          </button>
+          {(['left', 'center', 'right'] as const).map((a) => (
+            <button key={a} type="button" className={`style-btn${o.align === a ? ' on' : ''}`} aria-pressed={o.align === a} title={{ left: '左揃え', center: '中央揃え', right: '右揃え' }[a]} onClick={() => onChange({ align: a }, '揃えの変更')}>
+              {{ left: '左', center: '中', right: '右' }[a]}
+            </button>
+          ))}
+        </span>
+      </Field>
+      <Field label="色" group wide={isGradient(o.color)}>
+        <FillInput label="文字色" value={o.color} size={size} onChange={(c, l, k) => onChange({ color: c ?? '#000000' }, l, k)} />
+      </Field>
+      <Field label="文字間隔">
+        <NumberInput label="文字間隔" value={o.letterSpacing} min={-100} max={1000} precision={1} suffix="px" onCommit={(letterSpacing) => onChange({ letterSpacing }, '文字間隔の変更')} />
+      </Field>
+      <Field label="行間">
+        <NumberInput label="行間" value={o.lineHeight} min={0.5} max={5} step={0.1} precision={2} suffix="倍" onCommit={(lineHeight) => onChange({ lineHeight }, '行間の変更')} />
+      </Field>
+    </>
+  );
+}
+
+/** Size used for gradient editing in the new-object settings (no box yet). */
+const SAMPLE_SIZE = { width: 100, height: 100 };
+
+/**
+ * Settings for new objects of the active drawing tool (shown while nothing is selected).
+ * Changing them affects only objects drawn afterwards.
+ */
+function ToolDefaultsSection({ category }: { category: ToolCategory }) {
+  const defaults = useEditor((s) => s.toolDefaults);
+  return (
+    <div className="prop-section" data-testid="tool-defaults" role="group" aria-label={`新しい${CATEGORY_LABELS[category]}の設定`}>
+      <span className="section-title">新しい{CATEGORY_LABELS[category]}の設定</span>
+      {category === 'text' ? (
+        <TextStyleFields style={defaults.text} size={SAMPLE_SIZE} onChange={(patch) => editor.setToolDefaults('text', patch)} />
+      ) : (
+        <PaintFields
+          paint={defaults[category]}
+          lineLike={category === 'line'}
+          size={SAMPLE_SIZE}
+          onChange={(patch) => editor.setToolDefaults(category, patch)}
+        />
+      )}
+      {category === 'pen' && <span className="hint">塗りは閉じたパスに使われます。</span>}
+    </div>
   );
 }
 

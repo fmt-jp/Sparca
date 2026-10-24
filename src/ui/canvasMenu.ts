@@ -10,7 +10,7 @@ import {
   selectAll,
   ungroupSelection,
 } from '../store/actions';
-import { convertSelectedNodes, deleteSelectedNodes, editablePath, insertNode } from '../store/pathActions';
+import { convertSelectedNodes, deleteSelectedNodes, editablePath, insertNode, isLineShape } from '../store/pathActions';
 import type { MenuItem } from './MenuBar';
 import { ALIGN, alignShortcut, DISTRIBUTE } from './PropertiesPanel';
 import { menuCopy, menuPaste } from './clipboard';
@@ -56,7 +56,7 @@ export function objectMenu(): MenuItem[] {
       ],
     },
   ];
-  if (single?.object.type === 'path' && !isEffectivelyLocked(single) && editor.getState().tool !== 'subselect') {
+  if ((single?.object.type === 'path' || isLineShape(single?.object)) && !isEffectivelyLocked(single!) && editor.getState().tool !== 'subselect') {
     items.push(SEP, {
       label: 'パスの編集',
       action: () => {

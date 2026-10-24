@@ -7,6 +7,7 @@ import type {
   SceneObject,
   ShapeObject,
   SparcaDocument,
+  StrokeStyle,
   TextObject,
 } from '../model/types';
 import { effectsFilter, splitAtZoomBlur, zoomBlurLayers, zoomBlurReach } from './effects';
@@ -141,6 +142,17 @@ function renderObject(o: SceneObject, opts: RenderOptions, prefix: string, canva
   );
 }
 
+/**
+ * Dash pattern for a line style, proportional to the stroke width: dashes 4× the width
+ * with 2× gaps; dots are zero-length dashes with round caps, 2× the width apart.
+ */
+export function strokeDash(style: StrokeStyle | undefined, width: number, cap: 'round' | 'butt'): { strokeDasharray?: string; strokeLinecap: 'round' | 'butt' } {
+  const w = Math.max(width, 0.5);
+  if (style === 'dashed') return { strokeDasharray: `${w * 4} ${w * 2}`, strokeLinecap: 'butt' };
+  if (style === 'dotted') return { strokeDasharray: `0 ${w * 2}`, strokeLinecap: 'round' };
+  return { strokeLinecap: cap };
+}
+
 function renderShape(o: ShapeObject, fillId: string): ReactElement {
   const { width: w, height: h } = o.box;
   const p = shapePaths(o.shape, w, h, o.strokeWidth);
@@ -155,7 +167,7 @@ function renderShape(o: ShapeObject, fillId: string): ReactElement {
         stroke={stroke}
         strokeWidth={o.strokeWidth}
         strokeLinejoin="round"
-        strokeLinecap={p.open ? 'round' : 'butt'}
+        {...strokeDash(o.strokeStyle, o.strokeWidth, p.open ? 'round' : 'butt')}
       />
       {p.headD && <path d={p.headD} fill={o.stroke ?? '#000'} stroke="none" />}
     </>
@@ -174,7 +186,7 @@ function renderPath(o: PathObject, fillId: string): ReactElement {
         stroke={o.stroke && o.strokeWidth > 0 ? o.stroke : 'none'}
         strokeWidth={o.strokeWidth}
         strokeLinejoin="round"
-        strokeLinecap="round"
+        {...strokeDash(o.strokeStyle, o.strokeWidth, 'round')}
       />
     </>
   );
