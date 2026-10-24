@@ -1,13 +1,14 @@
-// Image export (spec §13.2): the canvas area composited into PNG, JPEG or WebP.
+// Image export (spec §13.2): the canvas area composited into PNG, JPEG or WebP, or as SVG.
 import type { SparcaDocument } from '../model/types';
 import { validateDimensions } from '../store/assets';
 
-export type ExportFormat = 'png' | 'jpeg' | 'webp';
+export type ExportFormat = 'png' | 'jpeg' | 'webp' | 'svg';
 
 export const FORMAT_INFO: Record<ExportFormat, { label: string; mime: string; ext: string; lossy: boolean; alpha: boolean }> = {
   png: { label: 'PNG', mime: 'image/png', ext: 'png', lossy: false, alpha: true },
   jpeg: { label: 'JPEG', mime: 'image/jpeg', ext: 'jpg', lossy: true, alpha: false },
   webp: { label: 'WebP', mime: 'image/webp', ext: 'webp', lossy: true, alpha: true },
+  svg: { label: 'SVG', mime: 'image/svg+xml', ext: 'svg', lossy: false, alpha: true },
 };
 
 export interface ExportOptions {
@@ -27,6 +28,7 @@ export function flattenColor(opts: ExportOptions): string | null {
 }
 
 export async function exportImage(doc: SparcaDocument, opts: ExportOptions): Promise<Blob> {
+  if (opts.format === 'svg') return (await import('./svgExport')).exportSvg(doc);
   const problem = validateDimensions(doc.width, doc.height);
   if (problem) throw new ExportError(problem);
   const info = FORMAT_INFO[opts.format];

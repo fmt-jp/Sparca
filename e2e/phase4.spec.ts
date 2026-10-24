@@ -7,10 +7,11 @@ test.beforeEach(async ({ page }) => {
   await page.goto('/');
 });
 
-async function exportAs(page: Page, format: 'PNG' | 'JPEG' | 'WebP', quality?: string) {
+async function exportAs(page: Page, format: 'PNG' | 'JPEG' | 'WebP' | 'SVG', quality?: string) {
   await page.keyboard.press('Control+Shift+E');
   const dialog = page.getByRole('dialog', { name: '画像として書き出し' });
-  await expect(dialog).toContainText('レイヤー構造や編集情報');
+  await dialog.getByLabel(format, { exact: true }).check();
+  await expect(dialog).toContainText(format === 'SVG' ? 'ベクターのまま' : 'レイヤー構造や編集情報');
   await dialog.getByLabel(format, { exact: true }).check();
   if (quality) {
     const q = dialog.locator('input[type="text"][aria-label="品質"]');
@@ -95,6 +96,68 @@ test('WebP export with quality and alpha', async ({ page }) => {
   const px = await decodePixels(page, out.bytes, 'image/webp', [[5, 5], [35, 35]]);
   expect(px.px[0][3]).toBe(0);
   expect(px.px[1][0]).toBeGreaterThan(220);
+});
+
+/** Draw an SVG file in the browser (as an <img>) and read pixels. */
+async function renderSvg(page: Page, svg: string, points: [number, number][]) {
+  return page.evaluate(
+    async ({ svg, points }) => {
+      const url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }));
+      const img = new Image();
+      await new Promise((ok, fail) => {
+        img.onload = ok;
+        img.onerror = fail;
+        img.src = url;
+      });
+      const c = document.createElement('canvas');
+      c.width = img.naturalWidth;
+      c.height = img.naturalHeight;
+      const ctx = c.getContext('2d')!;
+      ctx.drawImage(img, 0, 0);
+      return { width: c.width, height: c.height, px: points.map(([x, y]) => Array.from(ctx.getImageData(x, y, 1, 1).data)) };
+    },
+    { svg, points },
+  );
+}
+
+test('SVG export keeps vectors and text, embeds edited images, uses filters for effects and leaves out what is off the canvas', async ({ page }) => {
+  await buildScene(page);
+  const c = await canvasBox(page);
+  await page.keyboard.press('t');
+  await page.mouse.click(c.x + 20, c.y + 250);
+  await expect(page.locator('textarea.text-editor')).toBeFocused();
+  await page.keyboard.type('Hello SVG');
+  await page.keyboard.press('Escape');
+  // A shape moved entirely off the canvas.
+  await page.keyboard.press('r');
+  await drag(page, { x: c.x + 300, y: c.y + 20 }, { x: c.x + 340, y: c.y + 60 });
+  const props = page.getByRole('region', { name: 'プロパティ' });
+  const xField = props.locator('input[type="text"][aria-label="X"]');
+  await xField.fill('900');
+  await xField.press('Enter');
+  const offId = await page.evaluate(() => (window as never as { __sparca: { getState(): { selection: string[] } } }).__sparca.getState().selection[0]);
+
+  const out = await exportAs(page, 'SVG');
+  expect(out.name).toBe('untitled.svg');
+  const svg = out.bytes.toString('utf8');
+  expect(svg.startsWith('<?xml')).toBe(true);
+  expect(svg).toContain('viewBox="0 0 400 300"');
+  expect(svg).toContain('data-name="レイヤー 1"');
+  // Vector shapes, real text, an embedded (processed) image and a filter for the shadow.
+  expect(svg).toMatch(/<rect|<path/);
+  expect(svg).toMatch(/<text[^>]*>[\s\S]*Hello SVG/);
+  expect(svg).toContain('href="data:image/png;base64,');
+  expect(svg).toContain('<filter');
+  expect(svg).not.toContain(`data-object-id="${offId}"`);
+  expect(svg).not.toContain('blob:');
+  // It renders like the canvas (transparent background, red square, brightened image).
+  const px = await renderSvg(page, svg, [[5, 5], [35, 35], [300, 200], [125 + 14, 35 + 14]]);
+  expect([px.width, px.height]).toEqual([400, 300]);
+  expect(px.px[0][3]).toBe(0);
+  expect(px.px[1]).toEqual([255, 0, 0, 255]);
+  expect(px.px[2][0]).toBeGreaterThan(140);
+  expect(px.px[2][0]).toBeLessThan(190);
+  expect(px.px[3][3]).toBeGreaterThan(50);
 });
 
 test('export failure is reported and leaves the document unchanged', async ({ page }) => {

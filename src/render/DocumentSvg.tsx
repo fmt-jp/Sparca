@@ -55,7 +55,7 @@ export function DocumentSvg({
       )}
       {doc.layers.map((layer) =>
         layer.visible ? (
-          <g key={layer.id} data-layer-id={layer.id}>
+          <g key={layer.id} data-layer-id={layer.id} data-name={forExport ? layer.name : undefined}>
             {layer.children.map((o) => renderObject(o, options, prefix, doc))}
           </g>
         ) : null,
