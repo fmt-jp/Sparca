@@ -1620,7 +1620,24 @@ kbd {
   white-space: nowrap;
   font-weight: 600;
 }
+.help-intro {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 8px;
+}
+.help-intro p {
+  margin: 0;
+}
+.help-logo {
+  flex: none;
+  display: block;
+}
 @media (max-width: 600px) {
+  .help-intro {
+    flex-direction: column;
+    align-items: flex-start;
+  }
   .help-layout {
     flex-direction: column;
     height: 70vh;

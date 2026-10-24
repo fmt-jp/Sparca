@@ -21,7 +21,10 @@ export const HELP_SECTIONS: Section[] = [
     title: 'はじめに',
     body: (
       <>
-        <p>HANABI は、写真などの画像（ラスター）と、図形・テキスト（ベクター）を同じキャンバスで編集できるグラフィックエディタです。作ったオブジェクトは後から何度でも選び直して編集できます。</p>
+        <div className="help-intro">
+          <img className="help-logo" src={`${import.meta.env.BASE_URL}logo.svg`} alt="花火 HANABI" width={120} height={138} />
+          <p>HANABI は、写真などの画像（ラスター）と、図形・テキスト（ベクター）を同じキャンバスで編集できるグラフィックエディタです。作ったオブジェクトは後から何度でも選び直して編集できます。</p>
+        </div>
         <h4>基本の流れ</h4>
         <ol>
           <li>「ファイル」→「新規…」でキャンバスを作るか、「開く…」で画像やプロジェクト（.hnb）を開く。</li>
