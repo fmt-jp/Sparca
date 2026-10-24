@@ -48,8 +48,10 @@ jobs:
         uses: actions/deploy-pages@v4
 
   # Also publish the build to https://fmt-jp.github.io/open/hanabi/ (repository fmt-jp/open,
-  # folder hanabi/). Needs the secret OPEN_REPO_TOKEN: a fine-grained personal access token
-  # with "Contents: Read and write" on fmt-jp/open. Without it this job is skipped.
+  # folder hanabi/). Credentials, in order of preference:
+  # - OPEN_DEPLOY_KEY: private key of a deploy key with write access on fmt-jp/open
+  # - OPEN_REPO_TOKEN: fine-grained personal access token, "Contents: Read and write" on fmt-jp/open
+  # Without either this job is skipped.
   publish-open:
     needs: build
     runs-on: ubuntu-latest
@@ -57,26 +59,39 @@ jobs:
       group: publish-open
       cancel-in-progress: false
     steps:
-      - id: token
+      - id: auth
         env:
+          KEY: ${{ secrets.OPEN_DEPLOY_KEY }}
           TOKEN: ${{ secrets.OPEN_REPO_TOKEN }}
         run: |
-          if [ -z "$TOKEN" ]; then
-            echo "OPEN_REPO_TOKEN が未設定のため、fmt-jp/open への公開をスキップしました。" >> "$GITHUB_STEP_SUMMARY"
-            echo "skip=true" >> "$GITHUB_OUTPUT"
+          if [ -n "$KEY" ]; then
+            echo "mode=key" >> "$GITHUB_OUTPUT"
+            echo "認証：デプロイキー（OPEN_DEPLOY_KEY）" >> "$GITHUB_STEP_SUMMARY"
+          elif [ -n "$TOKEN" ]; then
+            echo "mode=token" >> "$GITHUB_OUTPUT"
+            echo "認証：個人用アクセストークン（OPEN_REPO_TOKEN）" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "mode=none" >> "$GITHUB_OUTPUT"
+            echo "OPEN_DEPLOY_KEY も OPEN_REPO_TOKEN も未設定のため、fmt-jp/open への公開をスキップしました。" >> "$GITHUB_STEP_SUMMARY"
           fi
-      - if: steps.token.outputs.skip != 'true'
+      - if: steps.auth.outputs.mode == 'key'
+        uses: actions/checkout@v4
+        with:
+          repository: fmt-jp/open
+          ssh-key: ${{ secrets.OPEN_DEPLOY_KEY }}
+          path: open
+      - if: steps.auth.outputs.mode == 'token'
         uses: actions/checkout@v4
         with:
           repository: fmt-jp/open
           token: ${{ secrets.OPEN_REPO_TOKEN }}
           path: open
-      - if: steps.token.outputs.skip != 'true'
+      - if: steps.auth.outputs.mode != 'none'
         uses: actions/download-artifact@v4
         with:
           name: hanabi-dist
           path: dist
-      - if: steps.token.outputs.skip != 'true'
+      - if: steps.auth.outputs.mode != 'none'
         name: Update hanabi/ in fmt-jp/open
         run: |
           rm -rf open/hanabi
@@ -86,7 +101,7 @@ jobs:
           git config user.email "41898299+github-actions[bot]@users.noreply.github.com"
           git add -A hanabi
           if git diff --cached --quiet; then
-            echo "変更なし" >> "$GITHUB_STEP_SUMMARY"
+            echo "変更なし（公開中の hanabi/ と同じビルド）" >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
           git commit -m "HANABI を更新（fmt-jp/Sparca ${GITHUB_SHA::7}）"
