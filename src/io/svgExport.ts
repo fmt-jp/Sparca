@@ -7,6 +7,7 @@ import type { SceneObject, SparcaDocument } from '../model/types';
 import { effectsMargin, splitAtZoomBlur, zoomBlurReach } from '../render/effects';
 import { validateDimensions } from '../store/assets';
 import { ExportError } from './export';
+import { AppUpdatedError, loadRasterize } from '../lazy';
 
 /** Whether an object (with what its stroke and effects add around it) can show on the canvas. */
 function reachesCanvas(o: SceneObject, canvas: { width: number; height: number }): boolean {
@@ -41,12 +42,17 @@ export function canvasContent(doc: SparcaDocument): SparcaDocument {
 export async function exportSvg(doc: SparcaDocument): Promise<Blob> {
   const problem = validateDimensions(doc.width, doc.height);
   if (problem) throw new ExportError(problem);
-  const { documentSvgMarkup, RenderError } = await import('../render/rasterize');
+  let r: Awaited<ReturnType<typeof loadRasterize>>;
+  try {
+    r = await loadRasterize();
+  } catch (e) {
+    throw new ExportError(e instanceof AppUpdatedError ? e.message : String(e));
+  }
   let markup: string;
   try {
-    markup = await documentSvgMarkup(canvasContent(doc));
+    markup = await r.documentSvgMarkup(canvasContent(doc));
   } catch (e) {
-    throw new ExportError(e instanceof RenderError ? e.message : `描画に失敗しました: ${String(e)}`);
+    throw new ExportError(e instanceof r.RenderError ? e.message : `描画に失敗しました: ${String(e)}`);
   }
   return new Blob(['<?xml version="1.0" encoding="UTF-8"?>\n', markup, '\n'], { type: 'image/svg+xml' });
 }

@@ -2,6 +2,8 @@
 // browser offers the Local Font Access API (Chrome / Edge) and the user allows it — every
 // installed family. Text keeps only the family name; rendering adds a generic fallback.
 
+import { loadFontNames } from '../lazy';
+
 export const GENERIC_FAMILIES = ['sans-serif', 'serif', 'monospace', 'cursive', 'fantasy'];
 
 export type FontGroup = 'ja' | 'latin' | 'generic' | 'local';
@@ -201,7 +203,7 @@ let localizing: Promise<LocalFont[]> | null = null;
 export function localizeLocalFonts(): Promise<LocalFont[]> {
   if (!localFonts) return Promise.resolve([]);
   localizing ??= (async () => {
-    const { japaneseFamilyName } = await import('./fontNames');
+    const { japaneseFamilyName } = await loadFontNames();
     const cache = loadLabelCache();
     for (const f of localFonts!) {
       if (f.family in cache) continue;

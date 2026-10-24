@@ -27,6 +27,8 @@ npm run preview    # ビルド結果の確認
 初回のみ、リポジトリの Settings → Pages → Build and deployment → Source を「GitHub Actions」に設定してください。
 ビルドは相対パス（`base: './'`）なので、`https://<owner>.github.io/<repo>/` のようなサブパスでも動作します。
 
+公開し直すとサーバー上のファイルはすべて新しいものに置き換わるため、更新前から開いているページは、必要になったときに読み込む分割ファイル（描画・書き出し用の `rasterize`、`svgExport`、フォント名の `fontNames`、画像処理の Worker）を取得できなくなる。これを避けるため、起動直後に分割ファイルをすべて読み込み、Worker も起動しておく（`src/lazy.ts`）。それでも読み込めなかった場合は「アプリが更新されたため…保存してから再読み込みしてください」と表示する（`e2e/app-update.spec.ts`）。
+
 ## テスト
 
 ```sh
