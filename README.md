@@ -28,7 +28,7 @@ npm run preview    # ビルド結果の確認
 
 同じビルドを [fmt-jp/open](https://github.com/fmt-jp/open) の `hanabi/` フォルダにも公開する（https://fmt-jp.github.io/open/hanabi/ 、トップページのアプリ一覧にも掲載）。ワークフローの `publish-open` ジョブが、`main` への push のたびに `hanabi/` を最新のビルドに置き換えてコミットする（ビルドが同じなら何もしない）。書き込みにはデプロイキーを使う（2026-10-24 にユーザーの判断で個人用アクセストークンから切り替え。期限切れがなく、効く範囲が `fmt-jp/open` だけに限られるため）：
 
-1. PC で鍵を作る：`ssh-keygen -t ed25519 -C "sparca-to-open" -f open_deploy -N ""`（`open_deploy` が秘密鍵、`open_deploy.pub` が公開鍵）。
+1. PC で鍵を作る：`ssh-keygen -t ed25519 -C "sparca-to-open" -f open_deploy`。パスフレーズを2回聞かれるので、どちらも何も入力せずに Enter（`open_deploy` が秘密鍵、`open_deploy.pub` が公開鍵）。Windows PowerShell では `-N ""` を付けると空の値が渡らず「option requires an argument -- N」になるため付けない。
 2. `fmt-jp/open` の Settings → Deploy keys → Add deploy key に `open_deploy.pub` の中身を登録し、「Allow write access」にチェックを入れる。
 3. Sparca の Settings → Secrets and variables → Actions に、名前 `OPEN_DEPLOY_KEY`、値 `open_deploy` の中身全体でシークレットを登録する。PC の鍵ファイルはその後削除してよい。
 
