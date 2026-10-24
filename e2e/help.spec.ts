@@ -12,7 +12,7 @@ test('ヘルプ → 操作ガイド shows the basics by topic', async ({ page })
   // Starts with the overview.
   await expect(dialog.getByRole('article')).toContainText('基本の流れ');
   const nav = dialog.getByRole('navigation', { name: '項目' });
-  for (const t of ['画面の見かた', '選択・移動・変形', '図形・テキスト・パス', 'レイヤー', '画像の加工', '範囲選択', 'エフェクト', '保存・書き出し', 'キーボードショートカット']) {
+  for (const t of ['画面の見かた', '選択・移動・変形', '図形・テキスト・パス', 'レイヤー', '画像の加工', '範囲選択', 'エフェクト', '保存・書き出し', 'キーボードショートカット', '動作環境']) {
     await expect(nav.getByRole('button', { name: t })).toBeVisible();
   }
   await nav.getByRole('button', { name: '範囲選択' }).click();
@@ -36,4 +36,13 @@ test('F1 opens the guide; キーボードショートカット opens it at the s
   await expect(article).toBeVisible();
   await expect(article.getByRole('row', { name: /取り消し／やり直し/ })).toContainText('Ctrl+Z');
   await expect(article.getByRole('row', { name: /操作ガイド/ })).toContainText('F1');
+});
+
+test('the guide has the system requirements (動作環境)', async ({ page }) => {
+  await page.getByRole('button', { name: 'ヘルプ', exact: true }).click();
+  await page.getByRole('menuitem', { name: '動作環境…' }).click();
+  const article = page.getByRole('dialog', { name: '操作ガイド' }).getByRole('article', { name: '動作環境' });
+  await expect(article).toContainText('Google Chrome');
+  await expect(article).toContainText('16,384px');
+  await expect(article).toContainText('サーバーには送信されません');
 });

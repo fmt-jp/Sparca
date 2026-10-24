@@ -1,5 +1,6 @@
 // ヘルプ → 操作ガイド: the basics of HANABI by topic, plus the keyboard shortcuts.
 import { useState, type ReactNode } from 'react';
+import { MAX_DIMENSION, MAX_PIXELS } from '../model/types';
 import { Dialog } from './Dialog';
 
 const IS_MAC = /Mac|iPhone|iPad/.test(navigator.platform);
@@ -191,6 +192,36 @@ export const HELP_SECTIONS: Section[] = [
           ))}
         </tbody>
       </table>
+    ),
+  },
+  {
+    id: 'environment',
+    title: '動作環境',
+    body: (
+      <>
+        <h4>推奨</h4>
+        <ul>
+          <li>Windows 10／11 または macOS のパソコン</li>
+          <li>最新の Google Chrome または Microsoft Edge（動作確認は Chrome で行っています）</li>
+          <li>マウス（ホイール付き）とキーボード。画面の横幅はおよそ 1280px 以上</li>
+        </ul>
+        <h4>ほかのブラウザ（Firefox・Safari など）</h4>
+        <p>基本的な編集はできますが、次の機能は使えないか、制限されます。</p>
+        <ul>
+          <li><b>上書き保存</b>：保存先を覚えて上書きする機能は Chrome／Edge のみ。ほかのブラウザでは、保存のたびにファイルがダウンロードされます。</li>
+          <li><b>フォント</b>：「この PC のすべてのフォント」を一覧に出す機能は Chrome／Edge のみ（初回にブラウザが許可を求めます）。ほかのブラウザでは代表的なフォントだけが一覧に出ます（名前を入力すれば、ほかのフォントも使えます）。</li>
+          <li><b>WebP の書き出し</b>：ブラウザが対応していない場合はエラーでお知らせします。PNG または JPEG を使ってください。</li>
+          <li><b>クリップボード</b>：メニューの「ペースト」で画像を読み込む機能や、選択範囲の画素をほかのアプリへコピーする機能は、ブラウザの対応状況と許可の設定によっては使えません。</li>
+        </ul>
+        <h4>そのほか</h4>
+        <ul>
+          <li>スマートフォン・タブレットのタッチ操作には対応していません。</li>
+          <li>アプリを開くときはインターネット接続が必要です。画像やファイルはすべてブラウザの中で処理され、サーバーには送信されません。</li>
+          <li>扱える画像の大きさは、一辺 {MAX_DIMENSION.toLocaleString()}px まで、合計 {(MAX_PIXELS / 1e8).toLocaleString()} 億画素まで。大きな画像ほどメモリを多く使うため、動作が重いときは画像サイズを小さくしてください。</li>
+          <li>自動保存はありません。作業内容はこまめに「保存」（<K>{MOD}S</K>）で .hnb ファイルに保存してください。グリッドやパネルの表示などの設定は、このブラウザに記憶されます。</li>
+          <li>画面の表示は日本語のみです。</li>
+        </ul>
+      </>
     ),
   },
 ];

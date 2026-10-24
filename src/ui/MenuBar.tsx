@@ -181,6 +181,7 @@ export function MenuBar({ onNew }: { onNew: () => void }) {
       items: [
         { label: '操作ガイド…', shortcut: 'F1', action: () => openDialog({ kind: 'help' }) },
         { label: 'キーボードショートカット…', action: () => openDialog({ kind: 'help', section: 'shortcuts' }) },
+        { label: '動作環境…', action: () => openDialog({ kind: 'help', section: 'environment' }) },
       ],
     },
   ];
