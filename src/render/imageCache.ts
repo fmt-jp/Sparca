@@ -2,6 +2,7 @@
 // the original asset when the pipeline is the identity, otherwise the processed result.
 // Processing runs in a worker. While parameters change, a downscaled preview is computed
 // first; the full-resolution result follows once the parameters stay unchanged.
+import { APP_UPDATED_MESSAGE } from '../lazy';
 import type { AutoColorParams, ImageObject, ImagePipeline } from '../model/types';
 import type { WorkerRequest, WorkerResponse } from '../engine/worker';
 import { pipelineOutputSize } from '../engine/pipeline';
@@ -75,10 +76,23 @@ export class ImageRenderCache {
     this.listeners.forEach((l) => l());
   }
 
+  /** Start the worker ahead of first use (its script must load before an app update replaces it). */
+  warmUp(): void {
+    this.getWorker();
+  }
+
   private getWorker(): Worker {
     if (!this.worker) {
       this.worker = new Worker(new URL('../engine/worker.ts', import.meta.url), { type: 'module' });
       this.worker.onmessage = (e: MessageEvent<WorkerResponse>) => this.onMessage(e.data);
+      // A worker whose script cannot be loaded (e.g. replaced by an app update) reports an
+      // error event without a message; errors inside jobs come back as messages instead.
+      this.worker.onerror = (e) => {
+        if (e.message) return;
+        e.preventDefault();
+        this.worker = null;
+        this.errorHandler?.(APP_UPDATED_MESSAGE);
+      };
     }
     return this.worker;
   }

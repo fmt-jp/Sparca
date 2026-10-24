@@ -3,6 +3,7 @@ import { updateObject } from '../model/commands';
 import { findObject, isEffectivelyLocked } from '../model/tree';
 import type { SceneObject, SparcaDocument } from '../model/types';
 import type { EditorStore } from './editor';
+import { AppUpdatedError, loadRasterize } from '../lazy';
 
 let cached: { doc: SparcaDocument; ctx: CanvasRenderingContext2D } | null = null;
 
@@ -14,7 +15,7 @@ export function toHex(r: number, g: number, b: number): string {
 export async function sampleColor(doc: SparcaDocument, x: number, y: number): Promise<string | null> {
   if (x < 0 || y < 0 || x >= doc.width || y >= doc.height) return null;
   if (!cached || cached.doc !== doc) {
-    const { rasterizeDocument } = await import('../render/rasterize');
+    const { rasterizeDocument } = await loadRasterize();
     const canvas = await rasterizeDocument(doc);
     cached = { doc, ctx: canvas.getContext('2d', { willReadFrequently: true })! };
   }
@@ -61,6 +62,6 @@ export async function pickColorAt(ed: EditorStore, x: number, y: number): Promis
     const n = applyColorToSelection(ed, color);
     if (n === 0) ed.notify('info', `色 ${color} を取得しました。図形やテキストを選択してからクリックすると適用されます。`);
   } catch (e) {
-    ed.notify('error', `色の取得に失敗しました: ${e instanceof Error ? e.message : String(e)}`);
+    ed.notify('error', e instanceof AppUpdatedError ? e.message : `色の取得に失敗しました: ${e instanceof Error ? e.message : String(e)}`);
   }
 }
