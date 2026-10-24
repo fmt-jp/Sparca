@@ -101,7 +101,10 @@ jobs:
           git config user.email "41898299+github-actions[bot]@users.noreply.github.com"
           git add -A hanabi
           if git diff --cached --quiet; then
-            echo "変更なし（公開中の hanabi/ と同じビルド）" >> "$GITHUB_STEP_SUMMARY"
+            # Nothing to publish; still check that the credentials may push (a dry run
+            # talks to the server's receive side, which refuses read-only access).
+            git push --dry-run
+            echo "変更なし（公開中の hanabi/ と同じビルド）。書き込み権限は確認済み。" >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
           git commit -m "HANABI を更新（fmt-jp/Sparca ${GITHUB_SHA::7}）"
