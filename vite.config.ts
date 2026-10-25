@@ -1,6 +1,11 @@
 /// <reference types="vitest/config" />
 import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
+import { readFileSync } from 'node:fs';
+
+/** App version (package.json) and the build date in Japan time, shown in the operations guide. */
+const APP_VERSION = (JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')) as { version: string }).version;
+const BUILD_DATE = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Tokyo' }).format(new Date()); // YYYY-MM-DD
 
 /**
  * Content Security Policy for the built app (a <meta> tag, since GitHub Pages cannot send
@@ -36,6 +41,10 @@ function contentSecurityPolicy(): Plugin {
 
 export default defineConfig({
   plugins: [react(), contentSecurityPolicy()],
+  define: {
+    __APP_VERSION__: JSON.stringify(APP_VERSION),
+    __BUILD_DATE__: JSON.stringify(BUILD_DATE),
+  },
   // Relative asset URLs so the build works from any sub-path (e.g. GitHub Pages /Sparca/).
   base: './',
   test: {

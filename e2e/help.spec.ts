@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { readFileSync } from 'node:fs';
 
 test.beforeEach(async ({ page }) => {
   await page.goto('/');
@@ -11,6 +12,9 @@ test('ヘルプ → 操作ガイド shows the basics by topic', async ({ page })
   await expect(dialog).toBeVisible();
   // Starts with the overview.
   await expect(dialog.getByRole('article')).toContainText('基本の流れ');
+  // Version (package.json) and build date (Japan time) next to the logo.
+  const version = (JSON.parse(readFileSync('package.json', 'utf8')) as { version: string }).version;
+  await expect(dialog.getByTestId('app-version')).toHaveText(new RegExp(`^HANABI ${version.replace(/\./g, '\\.')}（\\d{4}-\\d{2}-\\d{2} 版）$`));
   // The HANABI logo heads the introduction.
   const logo = dialog.getByRole('img', { name: '花火 HANABI' });
   await expect(logo).toBeVisible();

@@ -1629,6 +1629,10 @@ kbd {
 .help-intro p {
   margin: 0;
 }
+.help-intro .help-version {
+  font-weight: 600;
+  margin-bottom: 6px;
+}
 .help-logo {
   flex: none;
   display: block;

@@ -7,6 +7,9 @@ const IS_MAC = /Mac|iPhone|iPad/.test(navigator.platform);
 const MOD = IS_MAC ? '⌘' : 'Ctrl+';
 const ALT = IS_MAC ? '⌥' : 'Alt+';
 
+/** e.g. 「HANABI 0.2.0（2026-10-25 版）」: the version and the date this build was made. */
+export const APP_VERSION_LABEL = `HANABI ${__APP_VERSION__}（${__BUILD_DATE__} 版）`;
+
 const K = ({ children }: { children: ReactNode }) => <kbd>{children}</kbd>;
 
 interface Section {
@@ -23,7 +26,10 @@ export const HELP_SECTIONS: Section[] = [
       <>
         <div className="help-intro">
           <img className="help-logo" src={`${import.meta.env.BASE_URL}logo.svg`} alt="花火 HANABI" width={120} height={138} />
-          <p>HANABI は、写真などの画像（ラスター）と、図形・テキスト（ベクター）を同じキャンバスで編集できるグラフィックエディタです。作ったオブジェクトは後から何度でも選び直して編集できます。</p>
+          <div>
+            <p className="help-version" data-testid="app-version">{APP_VERSION_LABEL}</p>
+            <p>HANABI は、写真などの画像（ラスター）と、図形・テキスト（ベクター）を同じキャンバスで編集できるグラフィックエディタです。作ったオブジェクトは後から何度でも選び直して編集できます。</p>
+          </div>
         </div>
         <h4>基本の流れ</h4>
         <ol>
