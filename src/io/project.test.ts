@@ -5,10 +5,11 @@ import { addLayer, addObject, groupObjects } from '../model/commands';
 import { createDocument, createImage, createShape, createText, defaultGeometry } from '../model/factory';
 import type { AssetMeta, ImageObject, SparcaDocument } from '../model/types';
 import { createEffect } from '../model/effects';
-import { ProjectError, readProject, writeProject } from './project';
+import { ProjectError, READ_LIMITS, readProject, writeProject } from './project';
 
 const asset: AssetMeta = { id: 'a_1', mimeType: 'image/png', width: 2, height: 2, fileName: 'x.png' };
-const bytes = new Uint8Array([137, 80, 78, 71, 1, 2, 3]);
+// PNG signature + some bytes (the reader checks the data really is the recorded format).
+const bytes = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, 1, 2, 3]);
 
 function sampleDoc(): SparcaDocument {
   return produce(createDocument(640, 480), (d) => {
@@ -140,5 +141,39 @@ describe('project format', () => {
 
   it('refuses to save when image data is missing', async () => {
     await expect(writeProject(sampleDoc(), () => undefined)).rejects.toThrow(ProjectError);
+  });
+
+  it('refuses oversized content (ZIP bombs) with a message', async () => {
+    const data = await writeProject(sampleDoc(), () => new Blob([bytes]));
+    await expect(readProject(data, { ...READ_LIMITS, fileBytes: 100 })).rejects.toThrow(/ファイルが大きすぎる/);
+    await expect(readProject(data, { ...READ_LIMITS, jsonBytes: 1000 })).rejects.toThrow(/document\.json が大きすぎる/);
+    await expect(readProject(data, { ...READ_LIMITS, assetBytes: 5 })).rejects.toThrow(/画像「x\.png」が大きすぎる/);
+    // A highly compressible entry is cut off while expanding, whatever its header says.
+    const zip = await JSZip.loadAsync(data);
+    zip.file('document.json', '{"pad":"' + ' '.repeat(5 * 1024 * 1024) + '"}');
+    const bomb = await zip.generateAsync({ type: 'uint8array', compression: 'DEFLATE' });
+    expect(bomb.length).toBeLessThan(100 * 1024);
+    await expect(readProject(bomb, { ...READ_LIMITS, jsonBytes: 1024 * 1024 })).rejects.toThrow(ProjectError);
+    // Within the limits it still opens.
+    await expect(readProject(data)).resolves.toBeTruthy();
+  });
+
+  it('accepts only supported image formats whose data matches', async () => {
+    const data = await writeProject(sampleDoc(), () => new Blob([bytes]));
+    const zip = await JSZip.loadAsync(data);
+    const raw = JSON.parse(await zip.file('document.json')!.async('string'));
+    // Recorded as HTML.
+    const html = await JSZip.loadAsync(data);
+    html.file('document.json', JSON.stringify({ ...raw, assets: { a_1: { ...raw.assets.a_1, mimeType: 'text/html' } } }));
+    html.file('assets/a_1.bin', '<script>alert(1)</script>');
+    await expect(readProject(await html.generateAsync({ type: 'uint8array' }))).rejects.toThrow(/形式（text\/html）には対応していません/);
+    // Recorded as PNG, but the data is not a PNG.
+    const fake = await JSZip.loadAsync(data);
+    fake.file('assets/a_1.png', '<svg xmlns="http://www.w3.org/2000/svg"></svg>');
+    await expect(readProject(await fake.generateAsync({ type: 'uint8array' }))).rejects.toThrow(/image\/png の画像ではありません/);
+    // Impossible sizes.
+    const huge = await JSZip.loadAsync(data);
+    huge.file('document.json', JSON.stringify({ ...raw, assets: { a_1: { ...raw.assets.a_1, width: 100000, height: 100000 } } }));
+    await expect(readProject(await huge.generateAsync({ type: 'uint8array' }))).rejects.toThrow(/大きさ/);
   });
 });
