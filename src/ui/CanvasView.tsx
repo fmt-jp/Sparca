@@ -26,8 +26,9 @@ import { docToNormalized, normalizedToDoc, objectGradient, representativeColor }
 import { placeImageFiles, writableLayer } from '../store/actions';
 import type { PixelSelection, ToolId } from '../store/editor';
 import { pickColorAt } from '../store/colorActions';
-import { docToPath, isSmooth, moveAnchors, moveHandle, nearestOnPath, pathToDoc, type DocNode } from '../model/pathEdit';
-import { deleteSelectedNodes, editablePath, editLineAsPath, insertNode, isLineShape, nudgeNodes, selectedNodes, toggleNodeType } from '../store/pathActions';
+import { isSmooth, moveAnchors, moveHandle, nearestOnPath, pathContoursToDoc, pathToDoc, type DocNode } from '../model/pathEdit';
+import { pathNodesD } from '../render/shapes';
+import { activeContour, deleteSelectedNodes, editablePath, editLineAsPath, insertNode, isLineShape, nudgeNodes, selectedNodes, toggleNodeType, writePathContour } from '../store/pathActions';
 import { cancelCrop, commitCrop, startCrop } from '../store/imageActions';
 import { hasImageExtension } from '../io/imageFormats';
 import { anchorMenu, canvasMenu, objectMenu, segmentNextTo } from './canvasMenu';
@@ -447,6 +448,12 @@ export function CanvasView() {
     }
 
     if (effectiveTool === 'subselect') {
+      // Another outline of the compound path being edited: edit that one instead.
+      const contourAttr = target.getAttribute('data-contour');
+      if (contourAttr) {
+        editor.set({ nodeContour: Number(contourAttr), nodeSelection: [] });
+        return;
+      }
       const path = editablePath(editor);
       const nodeAttr = target.getAttribute('data-node');
       const handleAttr = target.getAttribute('data-node-handle');
@@ -811,12 +818,10 @@ export function CanvasView() {
 
   /** Preview edited document-space nodes on a path during a drag. */
   function previewPath(id: Id, nodes: DocNode[]) {
-    editor.preview((d) => {
-      const loc = findObject(d, id);
-      if (!loc || loc.object.type !== 'path') return;
-      const fit = docToPath(loc.object.box, nodes);
-      updateObject(d, id, { box: fit.box, nodes: fit.nodes } as Partial<SceneObject>);
-    });
+    const loc = findObject(editor.getState().doc, id);
+    if (!loc || loc.object.type !== 'path') return;
+    const contour = activeContour(editor, loc.object);
+    editor.preview((d) => writePathContour(d, id, contour, nodes));
   }
 
   function updateCreate(g: Extract<Gesture, { kind: 'create' }>, shift: boolean, alt: boolean) {
@@ -1119,12 +1124,22 @@ export function CanvasView() {
 
 /** Anchors and handles of the selected path for the subselect tool. */
 function PathNodeOverlay({ zoom }: { zoom: number }) {
-  useEditor((s) => s.doc);
-  useEditor((s) => s.selection);
+  const doc = useEditor((s) => s.doc);
+  const selection = useEditor((s) => s.selection);
   const nodeSel = useEditor((s) => s.nodeSelection);
+  useEditor((s) => s.nodeContour);
   const path = editablePath(editor);
   if (!path) return null;
   const k = 1 / zoom;
+  // A compound path's other outlines: drawn thin, and clickable to edit them instead.
+  const whole = findObject(doc, selection[0])?.object;
+  const active = whole?.type === 'path' ? activeContour(editor, whole) : 0;
+  const others =
+    whole?.type === 'path' && whole.subpaths?.length
+      ? pathContoursToDoc(whole)
+          .map((c, i) => ({ c, i }))
+          .filter(({ i }) => i !== active)
+      : [];
   const nodes = pathToDoc(path);
   const sel = new Set(nodeSel.filter((i) => i < nodes.length));
   // Handles are shown for selected anchors and for the neighbors' handles facing them.
@@ -1137,6 +1152,17 @@ function PathNodeOverlay({ zoom }: { zoom: number }) {
   };
   return (
     <g data-testid="path-nodes">
+      {others.map(({ c, i }) => {
+        const d = pathNodesD(c.nodes, c.closed, 1, 1);
+        return (
+          <g key={`contour-${i}`}>
+            <path d={d} className="contour-outline" strokeWidth={k} strokeDasharray={`${4 * k} ${3 * k}`} />
+            <path d={d} data-contour={i} className="contour-hit" strokeWidth={10 * k}>
+              <title>クリックでこのアウトラインを編集</title>
+            </path>
+          </g>
+        );
+      })}
       {nodes.map((n, i) =>
         (['in', 'out'] as const).map((which) => {
           const h = n[which];

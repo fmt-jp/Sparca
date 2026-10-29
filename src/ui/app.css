@@ -1662,3 +1662,16 @@ kbd {
   margin-top: 4px;
   padding-top: 2px;
 }
+
+/* Other outlines of a compound path while editing one with the subselect tool. */
+.overlay .contour-outline {
+  fill: none;
+  stroke: var(--accent);
+  opacity: 0.8;
+}
+.overlay .contour-hit {
+  fill: none;
+  stroke: transparent;
+  pointer-events: stroke;
+  cursor: pointer;
+}

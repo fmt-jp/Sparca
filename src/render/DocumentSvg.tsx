@@ -174,6 +174,11 @@ function renderShape(o: ShapeObject, fillId: string): ReactElement {
   );
 }
 
+/** Path data of all outlines of a (compound) path. */
+export function pathContoursD(o: Pick<PathObject, 'nodes' | 'closed' | 'subpaths'>, w: number, h: number): string {
+  return [pathNodesD(o.nodes, o.closed, w, h), ...(o.subpaths ?? []).map((c) => pathNodesD(c.nodes, c.closed, w, h))].join(' ');
+}
+
 function renderPath(o: PathObject, fillId: string): ReactElement {
   const { width: w, height: h } = o.box;
   const fill = fillPaint(o.closed ? o.fill : null, fillId, w, h);
@@ -181,7 +186,8 @@ function renderPath(o: PathObject, fillId: string): ReactElement {
     <>
       {fill.def && <defs>{fill.def}</defs>}
       <path
-        d={pathNodesD(o.nodes, o.closed, w, h)}
+        d={pathContoursD(o, w, h)}
+        fillRule={o.subpaths?.length ? 'evenodd' : undefined}
         fill={fill.paint}
         stroke={o.stroke && o.strokeWidth > 0 ? o.stroke : 'none'}
         strokeWidth={o.strokeWidth}

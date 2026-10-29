@@ -10,6 +10,8 @@ import {
   selectAll,
   ungroupSelection,
 } from '../store/actions';
+import { canCombineSelection, COMBINE_LABELS } from '../store/pathCombine';
+import { COMBINE_OPS, runCombine } from './combine';
 import { canConvertSelectionToPaths, convertSelectedNodes, convertSelectionToPaths, deleteSelectedNodes, editablePath, insertNode, isLineShape } from '../store/pathActions';
 import type { MenuItem } from './MenuBar';
 import { ALIGN, alignShortcut, DISTRIBUTE } from './PropertiesPanel';
@@ -40,6 +42,11 @@ export function objectMenu(): MenuItem[] {
     { label: 'グループ解除', shortcut: `${mod}Shift+G`, action: () => ungroupSelection(editor), disabled: !isGroup },
     SEP,
     { label: 'パスに変換', action: () => convertSelectionToPaths(editor), disabled: !canConvertSelectionToPaths(editor) },
+    {
+      label: 'パスの結合',
+      disabled: !canCombineSelection(editor),
+      children: COMBINE_OPS.map((op) => ({ label: COMBINE_LABELS[op], action: () => void runCombine(op) })),
+    },
     SEP,
     {
       label: '整列',

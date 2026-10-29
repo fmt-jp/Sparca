@@ -4,7 +4,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { canvasBox, disableNativePickers, drag, makePng, placePng, state } from './helpers';
 
-const SPLIT_FILES = /\/assets\/(rasterize|svgExport|fontNames|worker)-[^/]+\.js$/;
+const SPLIT_FILES = /\/assets\/(rasterize|svgExport|fontNames|pathBoolean|worker)-[^/]+\.js$/;
 
 async function shapeFillAfterEyedropper(page: Page) {
   await placePng(page, 'red.png', makePng(100, 100, () => [220, 30, 40, 255]));
@@ -23,7 +23,7 @@ test('split-off files are fetched at startup, so the eyedropper and export work 
     if (m) fetched.add(m[1]);
   });
   await page.goto('/');
-  await expect.poll(() => [...fetched].sort()).toEqual(['fontNames', 'rasterize', 'svgExport', 'worker']);
+  await expect.poll(() => [...fetched].sort()).toEqual(['fontNames', 'pathBoolean', 'rasterize', 'svgExport', 'worker']);
   // "Update": the old files are gone from the server.
   await page.route(SPLIT_FILES, (route) => route.fulfill({ status: 404, body: '' }));
   await shapeFillAfterEyedropper(page);
