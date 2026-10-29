@@ -17,6 +17,7 @@ import { openDialog } from './dialogs';
 import { ALIGN, alignShortcut, DISTRIBUTE } from './PropertiesPanel';
 import { setPanelSizes, togglePanels, usePanelSizes } from './usePanelSizes';
 import { menuCopy, menuPaste } from './clipboard';
+import { canConvertSelectionToPaths, convertSelectionToPaths } from '../store/pathActions';
 import { editor, useEditor } from './useEditor';
 
 export interface MenuItem {
@@ -121,6 +122,8 @@ export function MenuBar({ onNew }: { onNew: () => void }) {
         { separator: true, label: '' },
         { label: 'グループ化', shortcut: `${mod}G`, action: () => groupSelection(editor), disabled: selection.length < 2 },
         { label: 'グループ解除', shortcut: `${mod}Shift+G`, action: () => ungroupSelection(editor), disabled: !hasSel },
+        { separator: true, label: '' },
+        { label: 'パスに変換', action: () => convertSelectionToPaths(editor), disabled: !canConvertSelectionToPaths(editor) },
         { separator: true, label: '' },
         ...ALIGN.map((a) => ({
           label: `整列：${a.label}`,

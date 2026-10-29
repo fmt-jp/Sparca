@@ -12,15 +12,13 @@ import {
   type DocNode,
 } from '../model/pathEdit';
 import { findObject, isEffectivelyLocked } from '../model/tree';
-import type { Id, PathNode, PathObject, SceneObject, ShapeObject } from '../model/types';
+import type { Id, PathObject, SceneObject, ShapeObject } from '../model/types';
 import type { EditorStore } from './editor';
+import { canConvertToPath, shapeToPath } from '../model/shapeToPath';
 
 /** A straight line shape as an equivalent open path with two anchors (same id, box, paint and effects). */
 export function lineToPath(o: ShapeObject): PathObject | null {
-  if (o.shape.kind !== 'line') return null;
-  const node = (anchor: { x: number; y: number }): PathNode => ({ anchor: { ...anchor }, in: null, out: null });
-  const { shape: _shape, type: _type, ...rest } = o;
-  return { ...rest, type: 'path', nodes: [node(o.shape.from), node(o.shape.to)], closed: false };
+  return o.shape.kind === 'line' ? shapeToPath(o) : null;
 }
 
 /** Whether the object is a line shape (older documents) that anchor editing turns into a path. */
@@ -133,4 +131,40 @@ export function setPathClosed(ed: EditorStore, closed: boolean): void {
   ed.edit(closed ? 'パスを閉じる' : 'パスを開く', (d) =>
     updateObject(d, p.id, { closed, fill: closed ? (p.fill ?? '#4a90e2') : p.fill } as Partial<SceneObject>),
   );
+}
+
+/** Shapes (also inside selected groups) the selection would turn into paths with 「パスに変換」. */
+function convertibleShapes(ed: EditorStore): ShapeObject[] {
+  const { doc, selection } = ed.getState();
+  const out: ShapeObject[] = [];
+  const visit = (o: SceneObject) => {
+    if (o.type === 'group') o.children.forEach(visit);
+    else if (o.type === 'shape' && canConvertToPath(o.shape) && !o.locked) out.push(o);
+  };
+  for (const id of selection) {
+    const loc = findObject(doc, id);
+    if (loc && !isEffectivelyLocked(loc)) visit(loc.object);
+  }
+  return out;
+}
+
+export function canConvertSelectionToPaths(ed: EditorStore): boolean {
+  return convertibleShapes(ed).length > 0;
+}
+
+/**
+ * 「パスに変換」: turn the selected shapes (and shapes in selected groups) into paths that
+ * look the same, keeping their ids so the selection stays. One undo step. Returns how many.
+ */
+export function convertSelectionToPaths(ed: EditorStore): number {
+  const shapes = convertibleShapes(ed);
+  if (!shapes.length) return 0;
+  ed.edit('パスに変換', (d) => {
+    for (const o of shapes) {
+      const l = findObject(d, o.id);
+      const path = shapeToPath(o);
+      if (l && path) l.siblings[l.index] = path;
+    }
+  });
+  return shapes.length;
 }
