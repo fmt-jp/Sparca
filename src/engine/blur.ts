@@ -122,6 +122,17 @@ export function gaussianBlur(src: Raster, sigma: number): Raster {
   return out;
 }
 
+/** Make pixels transparent by a coverage mask (0..1): alpha × (1 − m); colors are kept. */
+export function eraseWithMask(a: Raster, mask: Float32Array): Raster {
+  const out = createRaster(a.width, a.height);
+  out.data.set(a.data);
+  for (let i = 0; i < mask.length; i++) {
+    const m = mask[i];
+    if (m > 0) out.data[i * 4 + 3] = Math.round(a.data[i * 4 + 3] * (1 - Math.min(1, m)));
+  }
+  return out;
+}
+
 /** Blend `b` over `a` using a coverage mask (0..1 per pixel): out = a + (b − a) × m. */
 export function blendWithMask(a: Raster, b: Raster, mask: Float32Array): Raster {
   const out = createRaster(a.width, a.height);

@@ -48,10 +48,12 @@ export function measureText(o: Pick<TextObject, 'text' | 'fontFamily' | 'fontSiz
 /**
  * Box for `next` refitted to its natural size, keeping the point its alignment hangs from
  * fixed: the left edge (left), the middle (center) or the right edge (right) of the top.
- * Works for rotated text too (the box rotates about its center).
+ * Works for rotated text too (the box rotates about its center). Text on a path keeps its box.
  */
 export function fitTextBox(next: TextObject): Box {
   const b = next.box;
+  // Text on a path keeps the path's box: the box is where the path is.
+  if (next.path) return b;
   const m = measureText(next);
   const f = next.align === 'center' ? 0.5 : next.align === 'right' ? 1 : 0;
   // The fixed point in document space, before the resize.

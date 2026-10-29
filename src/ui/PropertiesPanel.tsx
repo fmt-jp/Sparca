@@ -2,7 +2,8 @@
 import { transformObjects, updateObject } from '../model/commands';
 import { boxCenter, unionBounds } from '../model/geometry';
 import { findObject, isEffectivelyLocked } from '../model/tree';
-import type { ColorAdjust, LocalEdit, SceneObject, ShapeObject, TextObject, ImageObject, PathObject, Id, Box, Paint, StrokeStyle } from '../model/types';
+import type { ColorAdjust, LocalEdit, SceneObject, ShapeObject, TextObject, ImageObject, PathObject, Id, Box, Paint, StrokeStyle, TextPathOrientation } from '../model/types';
+import { detachTextFromPath, setTextPath } from '../store/textPathActions';
 import { pipelineOutputSize } from '../engine/pipeline';
 import { METHOD_LABELS } from '../engine/resample';
 import { autoColor, cancelCrop, commitCrop, pixelTargetImage, resetAdjust, setAdjust, setCropTarget } from '../store/imageActions';
@@ -364,7 +365,56 @@ function TextSection({ o }: { o: TextObject }) {
         </Field>
         <TextStyleFields style={o} size={o.box} onChange={(patch, label, key) => setText(o, patch, label, key)} />
       </div>
+      {o.path && <TextPathSection o={o} />}
     </>
+  );
+}
+
+const ORIENTATIONS: { value: TextPathOrientation; label: string }[] = [
+  { value: 'rotate', label: 'パスに沿って回転' },
+  { value: 'vertical', label: '垂直' },
+  { value: 'skew-vertical', label: '傾斜（縦方向）' },
+  { value: 'skew-horizontal', label: '傾斜（横方向）' },
+];
+
+/** Settings of text attached to a path. */
+function TextPathSection({ o }: { o: TextObject }) {
+  const tp = o.path!;
+  return (
+    <div className="prop-section" role="group" aria-label="パス上のテキスト" data-testid="text-path-panel">
+      <span className="section-title">パス上のテキスト</span>
+      <Field label="開始位置" group>
+        <PopupSliderInput
+          label="開始位置"
+          value={Math.round(tp.offset * 1000) / 10}
+          min={0}
+          max={100}
+          precision={1}
+          suffix="%"
+          undoLabel="開始位置の変更"
+          onChange={(v) => setTextPath(editor, o.id, { offset: v / 100 }, '開始位置の変更', 'textPathOffset')}
+        />
+      </Field>
+      <Field label="方向">
+        <select aria-label="方向" value={tp.orientation} onChange={(e) => setTextPath(editor, o.id, { orientation: e.target.value as TextPathOrientation }, '方向の変更')}>
+          {ORIENTATIONS.map((x) => (
+            <option key={x.value} value={x.value}>
+              {x.label}
+            </option>
+          ))}
+        </select>
+      </Field>
+      <Toggle checked={tp.reverse} onChange={(reverse) => setTextPath(editor, o.id, { reverse }, '逆方向の切り替え')}>
+        逆方向（パスの反対側）
+      </Toggle>
+      <Field label="パスからの距離">
+        <NumberInput label="パスからの距離" value={tp.shift} min={-1000} max={1000} precision={1} suffix="px" onCommit={(shift) => setTextPath(editor, o.id, { shift }, 'パスからの距離の変更')} />
+      </Field>
+      <button type="button" onClick={() => detachTextFromPath(editor)}>
+        パスから外す
+      </button>
+      <span className="hint">揃え（左・中・右）は、開始位置にテキストのどこを合わせるかになります。改行は空白として並びます。</span>
+    </div>
   );
 }
 
@@ -500,7 +550,7 @@ function ImageSection({ o }: { o: ImageObject }) {
               type="button"
               className="link-btn"
               onClick={() =>
-                editor.edit(`${o.pipeline.localEdits[o.pipeline.localEdits.length - 1].kind === 'mosaic' ? '部分モザイク' : '部分ぼかし'}の削除`, (d) => {
+                editor.edit(`${LOCAL_EDIT_NAMES[o.pipeline.localEdits[o.pipeline.localEdits.length - 1].kind]}の削除`, (d) => {
                   const loc = findObject(d, o.id);
                   if (loc?.object.type === 'image') loc.object.pipeline.localEdits.pop();
                 })
@@ -671,11 +721,18 @@ function CropSection() {
   );
 }
 
+const LOCAL_EDIT_NAMES: Record<LocalEdit['kind'], string> = { blur: '部分ぼかし', mosaic: '部分モザイク', erase: '部分消去' };
+
 /** e.g. 「部分加工 3 件（ぼかし 2・モザイク 1）」 */
 function localEditsSummary(edits: LocalEdit[]): string {
-  const blur = edits.filter((e) => e.kind === 'blur').length;
-  const mosaic = edits.length - blur;
-  const parts = [blur && `ぼかし ${blur}`, mosaic && `モザイク ${mosaic}`].filter(Boolean).join('・');
+  const count = (k: LocalEdit['kind']) => edits.filter((e) => e.kind === k).length;
+  const parts = [
+    count('blur') && `ぼかし ${count('blur')}`,
+    count('mosaic') && `モザイク ${count('mosaic')}`,
+    count('erase') && `消去 ${count('erase')}`,
+  ]
+    .filter(Boolean)
+    .join('・');
   return `部分加工 ${edits.length} 件（${parts}）`;
 }
 

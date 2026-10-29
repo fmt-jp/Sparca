@@ -541,7 +541,8 @@ export function CanvasView() {
       const loc = hit ? findObject(editor.getState().doc, hit) : null;
       if (loc && loc.object.type === 'text') {
         editor.select([hit!]);
-        setEditingText({ id: hit!, isNew: false });
+        if (loc.object.path) focusTextContent();
+        else setEditingText({ id: hit!, isNew: false });
         return;
       }
       const layerId = writableLayer(editor, editor.getState().activeLayerId);
@@ -921,7 +922,11 @@ export function CanvasView() {
     const hit = onHandle ? sel[0] : hitObject(under);
     if (!hit) return;
     const loc = findObject(editor.getState().doc, hit);
-    if (loc?.object.type === 'text') setEditingText({ id: hit, isNew: false });
+    if (loc?.object.type === 'text') {
+      // Text on a path is edited in the properties panel (its letters are spread along the path).
+      if (loc.object.path) focusTextContent();
+      else setEditingText({ id: hit, isNew: false });
+    }
     // Double-clicking a path (or a line) switches to anchor editing.
     if ((loc?.object.type === 'path' || isLineShape(loc?.object)) && !isEffectivelyLocked(loc!)) {
       editor.select([hit]);
@@ -1236,6 +1241,11 @@ function PenPreview({ nodes, cursor, zoom }: { nodes: PathNode[]; cursor: Point 
 /** Paint for a new object from the settings of its drawing tool (see toolDefaults). */
 function newPaint(category: PaintCategory): Paint {
   return structuredClone(editor.getState().toolDefaults[category]);
+}
+
+/** Focus the text field of the properties panel (for text that cannot be edited in place). */
+function focusTextContent() {
+  requestAnimationFrame(() => document.querySelector<HTMLTextAreaElement>('textarea[aria-label="テキスト内容"]')?.focus());
 }
 
 function pointInRect(p: Point, r: Rect): boolean {

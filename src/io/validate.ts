@@ -133,6 +133,7 @@ function checkObject(o: unknown, where: string, ids: Set<string>, assets: Obj): 
       str(o, 'fontFamily', where);
       num(o, 'fontSize', where);
       checkFill(o.color, `${where}.color`, false);
+      if (o.path !== undefined) checkTextPath(o.path, `${where}.path`);
       break;
     case 'image': {
       const assetId = str(o, 'assetId', where);
@@ -232,7 +233,9 @@ function checkLocalEdits(v: unknown, where: string) {
     if (!isObj(e) || !isObj(e.mask)) throw new Invalid(`${w} が正しくありません`);
     checkMaskEdge(e.mask, `${w}.mask`);
     if (e.kind === 'blur') num(e, 'radius', w);
-    else if (e.kind === 'mosaic') {
+    else if (e.kind === 'erase') {
+      // Mask only.
+    } else if (e.kind === 'mosaic') {
       if (num(e, 'size', w) < 1) throw new Invalid(`${w}.size が小さすぎます`);
     } else throw new Invalid(`${w} の種類が正しくありません`);
   });
@@ -246,6 +249,29 @@ function checkMaskEdge(m: Obj, where: string) {
   }
   if (typeof m.feather === 'number' && m.feather < 0) throw new Invalid(`${where}.feather が負の値です`);
   if (m.antialias !== undefined && typeof m.antialias !== 'boolean') throw new Invalid(`${where}.antialias が正しくありません`);
+}
+
+const TEXT_PATH_ORIENTATIONS = new Set(['rotate', 'vertical', 'skew-vertical', 'skew-horizontal']);
+
+/** Text on a path: the path's nodes, layout settings and the original path's look. */
+function checkTextPath(v: unknown, where: string) {
+  if (!isObj(v)) throw new Invalid(`${where} が正しくありません`);
+  const nodes = arr(v, 'nodes', where);
+  if (nodes.length < 2) throw new Invalid(`${where}.nodes にはアンカーが2つ以上必要です`);
+  nodes.forEach((n, j) => {
+    if (!isObj(n) || !isObj(n.anchor)) throw new Invalid(`${where}.nodes[${j}] が正しくありません`);
+  });
+  v.closed = bool(v, 'closed', false);
+  num(v, 'offset', where);
+  num(v, 'shift', where);
+  v.reverse = bool(v, 'reverse', false);
+  if (!TEXT_PATH_ORIENTATIONS.has(v.orientation as string)) throw new Invalid(`${where}.orientation が正しくありません`);
+  const src = v.source;
+  if (!isObj(src)) throw new Invalid(`${where}.source が正しくありません`);
+  str(src, 'name', `${where}.source`);
+  checkPaint(src, `${where}.source`);
+  num(src, 'opacity', `${where}.source`);
+  src.effects = checkEffects(src.effects, `${where}.source.effects`);
 }
 
 const GRADIENT_KINDS = new Set(['linear', 'radial', 'conic']);

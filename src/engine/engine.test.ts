@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { defaultAdjust, defaultPipeline } from '../model/factory';
 import type { ResampleMethod } from '../model/types';
-import { blendWithMask, boxesForGauss, gaussianBlur, mosaic } from './blur';
+import { blendWithMask, boxesForGauss, eraseWithMask, gaussianBlur, mosaic } from './blur';
 import { applyAdjust, computeAutoColor } from './color';
 import { contours, distanceTransform, edgeOutline, rasterizeMask } from './mask';
 import { runPipeline } from './pipeline';
@@ -333,6 +333,19 @@ describe('mask and pipeline', () => {
     const ox = out[0].map((p) => p.x);
     expect(Math.min(...ox)).toBeCloseTo(90, 0);
     expect(Math.max(...ox)).toBeCloseTo(160, 0);
+  });
+
+  it('eraseWithMask lowers only alpha, by the mask coverage', () => {
+    const a = fillRaster(createRaster(3, 1), [200, 100, 50, 255]);
+    const out = eraseWithMask(a, new Float32Array([0, 0.5, 1]));
+    expect(pixel(out, 0, 0)).toEqual([200, 100, 50, 255]);
+    expect(pixel(out, 1, 0)).toEqual([200, 100, 50, 128]);
+    expect(pixel(out, 2, 0)).toEqual([200, 100, 50, 0]);
+    // The pipeline applies an erase step from the mask.
+    const p = { ...defaultPipeline(), localEdits: [{ kind: 'erase' as const, mask: { kind: 'rect' as const, x: 0, y: 0, width: 0.5, height: 1 } }] };
+    const r = runPipeline(fillRaster(createRaster(4, 2), [10, 20, 30, 255]), p);
+    expect(pixel(r, 0, 0)[3]).toBe(0);
+    expect(pixel(r, 3, 1)).toEqual([10, 20, 30, 255]);
   });
 
   it('blendWithMask only changes covered pixels', () => {

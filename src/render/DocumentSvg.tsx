@@ -15,6 +15,7 @@ import { cssFontFamily } from './fonts';
 import { fillPaint } from './gradient';
 import { pathNodesD, shapePaths } from './shapes';
 import { textLines, textBaselineOffset } from './text';
+import { layoutTextOnPath } from './textOnPath';
 
 export interface RenderOptions {
   /** URL of the processed raster for an image object (blob: on screen, data: for export). */
@@ -92,6 +93,8 @@ function renderObject(o: SceneObject, opts: RenderOptions, prefix: string, canva
       break;
     case 'text':
       body = renderText(o, fillId);
+      // Letters on a path reach past the box (it is the path's box); widen the effect region.
+      if (o.path) strokeWidth = o.fontSize * 1.5 + Math.abs(o.path.shift);
       break;
     case 'image':
       body = renderImage(o, opts);
@@ -198,7 +201,33 @@ function renderPath(o: PathObject, fillId: string): ReactElement {
   );
 }
 
+/** Text on a path: one positioned <text> per character (see render/textOnPath). */
+function renderTextOnPath(o: TextObject, fillId: string): ReactElement {
+  const fill = fillPaint(o.color, fillId, o.box.width, o.box.height);
+  return (
+    <>
+      {fill.def && <defs>{fill.def}</defs>}
+      <g
+        data-text-on-path=""
+        fontFamily={cssFontFamily(o.fontFamily)}
+        fontSize={o.fontSize}
+        fontWeight={o.bold ? 'bold' : 'normal'}
+        fontStyle={o.italic ? 'italic' : 'normal'}
+        fill={fill.paint}
+        textAnchor="middle"
+      >
+        {layoutTextOnPath(o).map((g, i) => (
+          <text key={i} transform={g.transform}>
+            {g.char}
+          </text>
+        ))}
+      </g>
+    </>
+  );
+}
+
 function renderText(o: TextObject, fillId: string): ReactElement {
+  if (o.path) return renderTextOnPath(o, fillId);
   const lines = textLines(o.text);
   const lh = o.fontSize * o.lineHeight;
   const anchor = o.align === 'center' ? 'middle' : o.align === 'right' ? 'end' : 'start';

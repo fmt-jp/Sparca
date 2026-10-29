@@ -1,4 +1,5 @@
 // Items of the canvas right-click menu: for objects, empty canvas, and path anchors.
+import { eraseSelection } from '../store/imageActions';
 import { findObject, isEffectivelyLocked } from '../model/tree';
 import { segmentCount, pathToDoc } from '../model/pathEdit';
 import {
@@ -11,6 +12,7 @@ import {
   ungroupSelection,
 } from '../store/actions';
 import { canCombineSelection, COMBINE_LABELS } from '../store/pathCombine';
+import { attachTextToPath, canAttachTextToPath, canDetachTextFromPath, detachTextFromPath } from '../store/textPathActions';
 import { COMBINE_OPS, runCombine } from './combine';
 import { canConvertSelectionToPaths, convertSelectedNodes, convertSelectionToPaths, deleteSelectedNodes, editablePath, insertNode, isLineShape } from '../store/pathActions';
 import type { MenuItem } from './MenuBar';
@@ -29,7 +31,7 @@ export function objectMenu(): MenuItem[] {
   const single = selection.length === 1 ? findObject(doc, selection[0]) : null;
   const isGroup = selection.some((id) => findObject(doc, id)?.object.type === 'group');
   const items: MenuItem[] = [
-    { label: 'カット', shortcut: `${mod}X`, action: () => menuCopy(true), disabled: !has },
+    { label: 'カット', shortcut: `${mod}X`, action: () => menuCopy(true), disabled: !has && !canCopyPixels(editor) },
     { label: 'コピー', shortcut: `${mod}C`, action: () => menuCopy(), disabled: !has && !canCopyPixels(editor) },
     { label: 'ペースト', shortcut: `${mod}V`, action: () => void menuPaste() },
     { label: '複製', shortcut: `${mod}D`, action: () => duplicateSelection(editor), disabled: !has },
@@ -47,6 +49,8 @@ export function objectMenu(): MenuItem[] {
       disabled: !canCombineSelection(editor),
       children: COMBINE_OPS.map((op) => ({ label: COMBINE_LABELS[op], action: () => void runCombine(op) })),
     },
+    ...(canAttachTextToPath(editor) ? [{ label: 'テキストをパスに添付', shortcut: `${mod}Shift+Y`, action: () => attachTextToPath(editor) }] : []),
+    ...(canDetachTextFromPath(editor) ? [{ label: 'テキストをパスから外す', action: () => detachTextFromPath(editor) }] : []),
     SEP,
     {
       label: '整列',
@@ -81,7 +85,14 @@ export function objectMenu(): MenuItem[] {
 export function canvasMenu(): MenuItem[] {
   const { grid } = editor.getState();
   return [
-    ...(canCopyPixels(editor) ? [{ label: '選択範囲をコピー', shortcut: `${mod}C`, action: () => menuCopy() }] : []),
+    ...(canCopyPixels(editor)
+      ? [
+          { label: '選択範囲をカット', shortcut: `${mod}X`, action: () => menuCopy(true) },
+          { label: '選択範囲をコピー', shortcut: `${mod}C`, action: () => menuCopy() },
+          { label: '選択範囲を消去', shortcut: 'Delete', action: () => eraseSelection(editor) },
+          SEP,
+        ]
+      : []),
     { label: 'ペースト', shortcut: `${mod}V`, action: () => void menuPaste() },
     { label: 'すべてを選択', shortcut: `${mod}A`, action: () => selectAll(editor) },
     SEP,
