@@ -92,3 +92,31 @@ describe('pixel selection edge', () => {
     expect(ed.getState().pixelSelection!.grow).toBeUndefined();
   });
 });
+
+describe('convert to path', () => {
+  it('converts selected shapes and shapes inside selected groups; text and old arrows stay', async () => {
+    const { convertSelectionToPaths, canConvertSelectionToPaths } = await import('./pathActions');
+    const { groupObjects } = await import('../model/commands');
+    const { createText } = await import('../model/factory');
+    const ed = new EditorStore();
+    const a = shape();
+    const b = createShape(defaultGeometry('ellipse'), { x: 20, y: 0, width: 10, height: 10, rotation: 0 });
+    const old = createShape(defaultGeometry('arrow'), { x: 40, y: 0, width: 10, height: 10, rotation: 0 });
+    const t = createText('あ', { x: 0, y: 40, width: 20, height: 20, rotation: 0 });
+    let groupId = '';
+    ed.edit('add', (d) => {
+      for (const o of [a, b, old, t]) addObject(d, d.layers[0].id, o);
+      groupId = groupObjects(d, [a.id, b.id])!;
+    });
+    ed.select([t.id]);
+    expect(canConvertSelectionToPaths(ed)).toBe(false);
+    ed.select([groupId, old.id, t.id]);
+    expect(convertSelectionToPaths(ed)).toBe(2);
+    const kids = ed.getState().doc.layers[0].children;
+    const g = kids.find((o) => o.id === groupId) as { children: { type: string }[] };
+    expect(g.children.map((o) => o.type)).toEqual(['path', 'path']);
+    expect(kids.find((o) => o.id === old.id)!.type).toBe('shape');
+    expect(kids.find((o) => o.id === t.id)!.type).toBe('text');
+    expect(ed.getState().selection).toEqual([groupId, old.id, t.id]);
+  });
+});

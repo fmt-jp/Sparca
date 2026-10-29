@@ -10,7 +10,7 @@ import {
   selectAll,
   ungroupSelection,
 } from '../store/actions';
-import { convertSelectedNodes, deleteSelectedNodes, editablePath, insertNode, isLineShape } from '../store/pathActions';
+import { canConvertSelectionToPaths, convertSelectedNodes, convertSelectionToPaths, deleteSelectedNodes, editablePath, insertNode, isLineShape } from '../store/pathActions';
 import type { MenuItem } from './MenuBar';
 import { ALIGN, alignShortcut, DISTRIBUTE } from './PropertiesPanel';
 import { menuCopy, menuPaste } from './clipboard';
@@ -38,6 +38,8 @@ export function objectMenu(): MenuItem[] {
     SEP,
     { label: 'グループ化', shortcut: `${mod}G`, action: () => groupSelection(editor), disabled: selection.length < 2 },
     { label: 'グループ解除', shortcut: `${mod}Shift+G`, action: () => ungroupSelection(editor), disabled: !isGroup },
+    SEP,
+    { label: 'パスに変換', action: () => convertSelectionToPaths(editor), disabled: !canConvertSelectionToPaths(editor) },
     SEP,
     {
       label: '整列',
