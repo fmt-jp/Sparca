@@ -1,4 +1,6 @@
 import { useEffect } from 'react';
+import { attachTextToPath } from '../store/textPathActions';
+import { eraseSelection, pixelTargetImage } from '../store/imageActions';
 import {
   alignSelection,
   arrangeSelection,
@@ -171,6 +173,11 @@ function handleShortcut(e: KeyboardEvent): boolean {
     return true;
   }
   if (mod) {
+    // Ctrl+Shift+Y: テキストをパスに添付 (as in Fireworks); checked before Ctrl+Y (redo).
+    if (k === 'y' && e.shiftKey) {
+      attachTextToPath(editor);
+      return true;
+    }
     if (k === 'z' && !e.shiftKey) editor.undo();
     else if ((k === 'z' && e.shiftKey) || k === 'y') editor.redo();
     else if (k === 's') void saveProject(editor, e.shiftKey);
@@ -200,7 +207,11 @@ function handleShortcut(e: KeyboardEvent): boolean {
     openDialog({ kind: 'help' });
     return true;
   }
-  if (k === 'delete' || k === 'backspace') deleteSelection(editor);
+  if (k === 'delete' || k === 'backspace') {
+    // With a range selection over an image, Delete erases those pixels (as in Fireworks).
+    if (editor.getState().pixelSelection && pixelTargetImage(editor)) eraseSelection(editor);
+    else deleteSelection(editor);
+  }
   else if (k === 'escape') {
     if (editor.getState().pixelSelection) editor.set({ pixelSelection: null });
     else editor.select([]);

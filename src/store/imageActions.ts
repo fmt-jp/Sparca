@@ -1,7 +1,7 @@
 // Raster-related editor actions (spec §7).
 import { updateObject } from '../model/commands';
 import { boundsOfPoints, boxCorners, objectBounds, rectsIntersect, toLocal, type Rect } from '../model/geometry';
-import { addLocalBlur, addLocalMosaic, cropDocument, cropImage, fitCanvasToObject, resizeCanvas, resizeImagePixels, selectionToImageMask, type Anchor } from '../model/imageOps';
+import { addLocalBlur, addLocalErase, addLocalMosaic, cropDocument, cropImage, fitCanvasToObject, resizeCanvas, resizeImagePixels, selectionToImageMask, type Anchor } from '../model/imageOps';
 import { allObjects, findObject, isEffectivelyLocked, isEffectivelyVisible } from '../model/tree';
 import { defaultAdjust } from '../model/factory';
 import type { ColorAdjust, Id, ImageObject, MaskShape, ResampleMethod, SceneObject } from '../model/types';
@@ -138,6 +138,17 @@ export function previewSelectionEdit(ed: EditorStore, kind: 'blur' | 'mosaic', v
   if (!t) return false;
   ed.beginGesture();
   ed.edit(SELECTION_EDIT_LABELS[kind], (d) => (kind === 'blur' ? addLocalBlur(d, t.img.id, t.mask, value) : addLocalMosaic(d, t.img.id, t.mask, value)));
+  return true;
+}
+
+/**
+ * Erase the pixel selection on the target image (it becomes transparent; kept as an
+ * editable step like partial blur / mosaic). The selection stays.
+ */
+export function eraseSelection(ed: EditorStore, label = '選択範囲を消去'): boolean {
+  const t = selectionTarget(ed);
+  if (!t) return false;
+  ed.edit(label, (d) => addLocalErase(d, t.img.id, t.mask));
   return true;
 }
 

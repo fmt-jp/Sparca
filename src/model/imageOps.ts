@@ -186,6 +186,10 @@ export function addLocalMosaic(doc: SparcaDocument, id: Id, mask: MaskShape, siz
   addLocalEdit(doc, id, { kind: 'mosaic', size, mask });
 }
 
+export function addLocalErase(doc: SparcaDocument, id: Id, mask: MaskShape): void {
+  addLocalEdit(doc, id, { kind: 'erase', mask });
+}
+
 function addLocalEdit(doc: SparcaDocument, id: Id, edit: LocalEdit): void {
   const loc = findObject(doc, id);
   if (!loc || loc.object.type !== 'image') return;

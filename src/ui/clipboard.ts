@@ -3,6 +3,7 @@
 // canvas, while objects copied in HANABI still paste as editable objects.
 import { copySelection, cutSelection, isPixelCopy, paste, placeImageFiles, setPixelClipboard } from '../store/actions';
 import { canCopyPixels, copySelectionPixels } from '../store/pixelCopy';
+import { eraseSelection } from '../store/imageActions';
 import { isTextEntry } from './keyboard';
 import { editor } from './useEditor';
 
@@ -52,7 +53,8 @@ async function copyPixels(cut: boolean): Promise<void> {
   await written?.catch(() => undefined); // No clipboard access: HANABI's own clipboard still has it.
   if (!copy) return;
   await setPixelClipboard(copy);
-  if (cut) editor.notify('info', '選択範囲の画素の切り取り（削除）には未対応のため、コピーのみ行いました。');
+  // カット: the copied pixels are then erased from the image (one undo step).
+  if (cut) eraseSelection(editor, '選択範囲をカット');
 }
 
 /** Whether pasted image files are HANABI's own latest selection copy (same size). */

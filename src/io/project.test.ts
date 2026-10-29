@@ -195,4 +195,28 @@ describe('project format', () => {
     zip.file('document.json', JSON.stringify(raw));
     await expect(readProject(await zip.generateAsync({ type: 'uint8array' }))).rejects.toThrow(/subpaths/);
   });
+
+  it('round-trips text on a path and erase steps; rejects a broken text path', async () => {
+    const doc = produce(sampleDoc(), (d) => {
+      const t = createText('ON PATH', { x: 0, y: 0, width: 100, height: 100, rotation: 0 });
+      t.path = {
+        nodes: [{ anchor: { x: 0, y: 1 }, in: null, out: null }, { anchor: { x: 1, y: 0 }, in: null, out: null }],
+        closed: false, offset: 0.25, orientation: 'skew-vertical', reverse: true, shift: 4,
+        source: { name: 'パス', fill: null, stroke: '#000000', strokeWidth: 2, strokeStyle: 'dashed', opacity: 1, effects: [] },
+      };
+      addObject(d, d.layers[0].id, t);
+      const img = d.layers[0].children.find((o) => o.type === 'image') as ImageObject;
+      img.pipeline.localEdits.push({ kind: 'erase', mask: { kind: 'rect', x: 0, y: 0, width: 0.5, height: 0.5, feather: 3 } });
+    });
+    const back = await readProject(await writeProject(doc, () => new Blob([bytes])));
+    const texts = back.doc.layers[0].children.filter((o) => o.type === 'text');
+    expect(texts.at(-1)).toMatchObject({ path: { offset: 0.25, orientation: 'skew-vertical', reverse: true, shift: 4, source: { strokeStyle: 'dashed' } } });
+    const img = back.doc.layers[0].children.find((o) => o.type === 'image') as ImageObject;
+    expect(img.pipeline.localEdits.at(-1)).toMatchObject({ kind: 'erase', mask: { feather: 3 } });
+    const raw = JSON.parse(JSON.stringify(doc));
+    raw.layers[0].children.at(-1).path.orientation = 'spiral';
+    const zip = await JSZip.loadAsync(await writeProject(doc, () => new Blob([bytes])));
+    zip.file('document.json', JSON.stringify({ format: 'hanabi', ...raw }));
+    await expect(readProject(await zip.generateAsync({ type: 'uint8array' }))).rejects.toThrow(/orientation/);
+  });
 });

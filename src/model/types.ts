@@ -197,9 +197,42 @@ export interface PathObject extends BaseObject, Paint {
   subpaths?: PathContour[];
 }
 
+/** How characters sit on a path (Fireworks テキストの方向). */
+export type TextPathOrientation = 'rotate' | 'vertical' | 'skew-vertical' | 'skew-horizontal';
+
+/**
+ * Text attached to a path (テキストをパスに添付; 2026-10-29). The path becomes part of the
+ * text: its outline in the text's box-normalized coordinates (the box is the path's box), and
+ * its look, kept to restore the path when the text is taken off it. The path itself is not
+ * drawn. The text runs along it as one line.
+ */
+export interface TextOnPath {
+  nodes: PathNode[];
+  closed: boolean;
+  /** Where along the path the text hangs, 0..1; the text's alignment says which part of it. */
+  offset: number;
+  orientation: TextPathOrientation;
+  /** Run the other way, on the other side of the path. */
+  reverse: boolean;
+  /** Baseline distance from the path in px (positive: away from the path, toward the top of the letters). */
+  shift: number;
+  /** The path's look before attaching. */
+  source: {
+    name: string;
+    fill: Fill | null;
+    stroke: string | null;
+    strokeWidth: number;
+    strokeStyle?: StrokeStyle;
+    opacity: number;
+    effects: Effect[];
+  };
+}
+
 export interface TextObject extends BaseObject {
   type: 'text';
   text: string;
+  /** Present when the text runs along a path. */
+  path?: TextOnPath;
   fontFamily: string;
   fontSize: number;
   bold: boolean;
@@ -281,7 +314,16 @@ export interface LocalMosaic {
   mask: MaskShape;
 }
 
-export type LocalEdit = LocalBlur | LocalMosaic;
+/**
+ * Erase inside the mask: the pixels become transparent (選択範囲を消去 / カット; 2026-10-29).
+ * The colors stay; only the alpha goes, so feathered edges fade out cleanly.
+ */
+export interface LocalErase {
+  kind: 'erase';
+  mask: MaskShape;
+}
+
+export type LocalEdit = LocalBlur | LocalMosaic | LocalErase;
 
 export interface ImagePipeline {
   /** Crop rectangle in source-image pixels. */

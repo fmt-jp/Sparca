@@ -11,7 +11,7 @@ import {
   selectAll,
   ungroupSelection,
 } from '../store/actions';
-import { autoColor, pixelTargetImage, selectedImage } from '../store/imageActions';
+import { autoColor, eraseSelection, pixelTargetImage, selectedImage } from '../store/imageActions';
 import { ZOOM_STEPS } from './CanvasView';
 import { openDialog } from './dialogs';
 import { ALIGN, alignShortcut, DISTRIBUTE } from './PropertiesPanel';
@@ -19,6 +19,7 @@ import { setPanelSizes, togglePanels, usePanelSizes } from './usePanelSizes';
 import { menuCopy, menuPaste } from './clipboard';
 import { canConvertSelectionToPaths, convertSelectionToPaths } from '../store/pathActions';
 import { canCombineSelection, COMBINE_LABELS } from '../store/pathCombine';
+import { attachTextToPath, canAttachTextToPath, canDetachTextFromPath, detachTextFromPath } from '../store/textPathActions';
 import { COMBINE_OPS, runCombine } from './combine';
 import { editor, useEditor } from './useEditor';
 
@@ -103,7 +104,7 @@ export function MenuBar({ onNew }: { onNew: () => void }) {
         { label: undoLabel ? `取り消し: ${undoLabel}` : '取り消し', shortcut: `${mod}Z`, action: () => editor.undo(), disabled: !undoLabel },
         { label: redoLabel ? `やり直し: ${redoLabel}` : 'やり直し', shortcut: `${mod}Shift+Z`, action: () => editor.redo(), disabled: !redoLabel },
         { separator: true, label: '' },
-        { label: 'カット', shortcut: `${mod}X`, action: () => menuCopy(true), disabled: !hasSel },
+        { label: 'カット', shortcut: `${mod}X`, action: () => menuCopy(true), disabled: !hasSel && !(pixelSel && pixelTargetImage(editor)) },
         { label: 'コピー', shortcut: `${mod}C`, action: () => menuCopy(), disabled: !hasSel && !(pixelSel && pixelTargetImage(editor)) },
         { label: 'ペースト', shortcut: `${mod}V`, action: () => void menuPaste() },
         { label: '複製', shortcut: `${mod}D`, action: () => duplicateSelection(editor), disabled: !hasSel },
@@ -132,6 +133,9 @@ export function MenuBar({ onNew }: { onNew: () => void }) {
           disabled: !canCombineSelection(editor),
         })),
         { separator: true, label: '' },
+        { label: 'テキストをパスに添付', shortcut: `${mod}Shift+Y`, action: () => attachTextToPath(editor), disabled: !canAttachTextToPath(editor) },
+        { label: 'テキストをパスから外す', action: () => detachTextFromPath(editor), disabled: !canDetachTextFromPath(editor) },
+        { separator: true, label: '' },
         ...ALIGN.map((a) => ({
           label: `整列：${a.label}`,
           shortcut: alignShortcut(a.digit),
@@ -158,6 +162,7 @@ export function MenuBar({ onNew }: { onNew: () => void }) {
         { label: '自動カラー調整', action: () => image && void autoColor(editor, image.id), disabled: !image },
         { label: '選択範囲にぼかし…', action: () => openDialog({ kind: 'blur-selection' }), disabled: !pixelSel || !pixelTargetImage(editor) },
         { label: '選択範囲にモザイク…', action: () => openDialog({ kind: 'mosaic-selection' }), disabled: !pixelSel || !pixelTargetImage(editor) },
+        { label: '選択範囲を消去', shortcut: 'Delete', action: () => eraseSelection(editor), disabled: !pixelSel || !pixelTargetImage(editor) },
         { label: '選択範囲を拡張…', action: () => openDialog({ kind: 'grow-selection', contract: false }), disabled: !pixelSel },
         { label: '選択範囲を縮小…', action: () => openDialog({ kind: 'grow-selection', contract: true }), disabled: !pixelSel },
         { label: '範囲選択を解除', shortcut: 'Esc', action: () => editor.set({ pixelSelection: null }), disabled: !pixelSel },
