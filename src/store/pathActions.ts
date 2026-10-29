@@ -2,7 +2,9 @@
 import { removeObjects, updateObject } from '../model/commands';
 import {
   deleteAnchors,
-  docToPath,
+  docContoursToPath,
+  pathContours,
+  pathContoursToDoc,
   isSmooth,
   makeCorner,
   makeSmooth,
@@ -12,7 +14,7 @@ import {
   type DocNode,
 } from '../model/pathEdit';
 import { findObject, isEffectivelyLocked } from '../model/tree';
-import type { Id, PathObject, SceneObject, ShapeObject } from '../model/types';
+import type { Id, PathObject, SceneObject, ShapeObject, SparcaDocument } from '../model/types';
 import type { EditorStore } from './editor';
 import { canConvertToPath, shapeToPath } from '../model/shapeToPath';
 
@@ -44,7 +46,7 @@ export function editLineAsPath(ed: EditorStore): boolean {
 }
 
 /** The selected path if exactly one editable path is selected. */
-export function editablePath(ed: EditorStore): PathObject | null {
+function selectedPath(ed: EditorStore): PathObject | null {
   const { doc, selection } = ed.getState();
   if (selection.length !== 1) return null;
   const loc = findObject(doc, selection[0]);
@@ -52,19 +54,62 @@ export function editablePath(ed: EditorStore): PathObject | null {
   return loc.object;
 }
 
+/** Index of the outline being edited, clamped to the path's outlines. */
+export function activeContour(ed: EditorStore, p: Pick<PathObject, 'subpaths'>): number {
+  return Math.min(Math.max(0, ed.getState().nodeContour), p.subpaths?.length ?? 0);
+}
+
+/**
+ * The selected path as seen by anchor editing: for a compound path, only the outline being
+ * edited (its `nodes` / `closed`; same id and box). Writes go through setPathNodes /
+ * writePathContour, which put that outline back among the others.
+ */
+export function editablePath(ed: EditorStore): PathObject | null {
+  const p = selectedPath(ed);
+  if (!p || !p.subpaths?.length) return p;
+  const c = pathContours(p)[activeContour(ed, p)];
+  return { ...p, nodes: c.nodes, closed: c.closed, subpaths: undefined };
+}
+
+/** Number of outlines of the selected path (1 for a simple path, 0 when none is selected). */
+export function contourCount(ed: EditorStore): number {
+  const p = selectedPath(ed);
+  return p ? 1 + (p.subpaths?.length ?? 0) : 0;
+}
+
 /** Selected anchor indices, clamped to the path's current node count (undo can remove nodes). */
 export function selectedNodes(ed: EditorStore, p: PathObject): number[] {
   return ed.getState().nodeSelection.filter((i) => i < p.nodes.length);
 }
 
-/** Write document-space nodes back to a path (refitting its box). */
+/**
+ * Replace outline `contour` of path `id` (in a draft document) with document-space nodes,
+ * refitting the box around all outlines.
+ */
+export function writePathContour(d: SparcaDocument, id: Id, contour: number, nodes: DocNode[], closed?: boolean): void {
+  const loc = findObject(d, id);
+  if (!loc || loc.object.type !== 'path') return;
+  const o = loc.object;
+  const all = pathContoursToDoc(o);
+  const k = Math.min(contour, all.length - 1);
+  all[k] = { nodes, closed: closed ?? all[k].closed };
+  updateObject(d, id, docContoursToPath(o.box, all) as Partial<SceneObject>);
+}
+
+/** Write document-space nodes back to the outline being edited (refitting the box). */
 export function setPathNodes(ed: EditorStore, id: Id, nodes: DocNode[], label: string, closed?: boolean): void {
   const loc = findObject(ed.getState().doc, id);
   if (!loc || loc.object.type !== 'path') return;
-  const fit = docToPath(loc.object.box, nodes);
-  const patch: Partial<PathObject> = { box: fit.box, nodes: fit.nodes };
-  if (closed !== undefined) patch.closed = closed;
-  ed.edit(label, (d) => updateObject(d, id, patch as Partial<SceneObject>));
+  const contour = activeContour(ed, loc.object);
+  ed.edit(label, (d) => writePathContour(d, id, contour, nodes, closed));
+}
+
+/** Remove the outline being edited from a compound path. */
+function removeContour(ed: EditorStore, p: PathObject): void {
+  const all = pathContoursToDoc(p);
+  all.splice(activeContour(ed, p), 1);
+  ed.edit('アウトラインの削除', (d) => updateObject(d, p.id, docContoursToPath(p.box, all) as Partial<SceneObject>));
+  ed.set({ nodeSelection: [], nodeContour: 0 });
 }
 
 export function nudgeNodes(ed: EditorStore, dx: number, dy: number): boolean {
@@ -80,6 +125,10 @@ export function deleteSelectedNodes(ed: EditorStore): boolean {
   const sel = p ? selectedNodes(ed, p) : [];
   if (!p || !sel.length) return false;
   const rest = deleteAnchors(pathToDoc(p), sel);
+  if (!rest && contourCount(ed) > 1) {
+    removeContour(ed, selectedPath(ed)!);
+    return true;
+  }
   if (!rest) {
     if (!window.confirm('アンカーが2つ未満になるため、パス全体を削除します。よろしいですか？')) return true;
     ed.edit('パスの削除', (d) => removeObjects(d, [p.id]));
@@ -128,9 +177,11 @@ export function setPathClosed(ed: EditorStore, closed: boolean): void {
     ed.notify('error', 'パスを閉じるにはアンカーが3つ以上必要です。');
     return;
   }
-  ed.edit(closed ? 'パスを閉じる' : 'パスを開く', (d) =>
-    updateObject(d, p.id, { closed, fill: closed ? (p.fill ?? '#4a90e2') : p.fill } as Partial<SceneObject>),
-  );
+  const contour = activeContour(ed, p);
+  ed.edit(closed ? 'パスを閉じる' : 'パスを開く', (d) => {
+    writePathContour(d, p.id, contour, pathToDoc(p), closed);
+    updateObject(d, p.id, { fill: closed ? (p.fill ?? '#4a90e2') : p.fill } as Partial<SceneObject>);
+  });
 }
 
 /** Shapes (also inside selected groups) the selection would turn into paths with 「パスに変換」. */

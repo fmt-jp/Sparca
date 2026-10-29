@@ -101,6 +101,7 @@ const SESSION_KEYS = [
   'fileHandle',
   'selection',
   'nodeSelection',
+  'nodeContour',
   'activeLayerId',
   'pixelSelection',
   'crop',
@@ -124,6 +125,8 @@ export interface EditorState {
   selection: Id[];
   /** Selected anchors (indices) of the selected path while editing it with the subselect tool. */
   nodeSelection: number[];
+  /** Outline of a compound path being edited with the subselect tool (index into its contours). */
+  nodeContour: number;
   activeLayerId: Id;
   tool: ToolId;
   pixelSelection: PixelSelection | null;
@@ -352,7 +355,7 @@ export class EditorStore {
 
   select(ids: Id[]): void {
     const same = ids.length === this.state.selection.length && ids.every((id, i) => id === this.state.selection[i]);
-    this.set(same ? { selection: ids } : { selection: ids, nodeSelection: [] });
+    this.set(same ? { selection: ids } : { selection: ids, nodeSelection: [], nodeContour: 0 });
   }
 
   /** Change the selection edge setting; the current selection takes it too. */
@@ -429,6 +432,7 @@ function freshSession(doc: SparcaDocument, fileName: string, fileHandle: FileSys
     fileHandle,
     selection: [],
     nodeSelection: [],
+    nodeContour: 0,
     activeLayerId: doc.layers[doc.layers.length - 1]?.id ?? '',
     pixelSelection: null,
     crop: null,

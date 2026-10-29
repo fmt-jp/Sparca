@@ -178,10 +178,23 @@ export interface PathNode {
   out: Point | null;
 }
 
-export interface PathObject extends BaseObject, Paint {
-  type: 'path';
+/** One outline of a (compound) path. */
+export interface PathContour {
   nodes: PathNode[];
   closed: boolean;
+}
+
+export interface PathObject extends BaseObject, Paint {
+  type: 'path';
+  /** The first (or only) outline. */
+  nodes: PathNode[];
+  closed: boolean;
+  /**
+   * Further outlines of a compound path (results of 型抜き etc.: holes and separate parts;
+   * 2026-10-29). Filled with the even-odd rule, so an outline inside another is a hole.
+   * Missing in simple paths and older files.
+   */
+  subpaths?: PathContour[];
 }
 
 export interface TextObject extends BaseObject {

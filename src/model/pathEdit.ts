@@ -2,7 +2,7 @@
 // (possibly rotated) box; editing happens on document-space copies and is converted back,
 // re-fitting the box while keeping the rotation and the on-screen position.
 import { boxCenter, rotatePoint } from './geometry';
-import type { Box, PathNode, PathObject, Point } from './types';
+import type { Box, PathContour, PathNode, PathObject, Point } from './types';
 
 /** Node in document coordinates. Handles are null for corner sides. */
 export interface DocNode {
@@ -18,6 +18,36 @@ function toDocPoint(b: Box, n: Point): Point {
 export function pathToDoc(p: Pick<PathObject, 'box' | 'nodes'>): DocNode[] {
   const t = (q: Point | null) => (q ? toDocPoint(p.box, q) : null);
   return p.nodes.map((n) => ({ anchor: t(n.anchor)!, in: t(n.in), out: t(n.out) }));
+}
+
+/** An outline in document coordinates. */
+export interface DocContour {
+  nodes: DocNode[];
+  closed: boolean;
+}
+
+/** All outlines of a (compound) path: the main one first, then `subpaths`. */
+export function pathContours(p: Pick<PathObject, 'nodes' | 'closed' | 'subpaths'>): PathContour[] {
+  return [{ nodes: p.nodes, closed: p.closed }, ...(p.subpaths ?? [])];
+}
+
+export function pathContoursToDoc(p: Pick<PathObject, 'box' | 'nodes' | 'closed' | 'subpaths'>): DocContour[] {
+  return pathContours(p).map((c) => ({ nodes: pathToDoc({ box: p.box, nodes: c.nodes }), closed: c.closed }));
+}
+
+/**
+ * Document-space outlines back into a path's box (same rotation as `prev`, refitted around
+ * all outlines) and its `nodes` / `closed` / `subpaths`.
+ */
+export function docContoursToPath(prev: Box, contours: DocContour[]): Pick<PathObject, 'box' | 'nodes' | 'closed' | 'subpaths'> {
+  const fit = docToPath(prev, contours.flatMap((c) => c.nodes));
+  const split: PathContour[] = [];
+  let at = 0;
+  for (const c of contours) {
+    split.push({ nodes: fit.nodes.slice(at, at + c.nodes.length), closed: c.closed });
+    at += c.nodes.length;
+  }
+  return { box: fit.box, nodes: split[0].nodes, closed: split[0].closed, subpaths: split.length > 1 ? split.slice(1) : undefined };
 }
 
 /**

@@ -176,4 +176,23 @@ describe('project format', () => {
     huge.file('document.json', JSON.stringify({ ...raw, assets: { a_1: { ...raw.assets.a_1, width: 100000, height: 100000 } } }));
     await expect(readProject(await huge.generateAsync({ type: 'uint8array' }))).rejects.toThrow(/大きさ/);
   });
+
+  it('round-trips compound paths (subpaths) and rejects broken ones', async () => {
+    const doc = produce(createDocument(100, 100), (d) => {
+      d.layers[0].children.push({
+        id: 'cp', name: 'パス', type: 'path', visible: true, locked: false, opacity: 1, effects: [],
+        box: { x: 0, y: 0, width: 100, height: 100, rotation: 0 }, fill: '#ff0000', stroke: null, strokeWidth: 0,
+        nodes: [{ anchor: { x: 0, y: 0 }, in: null, out: null }, { anchor: { x: 1, y: 0 }, in: null, out: null }, { anchor: { x: 1, y: 1 }, in: null, out: null }],
+        closed: true,
+        subpaths: [{ nodes: [{ anchor: { x: 0.4, y: 0.4 }, in: null, out: null }, { anchor: { x: 0.6, y: 0.4 }, in: null, out: null }, { anchor: { x: 0.5, y: 0.6 }, in: null, out: null }], closed: true }],
+      });
+    });
+    const back = await readProject(await writeProject(doc, () => undefined));
+    expect(back.doc.layers[0].children[0]).toMatchObject({ subpaths: [{ closed: true, nodes: [{ anchor: { x: 0.4, y: 0.4 } }, {}, {}] }] });
+    const raw = JSON.parse(JSON.stringify(doc));
+    raw.layers[0].children[0].subpaths = [{ nodes: [{ x: 1 }], closed: true }];
+    const zip = new JSZip();
+    zip.file('document.json', JSON.stringify(raw));
+    await expect(readProject(await zip.generateAsync({ type: 'uint8array' }))).rejects.toThrow(/subpaths/);
+  });
 });

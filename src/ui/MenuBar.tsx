@@ -18,6 +18,8 @@ import { ALIGN, alignShortcut, DISTRIBUTE } from './PropertiesPanel';
 import { setPanelSizes, togglePanels, usePanelSizes } from './usePanelSizes';
 import { menuCopy, menuPaste } from './clipboard';
 import { canConvertSelectionToPaths, convertSelectionToPaths } from '../store/pathActions';
+import { canCombineSelection, COMBINE_LABELS } from '../store/pathCombine';
+import { COMBINE_OPS, runCombine } from './combine';
 import { editor, useEditor } from './useEditor';
 
 export interface MenuItem {
@@ -124,6 +126,11 @@ export function MenuBar({ onNew }: { onNew: () => void }) {
         { label: 'グループ解除', shortcut: `${mod}Shift+G`, action: () => ungroupSelection(editor), disabled: !hasSel },
         { separator: true, label: '' },
         { label: 'パスに変換', action: () => convertSelectionToPaths(editor), disabled: !canConvertSelectionToPaths(editor) },
+        ...COMBINE_OPS.map((op) => ({
+          label: `パスの結合：${COMBINE_LABELS[op]}`,
+          action: () => void runCombine(op),
+          disabled: !canCombineSelection(editor),
+        })),
         { separator: true, label: '' },
         ...ALIGN.map((a) => ({
           label: `整列：${a.label}`,

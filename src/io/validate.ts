@@ -116,6 +116,16 @@ function checkObject(o: unknown, where: string, ids: Set<string>, assets: Obj): 
         if (!isObj(n) || !isObj(n.anchor)) throw new Invalid(`${where}.nodes[${j}] が正しくありません`);
       });
       o.closed = bool(o, 'closed', false);
+      if (o.subpaths !== undefined) {
+        arr(o, 'subpaths', where).forEach((c, k) => {
+          const w = `${where}.subpaths[${k}]`;
+          if (!isObj(c)) throw new Invalid(`${w} が正しくありません`);
+          arr(c, 'nodes', w).forEach((n, j) => {
+            if (!isObj(n) || !isObj(n.anchor)) throw new Invalid(`${w}.nodes[${j}] が正しくありません`);
+          });
+          c.closed = bool(c, 'closed', false);
+        });
+      }
       checkPaint(o, where);
       break;
     case 'text':

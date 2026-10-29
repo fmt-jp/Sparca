@@ -9,7 +9,7 @@ import { autoColor, cancelCrop, commitCrop, pixelTargetImage, resetAdjust, setAd
 import { openDialog } from './dialogs';
 import { FEATHER_LIMITS, type SelectionEdge } from '../store/editor';
 import { moveAnchors, pathToDoc } from '../model/pathEdit';
-import { convertSelectedNodes, deleteSelectedNodes, setPathClosed, setPathNodes } from '../store/pathActions';
+import { activeContour, convertSelectedNodes, deleteSelectedNodes, editablePath, setPathClosed, setPathNodes } from '../store/pathActions';
 import { fitTextBox } from '../render/text';
 import { isGradient } from '../model/gradient';
 import { FillInput } from './FillInput';
@@ -515,7 +515,11 @@ function ImageSection({ o }: { o: ImageObject }) {
   );
 }
 
-function PathNodeSection({ o }: { o: PathObject }) {
+function PathNodeSection({ o: whole }: { o: PathObject }) {
+  useEditor((s) => s.nodeContour);
+  // A compound path is edited one outline at a time.
+  const o = editablePath(editor) ?? whole;
+  const outlines = 1 + (whole.subpaths?.length ?? 0);
   const nodeSel = useEditor((s) => s.nodeSelection).filter((i) => i < o.nodes.length);
   const nodes = pathToDoc(o);
   const single = nodeSel.length === 1 ? nodes[nodeSel[0]] : null;
@@ -526,6 +530,7 @@ function PathNodeSection({ o }: { o: PathObject }) {
   return (
     <div className="prop-section" data-testid="path-node-panel">
       <span className="hint">
+        {outlines > 1 && `アウトライン ${activeContour(editor, whole) + 1} / ${outlines}（点線のアウトラインをクリックで切り替え）・`}
         アンカー {o.nodes.length} 個{nodeSel.length ? `（${nodeSel.length} 個選択中）` : ''}
       </span>
       {single && (
