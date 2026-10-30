@@ -193,3 +193,36 @@ test('double-clicking a text object with the select tool edits it in place', asy
   await page.keyboard.press('Escape');
   await expect(page.locator('[data-testid=canvas] text')).toHaveText('After');
 });
+
+test('Shift+drag on a selected object moves the whole selection along one axis; Shift+click still toggles', async ({ page }) => {
+  await expect(page.getByRole('region', { name: 'プロパティ' })).toBeVisible();
+  const c = await canvasBox(page);
+  await page.keyboard.press('r');
+  await drag(page, { x: c.x + 100, y: c.y + 100 }, { x: c.x + 150, y: c.y + 150 });
+  await page.keyboard.press('r');
+  await drag(page, { x: c.x + 200, y: c.y + 100 }, { x: c.x + 250, y: c.y + 150 });
+  await expect.poll(async () => (await objects(page)).length).toBe(2);
+  await page.keyboard.press('v');
+  await page.keyboard.press('Control+a');
+  expect(await state<string[]>(page, 's => s.selection')).toHaveLength(2);
+  await page.keyboard.down('Shift');
+  await page.mouse.move(c.x + 125, c.y + 125);
+  await page.mouse.down();
+  await page.mouse.move(c.x + 185, c.y + 135, { steps: 6 });
+  await page.mouse.up();
+  await page.keyboard.up('Shift');
+  // Both stay selected and move horizontally only.
+  expect(await state<string[]>(page, 's => s.selection')).toHaveLength(2);
+  const boxes = (await objects(page)).map((o) => (o as unknown as { box: { x: number; y: number } }).box);
+  expect(boxes.map((b) => [Math.round(b.x), Math.round(b.y)])).toEqual([
+    [160, 100],
+    [260, 100],
+  ]);
+  // A Shift+click without dragging takes the clicked one out of the selection, and adds it back.
+  await page.keyboard.down('Shift');
+  await page.mouse.click(c.x + 185, c.y + 125);
+  expect(await state<string[]>(page, 's => s.selection')).toHaveLength(1);
+  await page.mouse.click(c.x + 185, c.y + 125);
+  await page.keyboard.up('Shift');
+  expect(await state<string[]>(page, 's => s.selection')).toHaveLength(2);
+});
