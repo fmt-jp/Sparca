@@ -9,8 +9,8 @@ import { METHOD_LABELS } from '../engine/resample';
 import { autoColor, cancelCrop, commitCrop, pixelTargetImage, resetAdjust, setAdjust, setCropTarget } from '../store/imageActions';
 import { openDialog } from './dialogs';
 import { FEATHER_LIMITS, type SelectionEdge } from '../store/editor';
-import { moveAnchors, pathToDoc } from '../model/pathEdit';
-import { activeContour, convertSelectedNodes, deleteSelectedNodes, editablePath, setPathClosed, setPathNodes } from '../store/pathActions';
+import { moveAnchors } from '../model/pathEdit';
+import { convertSelectedNodes, deleteSelectedNodes, flatPath, selectedNodes, selectedOutline, setPathClosed, setPathNodes } from '../store/pathActions';
 import { fitTextBox } from '../render/text';
 import { isGradient } from '../model/gradient';
 import { FillInput } from './FillInput';
@@ -565,14 +565,14 @@ function ImageSection({ o }: { o: ImageObject }) {
   );
 }
 
-function PathNodeSection({ o: whole }: { o: PathObject }) {
-  useEditor((s) => s.nodeContour);
-  // A compound path is edited one outline at a time.
-  const o = editablePath(editor) ?? whole;
-  const outlines = 1 + (whole.subpaths?.length ?? 0);
-  const nodeSel = useEditor((s) => s.nodeSelection).filter((i) => i < o.nodes.length);
-  const nodes = pathToDoc(o);
+function PathNodeSection({ o }: { o: PathObject }) {
+  useEditor((s) => s.nodeSelection);
+  // Anchors of every outline of a compound path, numbered across outlines.
+  const flat = flatPath(o);
+  const nodes = flat.nodes;
+  const nodeSel = selectedNodes(editor, o);
   const single = nodeSel.length === 1 ? nodes[nodeSel[0]] : null;
+  const closed = flat.contours[selectedOutline(editor, o)]?.closed ?? o.closed;
   const moveTo = (x: number, y: number) => {
     const i = nodeSel[0];
     setPathNodes(editor, o.id, moveAnchors(nodes, [i], x - nodes[i].anchor.x, y - nodes[i].anchor.y), 'アンカーの移動');
@@ -580,8 +580,8 @@ function PathNodeSection({ o: whole }: { o: PathObject }) {
   return (
     <div className="prop-section" data-testid="path-node-panel">
       <span className="hint">
-        {outlines > 1 && `アウトライン ${activeContour(editor, whole) + 1} / ${outlines}（点線のアウトラインをクリックで切り替え）・`}
-        アンカー {o.nodes.length} 個{nodeSel.length ? `（${nodeSel.length} 個選択中）` : ''}
+        {flat.contours.length > 1 && `アウトライン ${flat.contours.length} 個・`}
+        アンカー {nodes.length} 個{nodeSel.length ? `（${nodeSel.length} 個選択中）` : ''}
       </span>
       {single && (
         <>
@@ -602,7 +602,7 @@ function PathNodeSection({ o: whole }: { o: PathObject }) {
       <button type="button" disabled={!nodeSel.length} onClick={() => deleteSelectedNodes(editor)}>
         アンカーを削除
       </button>
-      <Toggle checked={o.closed} onChange={(c) => setPathClosed(editor, c)}>
+      <Toggle checked={closed} onChange={(c) => setPathClosed(editor, c)}>
         パスを閉じる
       </Toggle>
     </div>

@@ -104,22 +104,17 @@ test('the right-click menu has パスの結合; text cannot take part', async ({
   await expect(page.getByRole('menuitem', { name: 'パスの結合：合体' })).toBeDisabled();
 });
 
-test('a compound path is edited one outline at a time with the subselect tool', async ({ page }) => {
+test('every outline of a compound path is shown and edited with the subselect tool', async ({ page }) => {
   await draw(page, 'rect', 100, 100, 300, 300);
   await draw(page, 'rect', 150, 150, 250, 250);
   await combine(page, '型抜き');
   await page.keyboard.press('a');
-  // The hole is shown as a dashed outline; click it to edit it.
-  const other = page.locator('[data-contour="1"]');
-  await expect(other).toHaveCount(1);
-  const c = await canvasBox(page);
-  await page.mouse.click(c.x + 150, c.y + 200); // on the hole's left edge
-  expect(await state<number>(page, 's => s.nodeContour')).toBe(1);
-  await expect(page.getByTestId('path-node-panel')).toContainText('アウトライン 2 / 2');
-  await expect(page.locator('[data-contour="0"]')).toHaveCount(1);
-  // Drag one of the hole's corners outwards.
+  // The anchors of both outlines (outer 4 + hole 4) are shown at once.
   const nodes = page.locator('[data-testid="path-nodes"] [data-node]');
-  await expect(nodes).toHaveCount(4);
+  await expect(nodes).toHaveCount(8);
+  await expect(page.getByTestId('path-node-panel')).toContainText('アウトライン 2 個・アンカー 8 個');
+  // Drag one of the hole's corners outwards.
+  const c = await canvasBox(page);
   const corner = await state<{ x: number; y: number }>(
     page,
     's => { const o = s.doc.layers[0].children[0]; const n = o.subpaths[0].nodes[0].anchor; return { x: o.box.x + n.x * o.box.width, y: o.box.y + n.y * o.box.height }; }',
@@ -133,4 +128,26 @@ test('a compound path is edited one outline at a time with the subselect tool', 
   expect(Math.min(...xs) < 140 || Math.max(...xs) > 260).toBe(true);
   // The outer outline is unchanged.
   expect((await objects(page))[0].box).toMatchObject({ x: 100, y: 100, width: 200, height: 200 });
+  // An anchor of the outer outline is edited the same way.
+  await drag(page, { x: c.x + 300, y: c.y + 300 }, { x: c.x + 320, y: c.y + 320 });
+  expect((await objects(page))[0].box).toMatchObject({ x: 100, y: 100, width: 220, height: 220 });
+});
+
+test('after 中マド the anchors of every part are shown', async ({ page }) => {
+  await draw(page, 'rect', 100, 100, 250, 250);
+  await draw(page, 'rect', 180, 180, 330, 330);
+  await combine(page, '中マド');
+  await page.keyboard.press('a');
+  const total = await state<number>(page, 's => { const o = s.doc.layers[0].children[0]; return o.nodes.length + (o.subpaths ?? []).reduce((n, c) => n + c.nodes.length, 0); }');
+  expect(await state<number>(page, 's => (s.doc.layers[0].children[0].subpaths ?? []).length')).toBeGreaterThan(0);
+  await expect(page.locator('[data-testid="path-nodes"] [data-node]')).toHaveCount(total);
+  // Corners of both rectangles' far ends carry anchors.
+  const anchors = await page.locator('[data-testid="path-nodes"] [data-node]').evaluateAll((els) =>
+    els.map((e) => {
+      const b = (e as SVGGraphicsElement).getBBox();
+      return { x: Math.round(b.x + b.width / 2), y: Math.round(b.y + b.height / 2) };
+    }),
+  );
+  expect(anchors).toContainEqual({ x: 100, y: 100 });
+  expect(anchors).toContainEqual({ x: 330, y: 330 });
 });

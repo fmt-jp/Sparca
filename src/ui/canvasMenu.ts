@@ -1,7 +1,7 @@
 // Items of the canvas right-click menu: for objects, empty canvas, and path anchors.
 import { eraseSelection } from '../store/imageActions';
 import { findObject, isEffectivelyLocked } from '../model/tree';
-import { segmentCount, pathToDoc } from '../model/pathEdit';
+import { locateNode, segmentCount } from '../model/pathEdit';
 import {
   alignSelection,
   arrangeSelection,
@@ -14,7 +14,7 @@ import {
 import { canCombineSelection, COMBINE_LABELS } from '../store/pathCombine';
 import { attachTextToPath, canAttachTextToPath, canDetachTextFromPath, detachTextFromPath } from '../store/textPathActions';
 import { COMBINE_OPS, runCombine } from './combine';
-import { canConvertSelectionToPaths, convertSelectedNodes, convertSelectionToPaths, deleteSelectedNodes, editablePath, insertNode, isLineShape } from '../store/pathActions';
+import { canConvertSelectionToPaths, convertSelectedNodes, convertSelectionToPaths, deleteSelectedNodes, editablePath, flatPath, insertNode, isLineShape, selectedNodes } from '../store/pathActions';
 import type { MenuItem } from './MenuBar';
 import { ALIGN, alignShortcut, DISTRIBUTE } from './PropertiesPanel';
 import { menuCopy, menuPaste } from './clipboard';
@@ -104,12 +104,12 @@ export function canvasMenu(): MenuItem[] {
  * Menu for path anchors (subselect tool). `insertAt` is where 「点の追加」 inserts:
  * the clicked spot on the outline, or the middle of the segment after the clicked anchor.
  */
-export function anchorMenu(insertAt: { segment: number; t: number } | null): MenuItem[] {
+export function anchorMenu(insertAt: { contour: number; segment: number; t: number } | null): MenuItem[] {
   const p = editablePath(editor);
-  const sel = p ? editor.getState().nodeSelection.filter((i) => i < p.nodes.length) : [];
+  const sel = p ? selectedNodes(editor, p) : [];
   const ins = insertAt;
   return [
-    { label: '点の追加', action: () => ins && insertNode(editor, ins.segment, ins.t), disabled: !ins },
+    { label: '点の追加', action: () => ins && insertNode(editor, ins.contour, ins.segment, ins.t), disabled: !ins },
     { label: '点の削除', shortcut: 'Delete', action: () => deleteSelectedNodes(editor), disabled: !sel.length },
     SEP,
     { label: '角の点に変換', action: () => convertSelectedNodes(editor, 'corner'), disabled: !sel.length },
@@ -117,11 +117,17 @@ export function anchorMenu(insertAt: { segment: number; t: number } | null): Men
   ];
 }
 
-/** Segment to split for 「点の追加」 on anchor i: the one after it, or before it at an open path's end. */
-export function segmentNextTo(i: number): { segment: number; t: number } | null {
+/**
+ * Segment to split for 「点の追加」 on anchor i (numbered across outlines): the one after it
+ * on its outline, or the one before it at an open outline's end.
+ */
+export function segmentNextTo(i: number): { contour: number; segment: number; t: number } | null {
   const p = editablePath(editor);
   if (!p) return null;
-  const n = segmentCount(pathToDoc(p), p.closed);
+  const flat = flatPath(p);
+  const { contour, index } = locateNode(flat, i);
+  const c = flat.contours[contour];
+  const n = segmentCount(flat.nodes.slice(c.start, c.start + c.length), c.closed);
   if (!n) return null;
-  return { segment: i < n ? i : n - 1, t: 0.5 };
+  return { contour, segment: index < n ? index : n - 1, t: 0.5 };
 }

@@ -36,6 +36,47 @@ export function pathContoursToDoc(p: Pick<PathObject, 'box' | 'nodes' | 'closed'
 }
 
 /**
+ * All outlines' anchors in one list (outline after outline), as the subselect tool shows
+ * them: anchor indices are global across outlines. `contours` says where each outline's
+ * anchors start, how many there are and whether it is closed.
+ */
+export interface FlatPath {
+  nodes: DocNode[];
+  contours: { start: number; length: number; closed: boolean }[];
+}
+
+export function flattenContours(cs: DocContour[]): FlatPath {
+  const contours: FlatPath['contours'] = [];
+  let start = 0;
+  for (const c of cs) {
+    contours.push({ start, length: c.nodes.length, closed: c.closed });
+    start += c.nodes.length;
+  }
+  return { nodes: cs.flatMap((c) => c.nodes), contours };
+}
+
+/** Outlines again from a flat list with the same outline lengths. */
+export function unflattenContours(flat: FlatPath, nodes: DocNode[]): DocContour[] {
+  return flat.contours.map((c) => ({ nodes: nodes.slice(c.start, c.start + c.length), closed: c.closed }));
+}
+
+/** Which outline a global anchor index is on, and its index there. */
+export function locateNode(flat: FlatPath, g: number): { contour: number; index: number } {
+  const k = flat.contours.findIndex((c) => g >= c.start && g < c.start + c.length);
+  return k < 0 ? { contour: 0, index: g } : { contour: k, index: g - flat.contours[k].start };
+}
+
+/** Closest point on any outline: the outline, its segment and parameter, and the distance. */
+export function nearestOnFlat(flat: FlatPath, p: Point): { contour: number; segment: number; t: number; dist: number } | null {
+  let best: { contour: number; segment: number; t: number; dist: number } | null = null;
+  unflattenContours(flat, flat.nodes).forEach((c, k) => {
+    const r = nearestOnPath(c.nodes, c.closed, p);
+    if (r && (!best || r.dist < best.dist)) best = { contour: k, ...r };
+  });
+  return best;
+}
+
+/**
  * Document-space outlines back into a path's box (same rotation as `prev`, refitted around
  * all outlines) and its `nodes` / `closed` / `subpaths`.
  */
