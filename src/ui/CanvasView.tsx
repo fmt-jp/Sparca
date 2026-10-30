@@ -64,6 +64,8 @@ type Gesture =
       moved: boolean;
       /** Last pointer position and Shift state, to update when only a modifier key changes. */
       last: { p: Point; shift: boolean } | null;
+      /** Shift+pressed on an already selected object: deselect it if released without dragging. */
+      toggleOff?: Id;
     }
   | { kind: 'gradient'; id: Id; which: 'start' | 'end' }
   | { kind: 'resize'; handle: Handle; originals: Map<Id, SceneObject>; single: Box | null; bounds: Rect }
@@ -507,14 +509,13 @@ export function CanvasView() {
       const hit = hitObject(target);
       if (hit) {
         const sel = editor.getState().selection;
-        if (e.shiftKey) {
-          editor.select(sel.includes(hit) ? sel.filter((s) => s !== hit) : [...sel, hit]);
-          return;
-        }
-        const ids = sel.includes(hit) ? sel : [hit];
+        // Shift+click toggles the object in the selection; Shift+drag moves the whole selection
+        // along one axis, so an already selected object is only deselected when released in place.
+        const ids = sel.includes(hit) ? sel : e.shiftKey ? [...sel, hit] : [hit];
         if (!sel.includes(hit)) editor.select(ids);
         editor.beginGesture();
         gesture.current = { kind: 'move', start: p, sources: originalsOf(ids), copies: null, moved: false, last: null };
+        if (e.shiftKey && sel.includes(hit)) gesture.current.toggleOff = hit;
         return;
       }
       gesture.current = {
@@ -733,6 +734,7 @@ export function CanvasView() {
     switch (g.kind) {
       case 'move':
         editor.endGesture(g.copies ? '複製' : '移動');
+        if (!g.moved && g.toggleOff) editor.select(editor.getState().selection.filter((s) => s !== g.toggleOff));
         break;
       case 'gradient':
         editor.endGesture('グラデーションの調整');
