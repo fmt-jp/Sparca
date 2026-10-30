@@ -55,7 +55,17 @@ const SHAPE_TOOLS: Partial<Record<ToolId, ShapeGeometry['kind']>> = {
 const BLOCK_ARROW_ASPECT = 0.55;
 
 type Gesture =
-  | { kind: 'move'; start: Point; originals: Map<Id, SceneObject>; moved: boolean; duplicate: boolean }
+  | {
+      kind: 'move';
+      start: Point;
+      /** The dragged objects as they were when the drag began. */
+      sources: Map<Id, SceneObject>;
+      /** Copies being moved instead (Ctrl / Alt held), as they were when made; null when moving the sources. */
+      copies: Map<Id, SceneObject> | null;
+      moved: boolean;
+      /** Last pointer position and Shift state, to update when only a modifier key changes. */
+      last: { p: Point; shift: boolean } | null;
+    }
   | { kind: 'gradient'; id: Id; which: 'start' | 'end' }
   | { kind: 'resize'; handle: Handle; originals: Map<Id, SceneObject>; single: Box | null; bounds: Rect }
   | { kind: 'rotate'; center: Point; startAngle: number; originals: Map<Id, SceneObject> }
@@ -511,9 +521,7 @@ export function CanvasView() {
         const ids = sel.includes(hit) ? sel : [hit];
         if (!sel.includes(hit)) editor.select(ids);
         editor.beginGesture();
-        // Ctrl (or Alt, as in Fireworks / on a Mac) + drag moves copies, leaving the originals.
-        const duplicate = e.ctrlKey || e.metaKey || e.altKey;
-        gesture.current = { kind: 'move', start: p, originals: originalsOf(ids), moved: false, duplicate };
+        gesture.current = { kind: 'move', start: p, sources: originalsOf(ids), copies: null, moved: false, last: null };
         return;
       }
       gesture.current = {
@@ -666,34 +674,9 @@ export function CanvasView() {
         el.scrollTop = g.startScroll.y - (e.clientY - g.startClient.y);
         break;
       }
-      case 'move': {
-        let dx = p.x - g.start.x;
-        let dy = p.y - g.start.y;
-        if (e.shiftKey) {
-          if (Math.abs(dx) > Math.abs(dy)) dy = 0;
-          else dx = 0;
-        }
-        if (!g.moved && Math.hypot(dx, dy) * zoom < 2) return;
-        if (!g.moved && g.duplicate) {
-          // Copies go right above their originals and are what moves from here on.
-          let copies: Id[] = [];
-          editor.preview((d) => {
-            copies = duplicateObjects(d, [...g.originals.keys()], 0, 0);
-          });
-          editor.select(copies);
-          g.originals = originalsOf(copies);
-        }
-        g.moved = true;
-        // With grid snapping, the top-left of the moved objects lands on the grid.
-        const b = unionBounds([...g.originals.values()]);
-        if (b) {
-          const snapped = editor.snap({ x: b.x + dx, y: b.y + dy });
-          dx = snapped.x - b.x;
-          dy = snapped.y - b.y;
-        }
-        applyTransformed(g.originals, (o) => transformObject(o, { pivot: { x: 0, y: 0 }, sx: 1, sy: 1, rotation: 0, dx, dy }));
+      case 'move':
+        updateMove(g, p, e.shiftKey, duplicateKey(e));
         break;
-      }
       case 'gradient': {
         const loc = findObject(editor.getState().doc, g.id);
         const cur = loc && objectGradient(loc.object);
@@ -756,7 +739,7 @@ export function CanvasView() {
     if (!g) return;
     switch (g.kind) {
       case 'move':
-        editor.endGesture(g.duplicate && g.moved ? '複製' : '移動');
+        editor.endGesture(g.copies ? '複製' : '移動');
         break;
       case 'gradient':
         editor.endGesture('グラデーションの調整');
@@ -888,6 +871,67 @@ export function CanvasView() {
       editor.preview((d) => updateObject(d, id, { box, shape: geometry } as Partial<SceneObject>));
     }
   }
+
+  /**
+   * Move the dragged objects — or copies of them while Ctrl (or Alt, as in Fireworks / on a
+   * Mac) is held. The key can be pressed or released at any time during the drag: pressing it
+   * puts the originals back and moves fresh copies; releasing it drops the copies and moves
+   * the originals again.
+   */
+  function updateMove(g: Extract<Gesture, { kind: 'move' }>, p: Point, shift: boolean, duplicate: boolean) {
+    g.last = { p, shift };
+    let dx = p.x - g.start.x;
+    let dy = p.y - g.start.y;
+    if (shift) {
+      if (Math.abs(dx) > Math.abs(dy)) dy = 0;
+      else dx = 0;
+    }
+    if (!g.moved && Math.hypot(dx, dy) * zoom < 2) return;
+    g.moved = true;
+    if (duplicate && !g.copies) {
+      // Originals back in place; copies go right above them and move from here on.
+      const sources = g.sources;
+      let copies: Id[] = [];
+      applyTransformed(sources, (o) => o);
+      editor.preview((d) => {
+        copies = duplicateObjects(d, [...sources.keys()], 0, 0);
+      });
+      editor.select(copies);
+      g.copies = originalsOf(copies);
+    } else if (!duplicate && g.copies) {
+      const copyIds = [...g.copies.keys()];
+      editor.preview((d) => removeObjects(d, copyIds));
+      editor.select([...g.sources.keys()]);
+      g.copies = null;
+    }
+    const moving = g.copies ?? g.sources;
+    // With grid snapping, the top-left of the moved objects lands on the grid.
+    const b = unionBounds([...moving.values()]);
+    if (b) {
+      const snapped = editor.snap({ x: b.x + dx, y: b.y + dy });
+      dx = snapped.x - b.x;
+      dy = snapped.y - b.y;
+    }
+    applyTransformed(moving, (o) => transformObject(o, { pivot: { x: 0, y: 0 }, sx: 1, sy: 1, rotation: 0, dx, dy }));
+  }
+
+  // Pressing or releasing Ctrl / Alt mid-drag switches between moving and duplicating at once,
+  // without waiting for the pointer to move.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const g = gesture.current;
+      if (g?.kind !== 'move' || !g.last) return;
+      if (!['Control', 'Alt', 'Meta'].includes(e.key)) return;
+      if (e.key === 'Alt') e.preventDefault(); // keep Alt from focusing the browser menu
+      updateMove(g, g.last.p, g.last.shift, duplicateKey(e));
+    };
+    window.addEventListener('keydown', onKey);
+    window.addEventListener('keyup', onKey);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('keyup', onKey);
+    };
+  });
 
   function applyTransformed(originals: Map<Id, SceneObject>, fn: (o: SceneObject) => SceneObject) {
     editor.preview((d) => {
@@ -1241,6 +1285,11 @@ function PenPreview({ nodes, cursor, zoom }: { nodes: PathNode[]; cursor: Point 
 /** Paint for a new object from the settings of its drawing tool (see toolDefaults). */
 function newPaint(category: PaintCategory): Paint {
   return structuredClone(editor.getState().toolDefaults[category]);
+}
+
+/** Whether the duplicate modifier (Ctrl, Alt or ⌘) is held. */
+function duplicateKey(e: { ctrlKey: boolean; altKey: boolean; metaKey: boolean }): boolean {
+  return e.ctrlKey || e.altKey || e.metaKey;
 }
 
 /** Focus the text field of the properties panel (for text that cannot be edited in place). */
