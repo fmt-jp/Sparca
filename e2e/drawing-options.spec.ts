@@ -61,6 +61,43 @@ test('Ctrl+drag (or Alt+drag) duplicates the selection and moves the copy', asyn
   expect(objs[1].box.x).toBeCloseTo(orig.box.x + 20, 0);
 });
 
+test('Ctrl / Alt pressed during a drag switches to duplicating; releasing it switches back', async ({ page }) => {
+  const c = await canvasBox(page);
+  await page.keyboard.press('r');
+  await drag(page, { x: c.x + 100, y: c.y + 100 }, { x: c.x + 200, y: c.y + 200 });
+  const [orig] = await objects(page);
+  // Start a plain drag, then press Ctrl part-way: a copy appears and the original goes back.
+  await page.mouse.move(c.x + 150, c.y + 150);
+  await page.mouse.down();
+  await page.mouse.move(c.x + 200, c.y + 150, { steps: 4 });
+  expect((await objects(page))[0].box.x).toBeCloseTo(orig.box.x + 50, 0);
+  await page.keyboard.down('Control');
+  // Without moving the pointer, the copy is already there.
+  await expect.poll(async () => (await objects(page)).length).toBe(2);
+  expect((await objects(page))[0].box).toMatchObject(orig.box);
+  await page.mouse.move(c.x + 250, c.y + 150, { steps: 4 });
+  let objs = await objects(page);
+  expect(objs[1].box.x).toBeCloseTo(orig.box.x + 100, 0);
+  // Release Ctrl before letting go: back to a plain move of the original.
+  await page.keyboard.up('Control');
+  await expect.poll(async () => (await objects(page)).length).toBe(1);
+  expect((await objects(page))[0].box.x).toBeCloseTo(orig.box.x + 100, 0);
+  // …and press it again (Alt this time) and let go: duplicated.
+  await page.keyboard.down('Alt');
+  await page.mouse.move(c.x + 260, c.y + 160, { steps: 2 });
+  await page.mouse.up();
+  await page.keyboard.up('Alt');
+  objs = await objects(page);
+  expect(objs).toHaveLength(2);
+  expect(objs[0]).toMatchObject({ id: orig.id, box: orig.box });
+  expect(objs[1].box.x).toBeCloseTo(orig.box.x + 110, 0);
+  expect(objs[1].box.y).toBeCloseTo(orig.box.y + 10, 0);
+  expect(await state<string>(page, 's => s.history.past.at(-1).label')).toBe('複製');
+  await page.keyboard.press('Control+z');
+  expect(await objects(page)).toHaveLength(1);
+  expect((await objects(page))[0].box).toMatchObject(orig.box);
+});
+
 test('drawing tools have settings for new objects (color, width, line style, font), remembered by the browser', async ({ page }) => {
   const c = await canvasBox(page);
   // Shapes.
