@@ -7,7 +7,7 @@ import { docContoursToPath, pathContoursToDoc, type DocContour } from '../model/
 import type { PathObject, SceneObject } from '../model/types';
 import { DocumentSvg } from '../render/DocumentSvg';
 import { EditorStore } from './editor';
-import { contourCount, deleteSelectedNodes, editablePath, setPathNodes } from './pathActions';
+import { contourCount, deleteSelectedNodes, editablePath, flatPath, insertNode, selectedOutline, setPathNodes } from './pathActions';
 import { canCombineSelection, combineSelection, type ComputeBoolean } from './pathCombine';
 
 const square = (x: number, y: number, s: number): DocContour => ({
@@ -46,20 +46,29 @@ describe('compound paths', () => {
     expect(svg.match(/M/g)!.length).toBeGreaterThanOrEqual(2);
   });
 
-  it('are edited one outline at a time with the subselect tool', () => {
+  it('show and edit every outline at once with the subselect tool', () => {
     const ed = editorWith([donut()]);
     ed.select(['donut']);
     expect(contourCount(ed)).toBe(2);
-    expect(editablePath(ed)!.nodes[0].anchor).toEqual({ x: 0, y: 0 });
-    ed.set({ nodeContour: 1 });
-    const hole = pathContoursToDoc(donut())[1].nodes;
+    const p0 = editablePath(ed)!;
+    const flat = flatPath(p0);
+    // Anchors are numbered across outlines: the outer square 0–3, the hole 4–7.
+    expect(flat.nodes).toHaveLength(8);
+    expect(flat.contours.map((c) => c.start)).toEqual([0, 4]);
     // Move the hole's first anchor; the outer outline stays.
-    setPathNodes(ed, 'donut', hole.map((n, i) => (i === 0 ? { ...n, anchor: { x: 30, y: 30 } } : n)), 'move');
+    setPathNodes(ed, 'donut', flat.nodes.map((n, i) => (i === 4 ? { ...n, anchor: { x: 30, y: 30 } } : n)), 'move');
     const after = pathContoursToDoc(ed.getState().doc.layers[0].children[0] as PathObject);
     expect(after[0].nodes.map((n) => n.anchor)).toEqual(square(0, 0, 100).nodes.map((n) => n.anchor));
     expect(after[1].nodes[0].anchor.x).toBeCloseTo(30);
+    // The open / closed toggle and anchor insertion follow the outline of the selected anchor.
+    ed.set({ nodeSelection: [5] });
+    expect(selectedOutline(ed, editablePath(ed)!)).toBe(1);
+    insertNode(ed, 1, 0, 0.5);
+    expect(pathContoursToDoc(editablePath(ed)!)[1].nodes).toHaveLength(5);
+    expect(pathContoursToDoc(editablePath(ed)!)[0].nodes).toHaveLength(4);
+    expect(ed.getState().nodeSelection).toEqual([5]);
     // Deleting every anchor of the hole removes just that outline.
-    ed.set({ nodeSelection: [0, 1, 2, 3] });
+    ed.set({ nodeSelection: [4, 5, 6, 7, 8] });
     expect(deleteSelectedNodes(ed)).toBe(true);
     const p = ed.getState().doc.layers[0].children[0] as PathObject;
     expect(p.subpaths).toBeUndefined();
