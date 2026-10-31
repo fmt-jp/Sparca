@@ -2,7 +2,7 @@
 import { transformObjects, updateObject } from '../model/commands';
 import { boxCenter, unionBounds } from '../model/geometry';
 import { findObject, isEffectivelyLocked } from '../model/tree';
-import type { ColorAdjust, LocalEdit, SceneObject, ShapeObject, TextObject, ImageObject, PathObject, Id, Box, Paint, Stroke, StrokeStyle, TextPathOrientation } from '../model/types';
+import type { ColorAdjust, LocalEdit, SceneObject, ShapeObject, TextObject, ImageObject, PathObject, Id, Box, Paint, Stroke, StrokeCap, StrokeJoin, StrokeStyle, TextPathOrientation } from '../model/types';
 import { detachTextFromPath, setTextPath } from '../store/textPathActions';
 import { pipelineOutputSize } from '../engine/pipeline';
 import { METHOD_LABELS } from '../engine/resample';
@@ -178,7 +178,7 @@ function PaintSection({ o }: { o: ShapeObject | PathObject }) {
   const lineLike = o.type === 'shape' ? o.shape.kind === 'line' || o.shape.kind === 'arrow' : !o.closed;
   return (
     <div className="prop-section">
-      <PaintFields paint={o} lineLike={lineLike} size={o.box} onChange={(patch, label, key) => set(o.id, patch as Partial<SceneObject>, label, key)} />
+      <PaintFields paint={o} lineLike={lineLike} showCap={lineLike} size={o.box} onChange={(patch, label, key) => set(o.id, patch as Partial<SceneObject>, label, key)} />
     </div>
   );
 }
@@ -189,6 +189,18 @@ export const STROKE_STYLES: { value: StrokeStyle; label: string }[] = [
   { value: 'dotted', label: '点線' },
 ];
 
+const STROKE_CAPS: { value: StrokeCap; label: string }[] = [
+  { value: 'round', label: '丸' },
+  { value: 'butt', label: '平ら' },
+  { value: 'square', label: '四角' },
+];
+
+const STROKE_JOINS: { value: StrokeJoin; label: string }[] = [
+  { value: 'round', label: '丸' },
+  { value: 'miter', label: '尖り' },
+  { value: 'bevel', label: '面取り' },
+];
+
 /**
  * Fill / stroke / stroke width / line style fields. Used for a selected shape or path and
  * for the drawing tools' settings for new objects.
@@ -196,12 +208,15 @@ export const STROKE_STYLES: { value: StrokeStyle; label: string }[] = [
 export function PaintFields({
   paint,
   lineLike,
+  showCap,
   size,
   onChange,
 }: {
   paint: Paint;
   /** Open lines have no fill and always a stroke. */
   lineLike: boolean;
+  /** Offer the end style (lines and open paths; closed outlines have no ends). */
+  showCap: boolean;
   /** Box size for the gradient editor. */
   size: { width: number; height: number };
   onChange: (patch: Partial<Paint>, label: string, mergeKey?: string) => void;
@@ -250,6 +265,26 @@ export function PaintFields({
           {STROKE_STYLES.map((st) => (
             <option key={st.value} value={st.value}>
               {st.label}
+            </option>
+          ))}
+        </select>
+      </Field>
+      {showCap && (
+        <Field label="先端">
+          <select aria-label="線の先端" value={paint.strokeCap ?? 'round'} onChange={(e) => onChange({ strokeCap: e.target.value as StrokeCap }, '線の先端の変更')}>
+            {STROKE_CAPS.map((c) => (
+              <option key={c.value} value={c.value}>
+                {c.label}
+              </option>
+            ))}
+          </select>
+        </Field>
+      )}
+      <Field label="角">
+        <select aria-label="線の角" value={paint.strokeJoin ?? 'round'} onChange={(e) => onChange({ strokeJoin: e.target.value as StrokeJoin }, '線の角の変更')}>
+          {STROKE_JOINS.map((c) => (
+            <option key={c.value} value={c.value}>
+              {c.label}
             </option>
           ))}
         </select>
@@ -490,6 +525,7 @@ function ToolDefaultsSection({ category }: { category: ToolCategory }) {
         <PaintFields
           paint={defaults[category]}
           lineLike={category === 'line'}
+          showCap={category === 'line' || category === 'pen'}
           size={SAMPLE_SIZE}
           onChange={(patch) => editor.setToolDefaults(category, patch)}
         />

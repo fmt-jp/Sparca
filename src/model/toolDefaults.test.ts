@@ -37,6 +37,20 @@ describe('tool defaults', () => {
     expect(sanitizeToolDefaults({ shape: { fill: { ...pattern, motif: 'x' } } }).shape.fill).toBe(DEFAULT_TOOL_DEFAULTS.shape.fill);
   });
 
+  it('keeps valid line ends and corners', () => {
+    const d = sanitizeToolDefaults({ line: { strokeCap: 'square', strokeJoin: 'miter' }, pen: { strokeCap: 'pointy', strokeJoin: 7 } });
+    expect(d.line).toMatchObject({ strokeCap: 'square', strokeJoin: 'miter' });
+    expect(d.pen.strokeCap).toBeUndefined();
+    expect(d.pen.strokeJoin).toBeUndefined();
+  });
+
+  it('dashes keep flat ends unless an end style was chosen; dots are always round', () => {
+    expect(strokeDash('dashed', 3, 'round')).toMatchObject({ strokeLinecap: 'butt' });
+    expect(strokeDash('dashed', 3, 'square', true)).toMatchObject({ strokeLinecap: 'square' });
+    expect(strokeDash('dotted', 3, 'butt', true)).toMatchObject({ strokeLinecap: 'round' });
+    expect(strokeDash('solid', 3, 'square', true)).toEqual({ strokeLinecap: 'square' });
+  });
+
   it('dash patterns scale with the stroke width', () => {
     expect(strokeDash(undefined, 3, 'butt')).toEqual({ strokeLinecap: 'butt' });
     expect(strokeDash('solid', 3, 'round')).toEqual({ strokeLinecap: 'round' });

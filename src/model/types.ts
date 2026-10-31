@@ -173,6 +173,15 @@ export type Fill = string | Gradient | Pattern;
 /** A stroke is a solid color or a gradient (no patterns, decided with the user 2026-10-31). */
 export type Stroke = string | Gradient;
 
+/**
+ * Ends of open lines (2026-10-31): round, butt (平ら: cut at the end) or square (四角: extends
+ * half the width past the end). Missing = round on open lines (documents before 0.7.0).
+ */
+export type StrokeCap = 'round' | 'butt' | 'square';
+
+/** Corners of a stroke: round, miter (尖り) or bevel (面取り). Missing = round. */
+export type StrokeJoin = 'round' | 'miter' | 'bevel';
+
 /** Line style of a stroke. Missing = solid (documents before 2026-10-24). */
 export type StrokeStyle = 'solid' | 'dashed' | 'dotted';
 
@@ -181,6 +190,8 @@ export interface Paint {
   stroke: Stroke | null;
   strokeWidth: number;
   strokeStyle?: StrokeStyle;
+  strokeCap?: StrokeCap;
+  strokeJoin?: StrokeJoin;
 }
 
 export type ShapeGeometry =
@@ -259,6 +270,8 @@ export interface TextOnPath {
     stroke: Stroke | null;
     strokeWidth: number;
     strokeStyle?: StrokeStyle;
+    strokeCap?: StrokeCap;
+    strokeJoin?: StrokeJoin;
     opacity: number;
     effects: Effect[];
   };

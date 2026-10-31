@@ -100,6 +100,8 @@ export function combineSelection(ed: EditorStore, op: CombineOp, compute: Comput
     stroke: refitFill(paint?.stroke ?? null, bottom.box, geometry.box),
     strokeWidth: paint?.strokeWidth ?? 0,
     ...(paint?.strokeStyle ? { strokeStyle: paint.strokeStyle } : {}),
+    ...(paint?.strokeCap ? { strokeCap: paint.strokeCap } : {}),
+    ...(paint?.strokeJoin ? { strokeJoin: paint.strokeJoin } : {}),
     ...geometry,
   };
   if (!result.subpaths) delete result.subpaths;

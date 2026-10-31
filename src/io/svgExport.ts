@@ -4,6 +4,7 @@
 // adjustments and partial edits applied) and effects are SVG filters.
 import { objectBounds, rectsIntersect } from '../model/geometry';
 import type { SceneObject, SparcaDocument } from '../model/types';
+import { strokeReach } from '../render/DocumentSvg';
 import { effectsMargin, splitAtZoomBlur, zoomBlurReach } from '../render/effects';
 import { validateDimensions } from '../store/assets';
 import { ExportError } from './export';
@@ -15,7 +16,7 @@ function reachesCanvas(o: SceneObject, canvas: { width: number; height: number }
   if (!b) return false;
   let m = 0;
   if (o.type !== 'group') {
-    m = (o.type === 'shape' || o.type === 'path') && o.stroke ? o.strokeWidth : 0;
+    m = (o.type === 'shape' || o.type === 'path') && o.stroke ? strokeReach(o) : 0;
     m += effectsMargin(o.effects);
     for (const seg of splitAtZoomBlur(o.effects)) if (seg.zoom) m += zoomBlurReach(seg.zoom, o.box.width, o.box.height);
   }

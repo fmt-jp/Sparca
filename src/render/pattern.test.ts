@@ -56,3 +56,18 @@ describe('pattern fills', () => {
     expect(svg).toContain('<linearGradient id="sp-fill-r-stroke"');
   });
 });
+
+describe('line ends and corners', () => {
+  it('render as stroke-linecap / stroke-linejoin; old documents keep round ends and corners', () => {
+    const doc = createDocument(200, 200);
+    const line = { ...createShape(defaultGeometry('line'), { x: 10, y: 10, width: 50, height: 50, rotation: 0 }), id: 'l' };
+    doc.layers[0].children = [line];
+    const draw = () => renderToStaticMarkup(createElement(DocumentSvg, { doc, options: { imageHref: () => undefined } }));
+    expect(draw()).toContain('stroke-linecap="round"');
+    expect(draw()).toContain('stroke-linejoin="round"');
+    doc.layers[0].children = [{ ...line, strokeCap: 'butt', strokeJoin: 'miter' }];
+    expect(draw()).toContain('stroke-linecap="butt"');
+    expect(draw()).toContain('stroke-linejoin="miter"');
+    expect(draw()).toContain('stroke-miterlimit="10"');
+  });
+});

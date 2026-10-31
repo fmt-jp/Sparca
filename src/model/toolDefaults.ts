@@ -2,7 +2,7 @@
 // (nothing selected). Each kind of drawing tool has its own: lines, shapes, block arrows,
 // pen paths and text. They are a per-browser preference, not part of the document.
 import { PATTERN_MOTIFS, PATTERN_SIZE } from './pattern';
-import type { Fill, Paint, Stroke, StrokeStyle, TextObject } from './types';
+import type { Fill, Paint, Stroke, StrokeCap, StrokeJoin, StrokeStyle, TextObject } from './types';
 import type { ToolId } from '../store/editor';
 
 export type TextStyle = Pick<TextObject, 'fontFamily' | 'fontSize' | 'bold' | 'italic' | 'color' | 'letterSpacing' | 'lineHeight' | 'align'>;
@@ -95,6 +95,8 @@ function sanitizePaint(v: unknown, base: Paint): Paint {
   if (stroke !== undefined) out.stroke = stroke as Stroke | null;
   if (typeof v.strokeWidth === 'number' && v.strokeWidth >= 0 && v.strokeWidth <= 500) out.strokeWidth = v.strokeWidth;
   if (['solid', 'dashed', 'dotted'].includes(v.strokeStyle as string)) out.strokeStyle = v.strokeStyle as StrokeStyle;
+  if (['round', 'butt', 'square'].includes(v.strokeCap as string)) out.strokeCap = v.strokeCap as StrokeCap;
+  if (['round', 'miter', 'bevel'].includes(v.strokeJoin as string)) out.strokeJoin = v.strokeJoin as StrokeJoin;
   return out;
 }
 
