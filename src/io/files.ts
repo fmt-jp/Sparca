@@ -27,6 +27,21 @@ export function isAbort(e: unknown): boolean {
 }
 
 /**
+ * Ask where to save (and under what name) before making the file, so a slow export does not
+ * outlast the click that allows the dialog. Null without the File System Access API (the
+ * file is then downloaded); undefined when the user cancelled.
+ */
+export async function pickSaveFile(suggestedName: string, type: FilePickerType): Promise<FileSystemFileHandleLike | null | undefined> {
+  if (!hasFileSystemAccess()) return null;
+  try {
+    return await fsWindow().showSaveFilePicker!({ suggestedName, types: [type] });
+  } catch (e) {
+    if (isAbort(e)) return undefined;
+    throw e;
+  }
+}
+
+/**
  * Save a blob. Returns the chosen handle (or null for the download fallback),
  * or undefined when the user cancelled.
  */

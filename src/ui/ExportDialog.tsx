@@ -1,7 +1,7 @@
 // Export dialog (spec §13.2): PNG / JPEG / WebP / SVG, quality, transparency handling.
 import { useState } from 'react';
 import { exportImage, ExportError, FORMAT_INFO, type ExportFormat } from '../io/export';
-import { isAbort, saveBlob } from '../io/files';
+import { hasFileSystemAccess, isAbort, pickSaveFile, saveBlob } from '../io/files';
 import { ColorInput, Field, SliderInput } from './controls';
 import { Dialog } from './Dialog';
 import { editor, useEditor } from './useEditor';
@@ -22,15 +22,21 @@ export function ExportDialog({ onClose }: { onClose: () => void }) {
   const [name, setName] = useState(baseName(fileName));
   const info = FORMAT_INFO[format];
   const transparent = doc.background.kind === 'transparent';
+  // Where the browser asks for the place and name to save, the name is chosen there only;
+  // otherwise (the file is downloaded) it is entered here.
+  const askName = !hasFileSystemAccess();
 
   async function run() {
-    const outName = `${name.trim() || 'untitled'}.${info.ext}`;
+    const suggested = `${(askName ? name.trim() : '') || baseName(fileName) || 'untitled'}.${info.ext}`;
+    const type = { description: `${info.label} 画像`, accept: { [info.mime]: [`.${info.ext}`] } };
     try {
+      const target = await pickSaveFile(suggested, type);
+      if (target === undefined) return;
       editor.set({ busy: `${info.label} に書き出し中…` });
       const blob = await exportImage(doc, { format, quality, jpegBackground });
-      const handle = await saveBlob(blob, outName, { description: `${info.label} 画像`, accept: { [info.mime]: [`.${info.ext}`] } });
+      const handle = await saveBlob(blob, suggested, type, target);
       if (handle === undefined) return;
-      editor.notify('info', `${outName} を書き出しました（${(blob.size / 1024).toFixed(0)} KB）。`);
+      editor.notify('info', `${handle?.name ?? suggested} を書き出しました（${(blob.size / 1024).toFixed(0)} KB）。`);
       onClose();
     } catch (e) {
       if (isAbort(e)) return;
@@ -66,10 +72,6 @@ export function ExportDialog({ onClose }: { onClose: () => void }) {
           後から編集するには「ファイル → 保存」で .hnb プロジェクトとして保存してください。
         </div>
       )}
-      <Field label="ファイル名">
-        <input aria-label="ファイル名" value={name} onChange={(e) => setName(e.target.value)} />
-        <span className="suffix">.{info.ext}</span>
-      </Field>
       <div className="radio-row" role="radiogroup" aria-label="形式">
         {FORMATS.map((f) => (
           <label key={f}>
@@ -77,6 +79,12 @@ export function ExportDialog({ onClose }: { onClose: () => void }) {
           </label>
         ))}
       </div>
+      {askName && (
+        <Field label="ファイル名">
+          <input aria-label="ファイル名" value={name} onChange={(e) => setName(e.target.value)} />
+          <span className="suffix">.{info.ext}</span>
+        </Field>
+      )}
       {info.lossy && (
         <Field label="品質">
           <SliderInput label="品質" value={quality} min={1} max={100} onChange={setQuality} />
@@ -100,6 +108,7 @@ export function ExportDialog({ onClose }: { onClose: () => void }) {
           </Field>
         </>
       )}
+      {!askName && <div className="hint">「書き出し」を押すと、保存先とファイル名を選ぶ画面が開きます。</div>}
       <div className="hint">
         書き出し範囲: キャンバス全体 {doc.width} × {doc.height} px（キャンバス外のオブジェクトは含まれません）
       </div>
