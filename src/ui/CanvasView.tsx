@@ -12,7 +12,7 @@ import {
   handlePoint,
   resizeBox,
   snap45,
-  snapHV,
+  project45,
   snapAngle,
   type Handle,
 } from '../model/handles';
@@ -310,9 +310,9 @@ export function CanvasView() {
     return () => window.removeEventListener('keydown', onKey, true);
   });
 
-  /** Where a pen click puts the next anchor (Shift: level with or plumb below `prev`). */
+  /** Where a pen click puts the next anchor (Shift: at 45° steps from `prev`). */
   function penAnchor(prev: Point, p: Point, shift: boolean): Point {
-    return shift ? snapHV(prev, editor.snap(p)) : editor.snap(p);
+    return shift ? project45(prev, editor.snap(p)) : editor.snap(p);
   }
 
   /** Turn the pen nodes into a path object (box-normalized nodes). */
@@ -438,7 +438,7 @@ export function CanvasView() {
         finishPen(penNodes, false);
         return;
       }
-      // Shift: straight across or straight down from the previous anchor.
+      // Shift: across, down or diagonally (45° steps) from the previous anchor.
       const prev = penNodes[penNodes.length - 1].anchor;
       setPenNodes([...penNodes, { anchor: penAnchor(prev, p, e.shiftKey), in: null, out: null }]);
       gesture.current = { kind: 'pen-handle', index: penNodes.length };

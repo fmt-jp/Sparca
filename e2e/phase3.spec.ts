@@ -162,7 +162,7 @@ test('tool shortcuts still work after clicking a checkbox in the properties pane
   expect(await state<string>(page, 's => s.tool')).toBe('pen');
 });
 
-test('pen tool: Shift keeps the next anchor level with or straight below the previous one', async ({ page }) => {
+test('pen tool: Shift puts the next anchor across, below or diagonally (45°) from the previous one', async ({ page }) => {
   const c = await canvasBox(page);
   await page.keyboard.press('p');
   await page.mouse.click(c.x + 100, c.y + 100);
@@ -174,6 +174,7 @@ test('pen tool: Shift keeps the next anchor level with or straight below the pre
   await expect(rubber).toHaveAttribute('y2', '100');
   await page.mouse.click(c.x + 300, c.y + 130); // → (300, 100)
   await page.mouse.click(c.x + 315, c.y + 300); // → (300, 300)
+  await page.mouse.click(c.x + 200, c.y + 390); // → diagonal: (205, 395)
   await page.keyboard.up('Shift');
   await page.mouse.click(c.x + 150, c.y + 320); // free
   await page.keyboard.press('Enter');
@@ -185,6 +186,7 @@ test('pen tool: Shift keeps the next anchor level with or straight below the pre
     { x: 100, y: 100 },
     { x: 300, y: 100 },
     { x: 300, y: 300 },
+    { x: 205, y: 395 },
     { x: 150, y: 320 },
   ]);
 });

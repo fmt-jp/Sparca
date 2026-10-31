@@ -18,6 +18,7 @@ test('with the browser save dialog, the export dialog has no name field and sugg
     };
   });
   await page.goto('/');
+  await expect(page.getByRole('region', { name: 'プロパティ' })).toBeVisible();
   await page.keyboard.press('Control+Shift+E');
   const dialog = page.getByRole('dialog', { name: '画像として書き出し' });
   await expect(dialog.getByLabel('ファイル名')).toHaveCount(0);
@@ -38,6 +39,7 @@ test('cancelling the save dialog keeps the export dialog open', async ({ page })
     };
   });
   await page.goto('/');
+  await expect(page.getByRole('region', { name: 'プロパティ' })).toBeVisible();
   await page.keyboard.press('Control+Shift+E');
   const dialog = page.getByRole('dialog', { name: '画像として書き出し' });
   await dialog.getByRole('button', { name: '書き出し' }).click();
@@ -48,6 +50,7 @@ test('cancelling the save dialog keeps the export dialog open', async ({ page })
 test('without it (download), the name is entered in the export dialog', async ({ page }) => {
   await disableNativePickers(page);
   await page.goto('/');
+  await expect(page.getByRole('region', { name: 'プロパティ' })).toBeVisible();
   await page.keyboard.press('Control+Shift+E');
   const dialog = page.getByRole('dialog', { name: '画像として書き出し' });
   await dialog.getByLabel('ファイル名').fill('hanabi');
