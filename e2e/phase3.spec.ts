@@ -190,3 +190,23 @@ test('pen tool: Shift puts the next anchor across, below or diagonally (45°) fr
     { x: 150, y: 320 },
   ]);
 });
+
+test('pen tool: over the first anchor the crosshair gets a circle (a click closes the path)', async ({ page }) => {
+  const c = await canvasBox(page);
+  const stage = page.locator('.stage');
+  await page.keyboard.press('p');
+  await page.mouse.click(c.x + 100, c.y + 100);
+  await page.mouse.click(c.x + 250, c.y + 100);
+  await page.mouse.click(c.x + 200, c.y + 220);
+  await page.mouse.move(c.x + 300, c.y + 300);
+  await expect(stage).toHaveCSS('cursor', 'crosshair');
+  await expect(page.getByTestId('pen-close')).toHaveCount(0);
+  await page.mouse.move(c.x + 104, c.y + 103); // within 8 px of the first anchor
+  await expect(stage).toHaveCSS('cursor', /data:image\/svg\+xml.*crosshair/);
+  await expect(page.getByTestId('pen-close')).toHaveCount(1);
+  // The rubber line snaps to the first anchor, and a click closes the path.
+  await expect(page.locator('[data-testid="pen-preview"] .pen-rubber')).toHaveAttribute('x2', '100');
+  await page.mouse.click(c.x + 104, c.y + 103);
+  expect(await state(page, 's => s.doc.layers[0].children[0].closed')).toBe(true);
+  await expect(stage).not.toHaveCSS('cursor', /data:/);
+});

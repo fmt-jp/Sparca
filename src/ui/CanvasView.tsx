@@ -51,6 +51,18 @@ const SHAPE_TOOLS: Partial<Record<ToolId, ShapeGeometry['kind']>> = {
   arrow: 'block-arrow',
 };
 
+/** A pen click this close to the first anchor (screen px) closes the path. */
+const PEN_CLOSE_DISTANCE = 8;
+
+/** Crosshair with a small circle: a click closes the pen path (as in Illustrator / Fireworks). */
+const PEN_CLOSE_CURSOR = `url("data:image/svg+xml,${encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24">' +
+    '<path d="M11.5 1v21M1 11.5h21" stroke="#fff" stroke-width="3"/>' +
+    '<path d="M11.5 1v21M1 11.5h21" stroke="#000" stroke-width="1"/>' +
+    '<circle cx="18.5" cy="18.5" r="4" fill="#fff" stroke="#000" stroke-width="1.5"/>' +
+    '</svg>',
+)}") 11 11, crosshair`;
+
 /** Default head width of a new block arrow relative to its length. */
 const BLOCK_ARROW_ASPECT = 0.55;
 
@@ -310,6 +322,12 @@ export function CanvasView() {
     return () => window.removeEventListener('keydown', onKey, true);
   });
 
+  /** Whether a pen click at `p` lands on the first anchor (and so closes the path). */
+  function penClosesAt(nodes: PathNode[], p: Point): boolean {
+    const first = nodes[0].anchor;
+    return Math.hypot(first.x - p.x, first.y - p.y) * zoom < PEN_CLOSE_DISTANCE;
+  }
+
   /** Where a pen click puts the next anchor (Shift: at 45° steps from `prev`). */
   function penAnchor(prev: Point, p: Point, shift: boolean): Point {
     return shift ? project45(prev, editor.snap(p)) : editor.snap(p);
@@ -429,8 +447,7 @@ export function CanvasView() {
         gesture.current = { kind: 'pen-handle', index: 0 };
         return;
       }
-      const first = penNodes[0].anchor;
-      if (penNodes.length >= 2 && Math.hypot(first.x - p.x, first.y - p.y) * zoom < 8) {
+      if (penNodes.length >= 2 && penClosesAt(penNodes, p)) {
         finishPen(penNodes, true);
         return;
       }
@@ -1080,8 +1097,12 @@ export function CanvasView() {
     else if (e.dataTransfer.files.length) editor.notify('error', 'ドロップされたファイルは画像ではありません。');
   }
 
-  const cursor =
-    effectiveTool === 'hand'
+  // Pen: over the first anchor (clicking closes the path) the crosshair gets a small circle.
+  const closesPen =
+    effectiveTool === 'pen' && !!penNodes && penNodes.length >= 2 && !!cursorPos && penClosesAt(penNodes, cursorPos);
+  const cursor = closesPen
+    ? PEN_CLOSE_CURSOR
+    : effectiveTool === 'hand'
       ? gesture.current?.kind === 'pan'
         ? 'grabbing'
         : 'grab'
@@ -1162,7 +1183,8 @@ export function CanvasView() {
           {penNodes && (
             <PenPreview
               nodes={penNodes}
-              cursor={cursorPos && penAnchor(penNodes[penNodes.length - 1].anchor, cursorPos, shiftHeld)}
+              cursor={cursorPos && (closesPen ? penNodes[0].anchor : penAnchor(penNodes[penNodes.length - 1].anchor, cursorPos, shiftHeld))}
+              closing={closesPen}
               zoom={zoom}
             />
           )}
@@ -1264,7 +1286,7 @@ function GridOverlay({ width, height, zoom }: { width: number; height: number; z
   );
 }
 
-function PenPreview({ nodes, cursor, zoom }: { nodes: PathNode[]; cursor: Point | null; zoom: number }) {
+function PenPreview({ nodes, cursor, closing, zoom }: { nodes: PathNode[]; cursor: Point | null; closing: boolean; zoom: number }) {
   const k = 1 / zoom;
   const P = (q: Point) => `${q.x} ${q.y}`;
   let d = `M${P(nodes[0].anchor)}`;
@@ -1287,6 +1309,7 @@ function PenPreview({ nodes, cursor, zoom }: { nodes: PathNode[]; cursor: Point 
           <rect x={n.anchor.x - 3.5 * k} y={n.anchor.y - 3.5 * k} width={7 * k} height={7 * k} className={i === 0 ? 'pen-anchor first' : 'pen-anchor'} strokeWidth={k} />
         </g>
       ))}
+      {closing && <circle data-testid="pen-close" cx={nodes[0].anchor.x} cy={nodes[0].anchor.y} r={8 * k} className="pen-close-ring" strokeWidth={2 * k} />}
     </g>
   );
 }

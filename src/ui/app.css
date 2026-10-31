@@ -756,6 +756,11 @@ kbd {
 .pen-anchor.first {
   fill: var(--accent);
 }
+/* Around the first anchor while a click there would close the path. */
+.pen-close-ring {
+  fill: none;
+  stroke: var(--accent);
+}
 .picked {
   display: inline-flex;
   align-items: center;
