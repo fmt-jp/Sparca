@@ -70,6 +70,8 @@ export function attachTextToPath(ed: EditorStore): boolean {
       stroke: path.stroke,
       strokeWidth: path.strokeWidth,
       ...(path.strokeStyle ? { strokeStyle: path.strokeStyle } : {}),
+      ...(path.strokeCap ? { strokeCap: path.strokeCap } : {}),
+      ...(path.strokeJoin ? { strokeJoin: path.strokeJoin } : {}),
       opacity: path.opacity,
       effects: path.effects,
     },
@@ -106,6 +108,8 @@ export function detachTextFromPath(ed: EditorStore): boolean {
     stroke: tp.source.stroke,
     strokeWidth: tp.source.strokeWidth,
     ...(tp.source.strokeStyle ? { strokeStyle: tp.source.strokeStyle } : {}),
+    ...(tp.source.strokeCap ? { strokeCap: tp.source.strokeCap } : {}),
+    ...(tp.source.strokeJoin ? { strokeJoin: tp.source.strokeJoin } : {}),
   };
   const plain: TextObject = { ...text };
   delete plain.path;

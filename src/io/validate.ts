@@ -319,6 +319,12 @@ function checkPaint(o: Obj, where: string) {
   if (o.strokeStyle !== undefined && !['solid', 'dashed', 'dotted'].includes(o.strokeStyle as string)) {
     throw new Invalid(`${where}.strokeStyle が正しくありません`);
   }
+  if (o.strokeCap !== undefined && !['round', 'butt', 'square'].includes(o.strokeCap as string)) {
+    throw new Invalid(`${where}.strokeCap が正しくありません`);
+  }
+  if (o.strokeJoin !== undefined && !['round', 'miter', 'bevel'].includes(o.strokeJoin as string)) {
+    throw new Invalid(`${where}.strokeJoin が正しくありません`);
+  }
 }
 
 /** Fill missing keys from defaults (one level of nesting for plain objects). */

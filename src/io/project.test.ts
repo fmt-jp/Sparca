@@ -123,6 +123,21 @@ describe('project format', () => {
     }
   });
 
+  it('keeps line ends and corners, and rejects unknown ones', async () => {
+    const doc = produce(createDocument(10, 10), (d) => {
+      addObject(d, d.layers[0].id, { ...createShape(defaultGeometry('line'), { x: 0, y: 0, width: 5, height: 5, rotation: 0 }), strokeCap: 'square', strokeJoin: 'bevel' });
+    });
+    const loaded = await readProject(await writeProject(doc, () => new Blob([bytes])));
+    expect(loaded.doc.layers[0].children[0]).toMatchObject({ strokeCap: 'square', strokeJoin: 'bevel' });
+    for (const [key, value] of [['strokeCap', 'pointy'], ['strokeJoin', 'arc']]) {
+      const raw = JSON.parse(JSON.stringify(doc));
+      raw.layers[0].children[0][key] = value;
+      const zip = new JSZip();
+      zip.file('document.json', JSON.stringify(raw));
+      await expect(readProject(await zip.generateAsync({ type: 'uint8array' }))).rejects.toThrow(ProjectError);
+    }
+  });
+
   it('rejects an unknown line style', async () => {
     const doc = produce(createDocument(10, 10), (d) => {
       addObject(d, d.layers[0].id, createShape(defaultGeometry('rect'), { x: 0, y: 0, width: 5, height: 5, rotation: 0 }));

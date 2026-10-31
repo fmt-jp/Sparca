@@ -7,6 +7,7 @@ import type {
   SceneObject,
   ShapeObject,
   SparcaDocument,
+  StrokeCap,
   StrokeStyle,
   TextObject,
 } from '../model/types';
@@ -85,11 +86,11 @@ function renderObject(o: SceneObject, opts: RenderOptions, prefix: string, canva
   switch (o.type) {
     case 'shape':
       body = renderShape(o, fillId);
-      strokeWidth = o.stroke ? o.strokeWidth : 0;
+      strokeWidth = o.stroke ? strokeReach(o) : 0;
       break;
     case 'path':
       body = renderPath(o, fillId);
-      strokeWidth = o.stroke ? o.strokeWidth : 0;
+      strokeWidth = o.stroke ? strokeReach(o) : 0;
       break;
     case 'text':
       body = renderText(o, fillId);
@@ -147,13 +148,36 @@ function renderObject(o: SceneObject, opts: RenderOptions, prefix: string, canva
 
 /**
  * Dash pattern for a line style, proportional to the stroke width: dashes 4× the width
- * with 2× gaps; dots are zero-length dashes with round caps, 2× the width apart.
+ * with 2× gaps (flat ends unless an end style was chosen); dots are zero-length dashes with
+ * round caps, 2× the width apart. `cap` is the chosen end style, or the default when unset.
  */
-export function strokeDash(style: StrokeStyle | undefined, width: number, cap: 'round' | 'butt'): { strokeDasharray?: string; strokeLinecap: 'round' | 'butt' } {
+export function strokeDash(
+  style: StrokeStyle | undefined,
+  width: number,
+  cap: StrokeCap,
+  chosen = false,
+): { strokeDasharray?: string; strokeLinecap: StrokeCap } {
   const w = Math.max(width, 0.5);
-  if (style === 'dashed') return { strokeDasharray: `${w * 4} ${w * 2}`, strokeLinecap: 'butt' };
+  if (style === 'dashed') return { strokeDasharray: `${w * 4} ${w * 2}`, strokeLinecap: chosen ? cap : 'butt' };
   if (style === 'dotted') return { strokeDasharray: `0 ${w * 2}`, strokeLinecap: 'round' };
   return { strokeLinecap: cap };
+}
+
+/** Miter joins are cut off past this many half widths (as in Illustrator). */
+export const MITER_LIMIT = 10;
+
+/** End, corner and dash attributes of an object's stroke. */
+function strokeShape(o: Pick<ShapeObject, 'strokeStyle' | 'strokeWidth' | 'strokeCap' | 'strokeJoin'>, open: boolean) {
+  return {
+    strokeLinejoin: o.strokeJoin ?? 'round',
+    strokeMiterlimit: o.strokeJoin === 'miter' ? MITER_LIMIT : undefined,
+    ...strokeDash(o.strokeStyle, o.strokeWidth, o.strokeCap ?? (open ? 'round' : 'butt'), o.strokeCap !== undefined),
+  };
+}
+
+/** How far a stroke can reach past the outline (miter corners reach further than the width). */
+export function strokeReach(o: Pick<ShapeObject, 'strokeWidth' | 'strokeJoin'>): number {
+  return o.strokeJoin === 'miter' ? (o.strokeWidth * MITER_LIMIT) / 2 : o.strokeWidth;
 }
 
 function renderShape(o: ShapeObject, fillId: string): ReactElement {
@@ -174,8 +198,7 @@ function renderShape(o: ShapeObject, fillId: string): ReactElement {
         fill={fill.paint}
         stroke={stroke.paint}
         strokeWidth={o.strokeWidth}
-        strokeLinejoin="round"
-        {...strokeDash(o.strokeStyle, o.strokeWidth, p.open ? 'round' : 'butt')}
+        {...strokeShape(o, p.open)}
       />
       {p.headD && <path d={p.headD} fill={o.stroke ? stroke.paint : '#000'} stroke="none" />}
     </>
@@ -205,8 +228,7 @@ function renderPath(o: PathObject, fillId: string): ReactElement {
         fill={fill.paint}
         stroke={stroke.paint}
         strokeWidth={o.strokeWidth}
-        strokeLinejoin="round"
-        {...strokeDash(o.strokeStyle, o.strokeWidth, 'round')}
+        {...strokeShape(o, !o.closed)}
       />
     </>
   );
