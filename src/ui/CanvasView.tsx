@@ -12,6 +12,7 @@ import {
   handlePoint,
   resizeBox,
   snap45,
+  snapHV,
   snapAngle,
   type Handle,
 } from '../model/handles';
@@ -106,6 +107,8 @@ export function CanvasView() {
   const [spaceDown, setSpaceDown] = useState(false);
   const [editingText, setEditingText] = useState<{ id: Id; isNew: boolean } | null>(null);
   const [cursorPos, setCursorPos] = useState<Point | null>(null);
+  /** Shift held, for the pen's rubber line (also follows key presses without moving). */
+  const [shiftHeld, setShiftHeld] = useState(false);
   const [menu, setMenu] = useState<{ x: number; y: number; items: MenuItem[]; label: string } | null>(null);
   const closeMenu = useCallback(() => setMenu(null), []);
 
@@ -224,6 +227,21 @@ export function CanvasView() {
     };
   }, []);
 
+  // While drawing with the pen, the rubber line follows Shift being pressed or released.
+  const drawingPen = penNodes !== null;
+  useEffect(() => {
+    if (!drawingPen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Shift') setShiftHeld(e.type === 'keydown');
+    };
+    window.addEventListener('keydown', onKey);
+    window.addEventListener('keyup', onKey);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('keyup', onKey);
+    };
+  }, [drawingPen]);
+
   // In-progress drawing belongs to the document it started in.
   useEffect(() => {
     setPolyPoints(null);
@@ -291,6 +309,11 @@ export function CanvasView() {
     window.addEventListener('keydown', onKey, true);
     return () => window.removeEventListener('keydown', onKey, true);
   });
+
+  /** Where a pen click puts the next anchor (Shift: level with or plumb below `prev`). */
+  function penAnchor(prev: Point, p: Point, shift: boolean): Point {
+    return shift ? snapHV(prev, editor.snap(p)) : editor.snap(p);
+  }
 
   /** Turn the pen nodes into a path object (box-normalized nodes). */
   function finishPen(nodes: PathNode[], closed: boolean) {
@@ -415,7 +438,9 @@ export function CanvasView() {
         finishPen(penNodes, false);
         return;
       }
-      setPenNodes([...penNodes, { anchor: editor.snap(p), in: null, out: null }]);
+      // Shift: straight across or straight down from the previous anchor.
+      const prev = penNodes[penNodes.length - 1].anchor;
+      setPenNodes([...penNodes, { anchor: penAnchor(prev, p, e.shiftKey), in: null, out: null }]);
       gesture.current = { kind: 'pen-handle', index: penNodes.length };
       return;
     }
@@ -593,6 +618,7 @@ export function CanvasView() {
   function onPointerMove(e: React.PointerEvent) {
     const p = toDoc(e.clientX, e.clientY);
     setCursorPos(p);
+    setShiftHeld(e.shiftKey);
     if (polyPoints) setPolyPoints([...polyPoints.slice(0, -1), p]);
     const g = gesture.current;
     if (!g) return;
@@ -1133,7 +1159,13 @@ export function CanvasView() {
             <polyline points={polyPoints.map((q) => `${q.x},${q.y}`).join(' ')} className="ants-a" strokeWidth={1 / zoom} />
           )}
           {tool === 'crop' && crop && <CropOverlay crop={crop} doc={doc} zoom={zoom} />}
-          {penNodes && <PenPreview nodes={penNodes} cursor={cursorPos} zoom={zoom} />}
+          {penNodes && (
+            <PenPreview
+              nodes={penNodes}
+              cursor={cursorPos && penAnchor(penNodes[penNodes.length - 1].anchor, cursorPos, shiftHeld)}
+              zoom={zoom}
+            />
+          )}
           {tool === 'subselect' && <PathNodeOverlay zoom={zoom} />}
           {marquee && (
             <rect

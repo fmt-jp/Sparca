@@ -130,6 +130,11 @@ export function dragRect(a: Point, b: Point, square: boolean, fromCenter: boolea
 }
 
 /** Constrain b relative to a to multiples of 45°. */
+/** `b` moved onto the horizontal or vertical line through `a`, whichever is nearer. */
+export function snapHV(a: Point, b: Point): Point {
+  return Math.abs(b.x - a.x) >= Math.abs(b.y - a.y) ? { x: b.x, y: a.y } : { x: a.x, y: b.y };
+}
+
 export function snap45(a: Point, b: Point): Point {
   const len = Math.hypot(b.x - a.x, b.y - a.y);
   const ang = snapAngle(angleTo(a, b), 45) * (Math.PI / 180);

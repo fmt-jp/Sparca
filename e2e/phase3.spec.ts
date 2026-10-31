@@ -161,3 +161,30 @@ test('tool shortcuts still work after clicking a checkbox in the properties pane
   await page.keyboard.press('p');
   expect(await state<string>(page, 's => s.tool')).toBe('pen');
 });
+
+test('pen tool: Shift keeps the next anchor level with or straight below the previous one', async ({ page }) => {
+  const c = await canvasBox(page);
+  await page.keyboard.press('p');
+  await page.mouse.click(c.x + 100, c.y + 100);
+  // The rubber line follows Shift as soon as it is pressed.
+  await page.mouse.move(c.x + 300, c.y + 130);
+  const rubber = page.locator('[data-testid="pen-preview"] .pen-rubber');
+  await expect(rubber).toHaveAttribute('y2', '130');
+  await page.keyboard.down('Shift');
+  await expect(rubber).toHaveAttribute('y2', '100');
+  await page.mouse.click(c.x + 300, c.y + 130); // → (300, 100)
+  await page.mouse.click(c.x + 315, c.y + 300); // → (300, 300)
+  await page.keyboard.up('Shift');
+  await page.mouse.click(c.x + 150, c.y + 320); // free
+  await page.keyboard.press('Enter');
+  const anchors = await state<{ x: number; y: number }[]>(
+    page,
+    's => { const o = s.doc.layers[0].children[0]; return o.nodes.map(n => ({ x: Math.round(o.box.x + n.anchor.x * o.box.width), y: Math.round(o.box.y + n.anchor.y * o.box.height) })); }',
+  );
+  expect(anchors).toEqual([
+    { x: 100, y: 100 },
+    { x: 300, y: 100 },
+    { x: 300, y: 300 },
+    { x: 150, y: 320 },
+  ]);
+});
