@@ -62,7 +62,7 @@ interface Box { x: number; y: number; width: number; height: number; rotation: n
 
 **エフェクト（Effect）**：`{ id, kind, enabled, strength, ...種類ごとの設定 }`。`kind` は drop-shadow / inner-shadow / glow / inner-glow / bevel-inner / bevel-outer / emboss / blur / zoom-blur / sharpen / brightness-contrast / hue-saturation / curves / grayscale / sepia / invert / color-overlay。トーンカーブ（curves）は `curves: { rgb, r, g, b }` に各チャンネルの制御点 `{ x, y }`（0..255、x 昇順、2〜16 点）を持ち、各色のカーブ → RGB カーブの順に適用する（描画は単調 3 次補間で 256 段の表を作り `feComponentTransfer type="table"`）。`enabled` は一時的なオン／オフ、`strength`（0..1）は適用前とのブレンド率。同じ種類を複数持てる。旧形式 `{ glow, dropShadow }` は読み込み時に配列へ変換する（有効なものだけ、グロー→ドロップシャドウの順）。
 
-**塗り（Fill）**：図形・パスの `fill` とテキストの `color` は、色文字列（`#rrggbb`）か次のグラデーション。`fill` は塗りなし（`null`）も可。
+**塗り（Fill）と線（Stroke）**：図形・パスの `fill` とテキストの `color` は、色文字列（`#rrggbb`）か次のグラデーションかパターン（`Fill = string | Gradient | Pattern`）。図形・パスの `stroke` は色文字列かグラデーション（`Stroke = string | Gradient`、2026-10-31 ユーザー確認：パターンは線には使わない）。`fill`・`stroke` はなし（`null`）も可。
 
 ```ts
 interface Gradient {
@@ -75,7 +75,22 @@ interface Gradient {
 
 - 線形：`start`（位置 0）→ `end`（位置 1）。放射：`start` が中心、`end` は外周上の点（正規化座標で円なので、box に合わせて楕円に伸びる）。円錐：`start` が中心、`end` の方向が位置 0 で、時計回り。
 - 正規化座標なので、オブジェクトの移動・拡縮・回転・テキスト枠の自動調整に追従する。
-- 線（枠線）の色は単色のみ。
+- 線のグラデーションも同じ形式・同じ box 基準（2026-10-31 ユーザー確認：線の流れに沿う方式ではなく、Fireworks・SVG と同じ枠基準）。描画は `stroke` に同じ paint server（id は `<fill id>-stroke`）。円錐の画像は線幅の半分だけ box の外まで広げて生成する。キャンバス上のハンドルは塗りと線の両方がグラデーションのとき `EditorState.gradientTarget`（最後にプロパティパネルで変更した方）で選ぶ。
+
+```ts
+interface Pattern {
+  kind: 'pattern';
+  motif: 'stripes' | 'dots' | 'grid' | 'ichimatsu' | 'uroko' | 'yagasuri' | 'seigaiha' | 'shippo' | 'kikko' | 'asanoha';
+  color: string;            // 柄の色
+  background: string | null; // 地の色（null は透明）
+  size: number;             // 繰り返し 1 つ分の大きさ（px、4..500）
+  angle: number;            // 度、時計回り
+  weight: number;           // 0..1 縞の幅・水玉の半径・線の太さ（使わない柄もある）
+}
+```
+
+- パターン（2026-10-31 ユーザー確認）：組み込みの柄のみ（画像の敷き詰めはしない）。塗りとテキストの色に使う。オブジェクトのローカル座標（box の左上が原点、回転はオブジェクトの変換で付く）で `pattern`（`patternUnits="userSpaceOnUse"`）を作り、`patternTransform` で box の中心へ移して `angle` だけ回す。タイルの中心が box の中心に来る。box の大きさに依存しないので、移動・回転には追従し、拡大縮小しても柄の大きさは変わらない（見える範囲が広がる）。
+- 柄はタイル 1 つ分をベクターで描く（`render/pattern.tsx`）。タイルの外にはみ出す図形も描き、タイルで切り取られた残りは隣のタイルが描く。青海波は後の段が前の段を地の色で隠して描くため、地の色が透明のときは柄を白・地を黒で描いたマスクで柄の色を切り抜く。
 
 `box` を「回転付き矩形」で統一することで、選択ハンドル・プロパティパネル（X, Y, 幅, 高さ, 回転）・保存形式が全種類のオブジェクトで共通になる。
 

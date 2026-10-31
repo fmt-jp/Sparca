@@ -1176,11 +1176,32 @@ kbd {
 
 /* Fill type + gradient editor */
 .fill-input,
-.gradient-editor {
+.gradient-editor,
+.pattern-editor {
   display: inline-flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 6px;
+}
+/* Motif buttons of the pattern editor (thumbnails). */
+.pattern-motifs {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+.pattern-motif {
+  padding: 1px;
+  line-height: 0;
+  border: 2px solid transparent;
+  border-radius: 4px;
+  background: none;
+}
+.pattern-motif.selected {
+  border-color: var(--accent);
+}
+.pattern-motif svg {
+  display: block;
+  border-radius: 2px;
 }
 .gradient-ramp {
   display: inline-flex;

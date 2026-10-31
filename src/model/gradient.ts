@@ -1,6 +1,7 @@
 // Gradient fills: defaults, stop interpolation and handle geometry (see types.ts Gradient).
 import { boxCenter, rotatePoint } from './geometry';
 import type { Box, Fill, Gradient, GradientStop, Point, SceneObject } from './types';
+import { isPattern } from './pattern';
 
 export const GRADIENT_KINDS: { kind: Gradient['kind']; label: string }[] = [
   { kind: 'linear', label: '線形' },
@@ -9,7 +10,7 @@ export const GRADIENT_KINDS: { kind: Gradient['kind']; label: string }[] = [
 ];
 
 export function isGradient(f: Fill | null | undefined): f is Gradient {
-  return typeof f === 'object' && f !== null;
+  return typeof f === 'object' && f !== null && f.kind !== 'pattern';
 }
 
 /**
@@ -23,15 +24,19 @@ export function defaultGeometry(kind: Gradient['kind']): Pick<Gradient, 'start' 
   return { start: { x: 0.5, y: 0.5 }, end: { x: 0.8, y: 0.5 } };
 }
 
-/** The gradient an object shows (fill of closed shapes/paths, text color), if any. */
-export function objectGradient(o: SceneObject): { gradient: Gradient; key: 'fill' | 'color'; box: Box } | null {
+export type GradientKey = 'fill' | 'stroke' | 'color';
+
+/**
+ * The gradient whose handles an object shows: of the fill (of closed shapes/paths) or the
+ * text color, or of the stroke. When both fill and stroke are gradients, `prefer` picks.
+ */
+export function objectGradient(o: SceneObject, prefer: 'fill' | 'stroke' = 'fill'): { gradient: Gradient; key: GradientKey; box: Box } | null {
   if (o.type === 'text') return isGradient(o.color) ? { gradient: o.color, key: 'color', box: o.box } : null;
-  if (o.type === 'path') return o.closed && isGradient(o.fill) ? { gradient: o.fill, key: 'fill', box: o.box } : null;
-  if (o.type === 'shape') {
-    const open = o.shape.kind === 'line' || o.shape.kind === 'arrow';
-    return !open && isGradient(o.fill) ? { gradient: o.fill, key: 'fill', box: o.box } : null;
-  }
-  return null;
+  if (o.type !== 'path' && o.type !== 'shape') return null;
+  const open = o.type === 'path' ? !o.closed : o.shape.kind === 'line' || o.shape.kind === 'arrow';
+  const fill = !open && isGradient(o.fill) ? { gradient: o.fill, key: 'fill' as const, box: o.box } : null;
+  const stroke = isGradient(o.stroke) && o.strokeWidth > 0 ? { gradient: o.stroke, key: 'stroke' as const, box: o.box } : null;
+  return prefer === 'stroke' ? (stroke ?? fill) : (fill ?? stroke);
 }
 
 /**
@@ -43,6 +48,7 @@ export function toGradient(kind: Gradient['kind'], current: Fill | null): Gradie
     if (current.kind === kind) return current;
     return { ...current, kind, ...defaultGeometry(kind) };
   }
+  if (isPattern(current)) current = current.color;
   const from = current ?? '#ffffff';
   const to = current ? '#ffffff' : '#000000';
   return {
@@ -57,6 +63,7 @@ export function toGradient(kind: Gradient['kind'], current: Fill | null): Gradie
 
 /** A single color standing in for a fill where only a color works (e.g. the text editor). */
 export function representativeColor(f: Fill | null): string | null {
+  if (isPattern(f)) return f.color;
   if (!isGradient(f)) return f;
   return sortedStops(f.stops)[0]?.color ?? '#000000';
 }

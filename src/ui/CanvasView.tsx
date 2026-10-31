@@ -673,7 +673,7 @@ export function CanvasView() {
         break;
       case 'gradient': {
         const loc = findObject(editor.getState().doc, g.id);
-        const cur = loc && objectGradient(loc.object);
+        const cur = loc && objectGradient(loc.object, editor.getState().gradientTarget);
         if (!loc || !cur) return;
         const box = cur.box;
         let q = p;
@@ -1429,7 +1429,8 @@ function SelectionOverlay({
 
 /** Start (circle) and end (square) of the selected object's gradient, joined by a line. */
 function GradientHandles({ o, zoom }: { o: SceneObject; zoom: number }) {
-  const cur = objectGradient(o);
+  const target = useEditor((s) => s.gradientTarget);
+  const cur = objectGradient(o, target);
   if (!cur) return null;
   const k = 1 / zoom;
   const a = normalizedToDoc(cur.box, cur.gradient.start);
@@ -1440,10 +1441,10 @@ function GradientHandles({ o, zoom }: { o: SceneObject; zoom: number }) {
     <g className="gradient-handles" data-testid="gradient-handles">
       <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} className="gradient-line" strokeWidth={1.5 * k} />
       <circle data-gradient-handle="start" cx={a.x} cy={a.y} r={s / 2} className="gradient-handle" strokeWidth={1.5 * k}>
-        <title>グラデーションの{label[0]}（ドラッグで移動）</title>
+        <title>{cur.key === 'stroke' ? '線の' : ''}グラデーションの{label[0]}（ドラッグで移動）</title>
       </circle>
       <rect data-gradient-handle="end" x={b.x - s / 2} y={b.y - s / 2} width={s} height={s} className="gradient-handle" strokeWidth={1.5 * k}>
-        <title>グラデーションの{label[1]}（ドラッグで移動、Shift で 45° 刻み）</title>
+        <title>{cur.key === 'stroke' ? '線の' : ''}グラデーションの{label[1]}（ドラッグで移動、Shift で 45° 刻み）</title>
       </rect>
     </g>
   );

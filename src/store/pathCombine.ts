@@ -8,7 +8,7 @@ import { boxCenter, rotatePoint } from '../model/geometry';
 import { docContoursToPath, pathContoursToDoc, type DocContour } from '../model/pathEdit';
 import { canConvertToPath, shapeToPath } from '../model/shapeToPath';
 import { allObjects, findObject, isEffectivelyLocked } from '../model/tree';
-import type { Box, Fill, PathObject, Point, SceneObject } from '../model/types';
+import type { Box, Fill, Gradient, PathObject, Point, SceneObject } from '../model/types';
 import type { EditorStore } from './editor';
 
 export type CombineOp = 'unite' | 'subtract' | 'intersect' | 'exclude';
@@ -57,13 +57,14 @@ export function canCombineSelection(ed: EditorStore): boolean {
 const NO_ROTATION: Box = { x: 0, y: 0, width: 1, height: 1, rotation: 0 };
 
 /** A box-relative fill (gradient points) moved from the old box to the new one, staying in place. */
-function refitFill(fill: Fill | null, from: Box, to: Box): Fill | null {
-  if (!fill || typeof fill === 'string') return fill;
+function refitFill<F extends Fill>(fill: F | null, from: Box, to: Box): F | null {
+  if (!fill || typeof fill === 'string' || fill.kind === 'pattern') return fill;
+  const g: Gradient = fill;
   const move = (p: Point): Point => {
     const d = rotatePoint({ x: from.x + p.x * from.width, y: from.y + p.y * from.height }, boxCenter(from), from.rotation);
     return { x: (d.x - to.x) / to.width, y: (d.y - to.y) / to.height };
   };
-  return { ...fill, start: move(fill.start), end: move(fill.end) };
+  return { ...g, start: move(g.start), end: move(g.end) } as F;
 }
 
 /**
@@ -96,7 +97,7 @@ export function combineSelection(ed: EditorStore, op: CombineOp, compute: Comput
     opacity: bottom.opacity,
     effects: bottom.effects,
     fill: refitFill(paint?.fill ?? null, bottom.box, geometry.box),
-    stroke: paint?.stroke ?? null,
+    stroke: refitFill(paint?.stroke ?? null, bottom.box, geometry.box),
     strokeWidth: paint?.strokeWidth ?? 0,
     ...(paint?.strokeStyle ? { strokeStyle: paint.strokeStyle } : {}),
     ...geometry,

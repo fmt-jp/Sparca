@@ -26,6 +26,17 @@ describe('tool defaults', () => {
     expect(sanitizeToolDefaults('garbage')).toEqual(DEFAULT_TOOL_DEFAULTS);
   });
 
+  it('keeps gradient strokes and pattern fills, but no pattern strokes', () => {
+    const grad = { kind: 'linear', start: { x: 0, y: 0 }, end: { x: 1, y: 0 }, stops: [{ offset: 0, color: '#000000', opacity: 1 }, { offset: 1, color: '#ffffff', opacity: 1 }] };
+    const pattern = { kind: 'pattern', motif: 'seigaiha', color: '#112233', background: null, size: 30, angle: 0, weight: 0.3 };
+    const d = sanitizeToolDefaults({ shape: { fill: pattern, stroke: grad, strokeWidth: 4 }, pen: { stroke: pattern }, text: { color: pattern } });
+    expect(d.shape.fill).toEqual(pattern);
+    expect(d.shape.stroke).toEqual(grad);
+    expect(d.pen.stroke).toBe(DEFAULT_TOOL_DEFAULTS.pen.stroke);
+    expect(d.text.color).toEqual(pattern);
+    expect(sanitizeToolDefaults({ shape: { fill: { ...pattern, motif: 'x' } } }).shape.fill).toBe(DEFAULT_TOOL_DEFAULTS.shape.fill);
+  });
+
   it('dash patterns scale with the stroke width', () => {
     expect(strokeDash(undefined, 3, 'butt')).toEqual({ strokeLinecap: 'butt' });
     expect(strokeDash('solid', 3, 'round')).toEqual({ strokeLinecap: 'round' });

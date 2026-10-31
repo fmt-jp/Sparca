@@ -1,7 +1,8 @@
 // Settings for new objects, chosen in the properties panel while a drawing tool is active
 // (nothing selected). Each kind of drawing tool has its own: lines, shapes, block arrows,
 // pen paths and text. They are a per-browser preference, not part of the document.
-import type { Fill, Paint, StrokeStyle, TextObject } from './types';
+import { PATTERN_MOTIFS, PATTERN_SIZE } from './pattern';
+import type { Fill, Paint, Stroke, StrokeStyle, TextObject } from './types';
 import type { ToolId } from '../store/editor';
 
 export type TextStyle = Pick<TextObject, 'fontFamily' | 'fontSize' | 'bold' | 'italic' | 'color' | 'letterSpacing' | 'lineHeight' | 'align'>;
@@ -57,10 +58,29 @@ export function toolCategory(tool: ToolId): ToolCategory | null {
 const COLOR = /^#[0-9a-f]{6}$/i;
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 
-function sanitizeFill(v: unknown, allowNull: boolean): Fill | null | undefined {
+function sanitizeFill(v: unknown, allowNull: boolean, allowPattern = true): Fill | null | undefined {
   if (v === null) return allowNull ? null : undefined;
   if (typeof v === 'string') return COLOR.test(v) ? v : undefined;
   if (isObj(v) && ['linear', 'radial', 'conic'].includes(v.kind as string) && Array.isArray(v.stops) && v.stops.length >= 2 && isObj(v.start) && isObj(v.end)) {
+    return v as unknown as Fill;
+  }
+  if (
+    allowPattern &&
+    isObj(v) &&
+    v.kind === 'pattern' &&
+    PATTERN_MOTIFS.some((m) => m.motif === v.motif) &&
+    typeof v.color === 'string' &&
+    COLOR.test(v.color) &&
+    (v.background === null || (typeof v.background === 'string' && COLOR.test(v.background))) &&
+    typeof v.size === 'number' &&
+    v.size >= PATTERN_SIZE.min &&
+    v.size <= PATTERN_SIZE.max &&
+    typeof v.angle === 'number' &&
+    Number.isFinite(v.angle) &&
+    typeof v.weight === 'number' &&
+    v.weight >= 0 &&
+    v.weight <= 1
+  ) {
     return v as unknown as Fill;
   }
   return undefined;
@@ -71,7 +91,8 @@ function sanitizePaint(v: unknown, base: Paint): Paint {
   const out: Paint = { ...base };
   const fill = sanitizeFill(v.fill, true);
   if (fill !== undefined) out.fill = fill;
-  if (v.stroke === null || (typeof v.stroke === 'string' && COLOR.test(v.stroke))) out.stroke = v.stroke as string | null;
+  const stroke = sanitizeFill(v.stroke, true, false);
+  if (stroke !== undefined) out.stroke = stroke as Stroke | null;
   if (typeof v.strokeWidth === 'number' && v.strokeWidth >= 0 && v.strokeWidth <= 500) out.strokeWidth = v.strokeWidth;
   if (['solid', 'dashed', 'dotted'].includes(v.strokeStyle as string)) out.strokeStyle = v.strokeStyle as StrokeStyle;
   return out;
