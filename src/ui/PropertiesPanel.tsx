@@ -6,7 +6,7 @@ import type { ColorAdjust, LocalEdit, SceneObject, ShapeObject, TextObject, Imag
 import { detachTextFromPath, setTextPath } from '../store/textPathActions';
 import { pipelineOutputSize } from '../engine/pipeline';
 import { METHOD_LABELS } from '../engine/resample';
-import { autoColor, cancelCrop, commitCrop, pixelTargetImage, resetAdjust, setAdjust, setCropTarget } from '../store/imageActions';
+import { autoColor, cancelCrop, commitCrop, fitCanvasToContent, pixelTargetImage, resetAdjust, setAdjust, setCropTarget } from '../store/imageActions';
 import { openDialog } from './dialogs';
 import { FEATHER_LIMITS, type SelectionEdge } from '../store/editor';
 import { moveAnchors } from '../model/pathEdit';
@@ -684,9 +684,14 @@ function DocumentSection() {
       <span className="hint">
         キャンバス {doc.width} × {doc.height} px
       </span>
-      <button type="button" onClick={() => openDialog({ kind: 'canvas-size' })}>
-        キャンバスサイズ…
-      </button>
+      <span className="button-row">
+        <button type="button" onClick={() => openDialog({ kind: 'canvas-size' })}>
+          キャンバスサイズ…
+        </button>
+        <button type="button" title="表示中の画像・図形・テキストがちょうど収まる大きさにする（線・エフェクトを含む）" onClick={() => fitCanvasToContent(editor)}>
+          内容に合わせる
+        </button>
+      </span>
       <Toggle
         checked={bg.kind === 'transparent'}
         onChange={(t) =>
