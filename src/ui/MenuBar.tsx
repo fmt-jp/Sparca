@@ -11,7 +11,7 @@ import {
   selectAll,
   ungroupSelection,
 } from '../store/actions';
-import { autoColor, eraseSelection, pixelTargetImage, selectedImage } from '../store/imageActions';
+import { autoColor, eraseSelection, fitCanvasToContent, pixelTargetImage, selectedImage } from '../store/imageActions';
 import { ZOOM_STEPS } from './CanvasView';
 import { openDialog } from './dialogs';
 import { ALIGN, alignShortcut, DISTRIBUTE } from './PropertiesPanel';
@@ -151,6 +151,7 @@ export function MenuBar({ onNew }: { onNew: () => void }) {
         { label: '整列：キャンバスに対して', checked: alignToCanvas, action: () => editor.set({ alignToCanvas: !alignToCanvas }) },
         { separator: true, label: '' },
         { label: 'キャンバスサイズ…', action: () => openDialog({ kind: 'canvas-size' }) },
+        { label: 'キャンバスを内容に合わせる', action: () => fitCanvasToContent(editor) },
         { label: '画像サイズ…（選択中の画像）', action: () => image && openDialog({ kind: 'image-size', imageId: image.id }), disabled: !image },
         { label: 'トリミング', shortcut: 'C', action: () => editor.setTool('crop') },
       ],

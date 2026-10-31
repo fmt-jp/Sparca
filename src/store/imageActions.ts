@@ -1,11 +1,13 @@
 // Raster-related editor actions (spec §7).
 import { updateObject } from '../model/commands';
 import { boundsOfPoints, boxCorners, objectBounds, rectsIntersect, toLocal, type Rect } from '../model/geometry';
-import { addLocalBlur, addLocalErase, addLocalMosaic, cropDocument, cropImage, fitCanvasToObject, resizeCanvas, resizeImagePixels, selectionToImageMask, type Anchor } from '../model/imageOps';
+import { addLocalBlur, addLocalErase, addLocalMosaic, cropDocument, cropImage, fitCanvasToObject, fitCanvasToRect, resizeCanvas, resizeImagePixels, selectionToImageMask, type Anchor } from '../model/imageOps';
 import { allObjects, findObject, isEffectivelyLocked, isEffectivelyVisible } from '../model/tree';
 import { defaultAdjust } from '../model/factory';
 import type { ColorAdjust, Id, ImageObject, MaskShape, ResampleMethod, SceneObject } from '../model/types';
 import { imageCache } from '../render/imageCache';
+import { strokeReach } from '../render/DocumentSvg';
+import { effectsMargin, splitAtZoomBlur, zoomBlurReach } from '../render/effects';
 import { validateDimensions } from './assets';
 import { GROW_LIMIT, type EditorStore, type PixelSelection } from './editor';
 import { edgeOutline } from '../engine/mask';
@@ -188,6 +190,72 @@ export function changeCanvasSize(ed: EditorStore, width: number, height: number,
     return false;
   }
   ed.edit('キャンバスサイズの変更', (d) => resizeCanvas(d, Math.round(width), Math.round(height), anchor));
+  return true;
+}
+
+/**
+ * How far an object shows past its box: half its stroke (miter corners reach further), its
+ * effects (shadows, glows…) and, for text on a path, the letters standing off the path.
+ */
+function visibleMargin(o: Exclude<SceneObject, { type: 'group' }>): number {
+  let m = 0;
+  if ((o.type === 'shape' || o.type === 'path') && o.stroke && o.strokeWidth > 0) m += strokeReach(o) / 2;
+  if (o.type === 'text' && o.path) m += o.fontSize + Math.abs(o.path.shift);
+  m += effectsMargin(o.effects);
+  for (const seg of splitAtZoomBlur(o.effects)) if (seg.zoom) m += zoomBlurReach(seg.zoom, o.box.width, o.box.height);
+  return m;
+}
+
+/**
+ * Bounds of everything that shows (visible layers and objects, with strokes and effects),
+ * widened to whole pixels; null when nothing shows.
+ */
+export function contentBounds(objects: SceneObject[]): Rect | null {
+  const pts: { x: number; y: number }[] = [];
+  const visit = (list: SceneObject[]) => {
+    for (const o of list) {
+      if (!o.visible) continue;
+      if (o.type === 'group') {
+        visit(o.children);
+        continue;
+      }
+      const b = objectBounds(o);
+      if (!b) continue;
+      const m = visibleMargin(o);
+      pts.push({ x: b.x - m, y: b.y - m }, { x: b.x + b.width + m, y: b.y + b.height + m });
+    }
+  };
+  visit(objects);
+  if (!pts.length) return null;
+  const b = boundsOfPoints(pts);
+  const x = Math.floor(b.x + 1e-6);
+  const y = Math.floor(b.y + 1e-6);
+  return { x, y, width: Math.max(1, Math.ceil(b.x + b.width - 1e-6) - x), height: Math.max(1, Math.ceil(b.y + b.height - 1e-6) - y) };
+}
+
+/**
+ * 「キャンバスを内容に合わせる」: make the canvas just big enough for every visible image,
+ * shape, path and text (with strokes and effects), moving them so nothing is cut off.
+ * Nothing is scaled; hidden layers and objects do not count. One undo step.
+ */
+export function fitCanvasToContent(ed: EditorStore): boolean {
+  const { doc } = ed.getState();
+  const r = contentBounds(doc.layers.filter((l) => l.visible).flatMap((l) => l.children));
+  if (!r) {
+    ed.notify('error', 'キャンバスに合わせる画像や図形がありません（表示中のオブジェクトがありません）。');
+    return false;
+  }
+  const problem = validateDimensions(r.width, r.height);
+  if (problem) {
+    ed.notify('error', problem);
+    return false;
+  }
+  if (r.x === 0 && r.y === 0 && r.width === doc.width && r.height === doc.height) {
+    ed.notify('info', 'キャンバスはすでに内容に合っています。');
+    return true;
+  }
+  ed.edit('キャンバスを内容に合わせる', (d) => fitCanvasToRect(d, r));
+  ed.notify('info', `キャンバスを ${r.width} × ${r.height} px にしました。`);
   return true;
 }
 

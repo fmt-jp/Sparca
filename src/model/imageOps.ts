@@ -206,6 +206,16 @@ export function coversCanvas(doc: SparcaDocument, id: Id): boolean {
 }
 
 /**
+ * Make the canvas the given rectangle (document coordinates): everything moves so that the
+ * rectangle's top-left becomes (0, 0). Nothing is scaled.
+ */
+export function fitCanvasToRect(doc: SparcaDocument, r: Rect): void {
+  translateAll(doc, -r.x, -r.y);
+  doc.width = Math.max(1, Math.round(r.width));
+  doc.height = Math.max(1, Math.round(r.height));
+}
+
+/**
  * Make the canvas exactly the object's bounds: the object ends up at (0, 0) and every
  * other object moves with it, keeping their positions relative to it. Nothing is scaled.
  */
