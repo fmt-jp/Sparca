@@ -159,20 +159,25 @@ export function strokeDash(style: StrokeStyle | undefined, width: number, cap: '
 function renderShape(o: ShapeObject, fillId: string): ReactElement {
   const { width: w, height: h } = o.box;
   const p = shapePaths(o.shape, w, h, o.strokeWidth);
-  const stroke = o.stroke && o.strokeWidth > 0 ? o.stroke : 'none';
+  const stroke = fillPaint(o.stroke && o.strokeWidth > 0 ? o.stroke : null, `${fillId}-stroke`, w, h, o.strokeWidth / 2);
   const fill = fillPaint(p.open ? null : o.fill, fillId, w, h);
   return (
     <>
-      {fill.def && <defs>{fill.def}</defs>}
+      {(fill.def || stroke.def) && (
+        <defs>
+          {fill.def}
+          {stroke.def}
+        </defs>
+      )}
       <path
         d={p.d}
         fill={fill.paint}
-        stroke={stroke}
+        stroke={stroke.paint}
         strokeWidth={o.strokeWidth}
         strokeLinejoin="round"
         {...strokeDash(o.strokeStyle, o.strokeWidth, p.open ? 'round' : 'butt')}
       />
-      {p.headD && <path d={p.headD} fill={o.stroke ?? '#000'} stroke="none" />}
+      {p.headD && <path d={p.headD} fill={o.stroke ? stroke.paint : '#000'} stroke="none" />}
     </>
   );
 }
@@ -185,14 +190,20 @@ export function pathContoursD(o: Pick<PathObject, 'nodes' | 'closed' | 'subpaths
 function renderPath(o: PathObject, fillId: string): ReactElement {
   const { width: w, height: h } = o.box;
   const fill = fillPaint(o.closed ? o.fill : null, fillId, w, h);
+  const stroke = fillPaint(o.stroke && o.strokeWidth > 0 ? o.stroke : null, `${fillId}-stroke`, w, h, o.strokeWidth / 2);
   return (
     <>
-      {fill.def && <defs>{fill.def}</defs>}
+      {(fill.def || stroke.def) && (
+        <defs>
+          {fill.def}
+          {stroke.def}
+        </defs>
+      )}
       <path
         d={pathContoursD(o, w, h)}
         fillRule={o.subpaths?.length ? 'evenodd' : undefined}
         fill={fill.paint}
-        stroke={o.stroke && o.strokeWidth > 0 ? o.stroke : 'none'}
+        stroke={stroke.paint}
         strokeWidth={o.strokeWidth}
         strokeLinejoin="round"
         {...strokeDash(o.strokeStyle, o.strokeWidth, 'round')}

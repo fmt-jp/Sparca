@@ -91,3 +91,22 @@ describe('gradient model', () => {
     expect(objectGradient(line)).toBeNull();
   });
 });
+
+describe('stroke gradients', () => {
+  it('objectGradient finds the stroke gradient and prefers the requested one', () => {
+    const g = toGradient('linear', '#ff0000');
+    const shape = { ...createShape(defaultGeometry('rect'), { x: 0, y: 0, width: 10, height: 10, rotation: 0 }), fill: g, stroke: g, strokeWidth: 2 };
+    expect(objectGradient(shape)!.key).toBe('fill');
+    expect(objectGradient(shape, 'stroke')!.key).toBe('stroke');
+    expect(objectGradient({ ...shape, fill: '#000000' })!.key).toBe('stroke');
+    expect(objectGradient({ ...shape, fill: '#000000', strokeWidth: 0 })).toBeNull();
+    const line = { ...createShape(defaultGeometry('line'), { x: 0, y: 0, width: 10, height: 10, rotation: 0 }), stroke: g, strokeWidth: 3 };
+    expect(objectGradient(line)!.key).toBe('stroke');
+  });
+
+  it('a pattern is not a gradient, and its color stands in for it', () => {
+    const p = { kind: 'pattern' as const, motif: 'dots' as const, color: '#00ff00', background: null, size: 10, angle: 0, weight: 0.5 };
+    expect(representativeColor(p)).toBe('#00ff00');
+    expect(toGradient('linear', p).stops[0].color).toBe('#00ff00');
+  });
+});

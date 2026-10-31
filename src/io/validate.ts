@@ -3,7 +3,8 @@
 import { createEffect, EFFECT_KINDS, migrateLegacyEffects } from '../model/effects';
 import { MAX_CURVE_POINTS } from '../model/curves';
 import { defaultPipeline } from '../model/factory';
-import type { EffectKind } from '../model/types';
+import { PATTERN_MOTIFS, PATTERN_SIZE } from '../model/pattern';
+import type { EffectKind, PatternMotif } from '../model/types';
 import type { SparcaDocument } from '../model/types';
 import { MAX_DIMENSION } from '../model/types';
 
@@ -275,10 +276,23 @@ function checkTextPath(v: unknown, where: string) {
 }
 
 const GRADIENT_KINDS = new Set(['linear', 'radial', 'conic']);
+const PATTERN_MOTIF_IDS = new Set(PATTERN_MOTIFS.map((m) => m.motif));
 
-/** A fill is a color string, a gradient, or (where allowed) null. */
-function checkFill(v: unknown, where: string, allowNull: boolean) {
+function checkPattern(v: Obj, where: string) {
+  if (!PATTERN_MOTIF_IDS.has(v.motif as PatternMotif)) throw new Invalid(`${where}.motif が正しくありません`);
+  str(v, 'color', where);
+  if (v.background !== null && typeof v.background !== 'string') throw new Invalid(`${where}.background が正しくありません`);
+  const size = num(v, 'size', where);
+  if (!(size >= PATTERN_SIZE.min && size <= PATTERN_SIZE.max)) throw new Invalid(`${where}.size が範囲外です`);
+  num(v, 'angle', where);
+  const weight = num(v, 'weight', where);
+  if (!(weight >= 0 && weight <= 1)) throw new Invalid(`${where}.weight が範囲外です`);
+}
+
+/** A fill is a color string, a gradient, (where allowed) a pattern, or (where allowed) null. */
+function checkFill(v: unknown, where: string, allowNull: boolean, allowPattern = true) {
   if (typeof v === 'string' || (allowNull && v === null)) return;
+  if (allowPattern && isObj(v) && v.kind === 'pattern') return checkPattern(v, where);
   if (!isObj(v) || !GRADIENT_KINDS.has(v.kind as string)) throw new Invalid(`${where} が正しくありません`);
   for (const k of ['start', 'end'] as const) {
     const p = v[k];
@@ -300,7 +314,7 @@ function checkFill(v: unknown, where: string, allowNull: boolean) {
 
 function checkPaint(o: Obj, where: string) {
   checkFill(o.fill, `${where}.fill`, true);
-  if (o.stroke !== null && typeof o.stroke !== 'string') throw new Invalid(`${where}.stroke が正しくありません`);
+  checkFill(o.stroke, `${where}.stroke`, true, false);
   num(o, 'strokeWidth', where);
   if (o.strokeStyle !== undefined && !['solid', 'dashed', 'dotted'].includes(o.strokeStyle as string)) {
     throw new Invalid(`${where}.strokeStyle が正しくありません`);

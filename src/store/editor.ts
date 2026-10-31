@@ -132,6 +132,8 @@ export interface EditorState {
   compareImageId: Id | null;
   /** Where the eyedropper applies a picked color on selected shapes. */
   eyedropperTarget: 'fill' | 'stroke';
+  /** Whose gradient handles the canvas shows when both fill and stroke are gradients. */
+  gradientTarget: 'fill' | 'stroke';
   /** Last color picked with the eyedropper. */
   pickedColor: string | null;
   zoom: number;
@@ -166,6 +168,7 @@ export class EditorStore {
       ...freshSession(doc, UNTITLED, null),
       tool: 'select',
       eyedropperTarget: 'fill',
+      gradientTarget: 'fill',
       grid: DEFAULT_GRID,
       selectionEdge: DEFAULT_SELECTION_EDGE,
       toolDefaults: DEFAULT_TOOL_DEFAULTS,

@@ -2,7 +2,7 @@
 import { transformObjects, updateObject } from '../model/commands';
 import { boxCenter, unionBounds } from '../model/geometry';
 import { findObject, isEffectivelyLocked } from '../model/tree';
-import type { ColorAdjust, LocalEdit, SceneObject, ShapeObject, TextObject, ImageObject, PathObject, Id, Box, Paint, StrokeStyle, TextPathOrientation } from '../model/types';
+import type { ColorAdjust, LocalEdit, SceneObject, ShapeObject, TextObject, ImageObject, PathObject, Id, Box, Paint, Stroke, StrokeStyle, TextPathOrientation } from '../model/types';
 import { detachTextFromPath, setTextPath } from '../store/textPathActions';
 import { pipelineOutputSize } from '../engine/pipeline';
 import { METHOD_LABELS } from '../engine/resample';
@@ -13,6 +13,7 @@ import { moveAnchors } from '../model/pathEdit';
 import { convertSelectedNodes, deleteSelectedNodes, flatPath, selectedNodes, selectedOutline, setPathClosed, setPathNodes } from '../store/pathActions';
 import { fitTextBox } from '../render/text';
 import { isGradient } from '../model/gradient';
+import { isPattern } from '../model/pattern';
 import { FillInput } from './FillInput';
 import { FontPicker } from './FontPicker';
 import { EffectsPanel } from './EffectsPanel';
@@ -208,19 +209,26 @@ export function PaintFields({
   return (
     <>
       {!lineLike && (
-        <Field label="塗り" group wide={isGradient(paint.fill)}>
-          <FillInput label="塗り" allowNone value={paint.fill} size={size} onChange={(fill, l, k) => onChange({ fill }, l, k)} />
+        <Field label="塗り" group wide={isGradient(paint.fill) || isPattern(paint.fill)}>
+          <FillInput label="塗り" allowNone allowPattern value={paint.fill} size={size} onChange={(fill, l, k) => {
+              editor.set({ gradientTarget: 'fill' });
+              onChange({ fill }, l, k);
+            }}
+          />
         </Field>
       )}
-      <Field label="線">
-        <ColorInput
+      <Field label="線" group wide={isGradient(paint.stroke)}>
+        <FillInput
           label="線"
           allowNone={!lineLike}
           value={paint.stroke}
-          onChange={(stroke) => {
-            const patch: Partial<Paint> = { stroke };
+          size={size}
+          onChange={(stroke, l, k) => {
+            const patch: Partial<Paint> = { stroke: stroke as Stroke | null };
             if (stroke && paint.strokeWidth === 0) patch.strokeWidth = 2;
-            onChange(patch, '線の色の変更', 'stroke');
+            // The canvas shows the handles of the gradient being edited.
+            editor.set({ gradientTarget: 'stroke' });
+            onChange(patch, l === '線の変更' ? '線の色の変更' : l, k === 'fill' ? 'stroke' : k);
           }}
         />
       </Field>
@@ -451,8 +459,8 @@ function TextStyleFields({
           ))}
         </span>
       </Field>
-      <Field label="色" group wide={isGradient(o.color)}>
-        <FillInput label="文字色" value={o.color} size={size} onChange={(c, l, k) => onChange({ color: c ?? '#000000' }, l, k)} />
+      <Field label="色" group wide={isGradient(o.color) || isPattern(o.color)}>
+        <FillInput label="文字色" allowPattern value={o.color} size={size} onChange={(c, l, k) => onChange({ color: c ?? '#000000' }, l, k)} />
       </Field>
       <Field label="文字間隔">
         <NumberInput label="文字間隔" value={o.letterSpacing} min={-100} max={1000} precision={1} suffix="px" onCommit={(letterSpacing) => onChange({ letterSpacing }, '文字間隔の変更')} />

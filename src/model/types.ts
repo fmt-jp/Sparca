@@ -134,15 +134,51 @@ export interface Gradient {
   end: Point;
 }
 
-/** A solid color (#rrggbb) or a gradient. */
-export type Fill = string | Gradient;
+/** Built-in pattern motifs (see model/pattern.ts and render/pattern.tsx). */
+export type PatternMotif =
+  | 'stripes'
+  | 'dots'
+  | 'grid'
+  | 'ichimatsu'
+  | 'uroko'
+  | 'yagasuri'
+  | 'seigaiha'
+  | 'shippo'
+  | 'kikko'
+  | 'asanoha';
+
+/**
+ * Pattern fill (decided with the user 2026-10-31): a built-in vector motif repeated over the
+ * object. It moves and turns with the object but keeps its own size in px when the object is
+ * resized (more of it shows); it is centered on the object's box.
+ */
+export interface Pattern {
+  kind: 'pattern';
+  motif: PatternMotif;
+  /** Color of the motif (#rrggbb). */
+  color: string;
+  /** Color behind the motif, or null for transparent. */
+  background: string | null;
+  /** Size of one repeat in px. */
+  size: number;
+  /** Turn of the motif in degrees (clockwise). */
+  angle: number;
+  /** Thickness of the motif's lines / bands / dots, 0..1 (motifs that have none ignore it). */
+  weight: number;
+}
+
+/** A solid color (#rrggbb), a gradient or a pattern. */
+export type Fill = string | Gradient | Pattern;
+
+/** A stroke is a solid color or a gradient (no patterns, decided with the user 2026-10-31). */
+export type Stroke = string | Gradient;
 
 /** Line style of a stroke. Missing = solid (documents before 2026-10-24). */
 export type StrokeStyle = 'solid' | 'dashed' | 'dotted';
 
 export interface Paint {
   fill: Fill | null;
-  stroke: string | null;
+  stroke: Stroke | null;
   strokeWidth: number;
   strokeStyle?: StrokeStyle;
 }
@@ -220,7 +256,7 @@ export interface TextOnPath {
   source: {
     name: string;
     fill: Fill | null;
-    stroke: string | null;
+    stroke: Stroke | null;
     strokeWidth: number;
     strokeStyle?: StrokeStyle;
     opacity: number;

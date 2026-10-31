@@ -3,7 +3,7 @@ import { produce } from 'immer';
 import { describe, expect, it } from 'vitest';
 import { addLayer, addObject, groupObjects } from '../model/commands';
 import { createDocument, createImage, createShape, createText, defaultGeometry } from '../model/factory';
-import type { AssetMeta, ImageObject, SparcaDocument } from '../model/types';
+import type { AssetMeta, Gradient, ImageObject, Pattern, SparcaDocument } from '../model/types';
 import { createEffect } from '../model/effects';
 import { ProjectError, READ_LIMITS, readProject, writeProject } from './project';
 
@@ -87,6 +87,36 @@ describe('project format', () => {
       });
       const raw = JSON.parse(JSON.stringify(doc));
       raw.layers[0].children[0].fill = fill;
+      const zip = new JSZip();
+      zip.file('document.json', JSON.stringify(raw));
+      await expect(readProject(await zip.generateAsync({ type: 'uint8array' }))).rejects.toThrow(ProjectError);
+    }
+  });
+
+  it('keeps pattern fills and gradient strokes through save and load', async () => {
+    const pattern: Pattern = { kind: 'pattern', motif: 'asanoha', color: '#1f3a93', background: null, size: 30, angle: 15, weight: 0.4 };
+    const stroke: Gradient = { kind: 'conic', start: { x: 0.5, y: 0.5 }, end: { x: 1, y: 0.5 }, stops: [{ offset: 0, color: '#ff0000', opacity: 1 }, { offset: 1, color: '#0000ff', opacity: 0.5 }] };
+    const doc = produce(createDocument(10, 10), (d) => {
+      addObject(d, d.layers[0].id, { ...createShape(defaultGeometry('rect'), { x: 0, y: 0, width: 5, height: 5, rotation: 0 }), fill: pattern, stroke, strokeWidth: 3 });
+    });
+    const loaded = await readProject(await writeProject(doc, () => new Blob([bytes])));
+    expect(loaded.doc.layers[0].children[0]).toMatchObject({ fill: pattern, stroke });
+  });
+
+  it('rejects broken patterns, and patterns on strokes', async () => {
+    const good = { kind: 'pattern', motif: 'dots', color: '#000000', background: '#ffffff', size: 20, angle: 0, weight: 0.5 };
+    for (const [key, value] of [
+      ['fill', { ...good, motif: 'paisley' }],
+      ['fill', { ...good, size: 0 }],
+      ['fill', { ...good, weight: 2 }],
+      ['fill', { ...good, background: 5 }],
+      ['stroke', good],
+    ] as const) {
+      const doc = produce(createDocument(10, 10), (d) => {
+        addObject(d, d.layers[0].id, createShape(defaultGeometry('rect'), { x: 0, y: 0, width: 5, height: 5, rotation: 0 }));
+      });
+      const raw = JSON.parse(JSON.stringify(doc));
+      raw.layers[0].children[0][key] = value;
       const zip = new JSZip();
       zip.file('document.json', JSON.stringify(raw));
       await expect(readProject(await zip.generateAsync({ type: 'uint8array' }))).rejects.toThrow(ProjectError);

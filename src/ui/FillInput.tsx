@@ -1,5 +1,6 @@
-// Fill field: fill type (solid / linear / radial / conic) plus a color or a gradient editor.
-import { useRef, useState } from 'react';
+// Fill field: fill type (solid / linear / radial / conic / pattern) plus a color, gradient or
+// pattern editor. Also used for strokes (without patterns).
+import { useId, useRef, useState } from 'react';
 import {
   GRADIENT_KINDS,
   colorAt,
@@ -11,7 +12,9 @@ import {
   toGradient,
   withAngle,
 } from '../model/gradient';
-import type { Fill, Gradient, GradientStop } from '../model/types';
+import { PATTERN_MOTIFS, PATTERN_SIZE, isPattern, motifInfo, toPattern, withMotif } from '../model/pattern';
+import type { Fill, Gradient, GradientStop, Pattern } from '../model/types';
+import { patternDef } from '../render/pattern';
 import { ColorPicker } from './ColorPicker';
 import { PopupSliderInput } from './controls';
 import { editor } from './useEditor';
@@ -23,17 +26,20 @@ export function FillInput({
   label,
   value,
   allowNone,
+  allowPattern,
   size,
   onChange,
 }: {
   label: string;
   value: Fill | null;
   allowNone?: boolean;
+  /** Offer pattern fills (not for strokes). */
+  allowPattern?: boolean;
   /** Object box size, for the gradient angle on screen. */
   size: { width: number; height: number };
   onChange: OnFill;
 }) {
-  const kind = isGradient(value) ? value.kind : 'solid';
+  const kind = isGradient(value) || isPattern(value) ? value.kind : 'solid';
   return (
     <span className="fill-input">
       <select
@@ -42,6 +48,7 @@ export function FillInput({
         onChange={(e) => {
           const k = e.target.value;
           if (k === 'solid') onChange(representativeColor(value) ?? '#000000', `${label}を単色に変更`);
+          else if (k === 'pattern') onChange(toPattern(value, representativeColor(value)), `${label}をパターンに変更`);
           else onChange(toGradient(k as Gradient['kind'], value), `${label}をグラデーションに変更`);
         }}
       >
@@ -51,9 +58,12 @@ export function FillInput({
             {g.label}グラデーション
           </option>
         ))}
+        {(allowPattern || isPattern(value)) && <option value="pattern">パターン</option>}
       </select>
       {isGradient(value) ? (
         <GradientEditor g={value} label={label} size={size} onChange={(g, l, k) => onChange(g, l, k)} />
+      ) : isPattern(value) ? (
+        <PatternEditor p={value} label={label} onChange={(p, l, k) => onChange(p, l, k)} />
       ) : (
         <ColorPicker label={label} allowNone={allowNone} value={value} onChange={(c) => onChange(c, `${label}の変更`, 'fill')} />
       )}
@@ -215,6 +225,71 @@ function GradientEditor({
       <button type="button" title="色の並びを反転" onClick={() => onChange(reversed(g), 'グラデーションの反転')}>
         反転
       </button>
+    </span>
+  );
+}
+
+/** Thumbnail of a motif for the motif buttons. */
+function MotifThumb({ motif, id }: { motif: Pattern['motif']; id: string }) {
+  const p: Pattern = { kind: 'pattern', motif, color: '#333333', background: '#ffffff', size: 12, angle: 0, weight: motifInfo(motif).weight };
+  return (
+    <svg width={26} height={26} viewBox="0 0 26 26" aria-hidden="true">
+      <defs>{patternDef(p, id, 26, 26)}</defs>
+      <rect width={26} height={26} fill={`url(#${id})`} />
+    </svg>
+  );
+}
+
+function PatternEditor({ p, label, onChange }: { p: Pattern; label: string; onChange: (p: Pattern, label: string, key?: string) => void }) {
+  const uid = useId().replace(/:/g, '');
+  const set = (patch: Partial<Pattern>, l: string, key?: string) => onChange({ ...p, ...patch }, l, key);
+  return (
+    <span className="pattern-editor">
+      <span className="pattern-motifs" role="radiogroup" aria-label={`${label}の柄`}>
+        {PATTERN_MOTIFS.map((m) => (
+          <button
+            key={m.motif}
+            type="button"
+            role="radio"
+            aria-checked={p.motif === m.motif}
+            aria-label={m.label}
+            title={m.label}
+            className={`pattern-motif${p.motif === m.motif ? ' selected' : ''}`}
+            onClick={() => p.motif !== m.motif && onChange(withMotif(p, m.motif), '柄の変更')}
+          >
+            <MotifThumb motif={m.motif} id={`${uid}-${m.motif}`} />
+          </button>
+        ))}
+      </span>
+      <span className="field-label">柄の色</span>
+      <ColorPicker label="柄の色" value={p.color} onChange={(c) => c && set({ color: c }, '柄の色の変更', 'pattern-color')} />
+      <span className="field-label">地の色</span>
+      <ColorPicker label="地の色" allowNone value={p.background} onChange={(c) => set({ background: c }, '地の色の変更', 'pattern-bg')} />
+      <span className="field-label">大きさ</span>
+      <PopupSliderInput
+        label="柄の大きさ"
+        value={p.size}
+        min={PATTERN_SIZE.min}
+        max={PATTERN_SIZE.max}
+        sliderMax={100}
+        suffix="px"
+        onChange={(size) => set({ size }, '柄の大きさの変更', 'pattern-size')}
+      />
+      <span className="field-label">角度</span>
+      <PopupSliderInput label="柄の角度" value={Math.round(p.angle)} min={-180} max={180} suffix="°" onChange={(angle) => set({ angle }, '柄の角度の変更', 'pattern-angle')} />
+      {motifInfo(p.motif).usesWeight && (
+        <>
+          <span className="field-label">太さ</span>
+          <PopupSliderInput
+            label="柄の太さ"
+            value={Math.round(p.weight * 100)}
+            min={2}
+            max={98}
+            suffix="%"
+            onChange={(v) => set({ weight: v / 100 }, '柄の太さの変更', 'pattern-weight')}
+          />
+        </>
+      )}
     </span>
   );
 }
