@@ -18,7 +18,7 @@ test('ヘルプ → 操作ガイド shows the basics by topic', async ({ page })
   // The HANABI logo heads the introduction.
   const logo = dialog.getByRole('img', { name: '花火 HANABI' });
   await expect(logo).toBeVisible();
-  expect(await logo.evaluate((i: HTMLImageElement) => i.naturalWidth)).toBeGreaterThan(0);
+  expect((await logo.boundingBox())!.width).toBeGreaterThan(100); // drawn inline (svg), 120 px wide
   const nav = dialog.getByRole('navigation', { name: '項目' });
   for (const t of ['画面の見かた', '選択・移動・変形', '図形・テキスト・パス', 'レイヤー', '画像の加工', '範囲選択', 'エフェクト', '保存・書き出し', 'キーボードショートカット', '動作環境']) {
     await expect(nav.getByRole('button', { name: t })).toBeVisible();
@@ -53,4 +53,18 @@ test('the guide has the system requirements (動作環境)', async ({ page }) =>
   await expect(article).toContainText('Google Chrome');
   await expect(article).toContainText('16,384px');
   await expect(article).toContainText('サーバーには送信されません');
+});
+
+test('the logo in はじめに is drawn in the same font as the guide text', async ({ page }) => {
+  await expect(page.getByRole('region', { name: 'プロパティ' })).toBeVisible();
+  await page.keyboard.press('F1');
+  const dialog = page.getByRole('dialog', { name: '操作ガイド' });
+  const logo = dialog.getByRole('img', { name: '花火 HANABI' });
+  await expect(logo).toBeVisible();
+  const [logoFont, textFont] = await Promise.all([
+    logo.locator('text').first().evaluate((el) => getComputedStyle(el).fontFamily),
+    dialog.locator('.help-intro p').last().evaluate((el) => getComputedStyle(el).fontFamily),
+  ]);
+  expect(logoFont).toBe(textFont);
+  await expect(logo.locator('text').first()).toHaveText('花火');
 });
