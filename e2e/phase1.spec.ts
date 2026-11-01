@@ -25,6 +25,9 @@ test('the app is called HANABI: top-left icon and name in orange, the browser ta
   });
   expect(tabIcon[0]).toBe(200);
   expect(tabIcon[1]).toContain('svg');
+  // The tab uses its own icon with thicker lines (easier to see at 16 px); the top-left keeps icon.svg.
+  expect(await page.locator('link[rel="icon"]').getAttribute('href')).toMatch(/favicon\.svg$/);
+  expect(await icon.getAttribute('src')).toMatch(/\/icon\.svg$/);
   await page.getByRole('button', { name: 'ファイル' }).click();
   await expect(page.getByRole('menuitem', { name: /^開く…（\.hnb／/ })).toBeVisible();
 });
