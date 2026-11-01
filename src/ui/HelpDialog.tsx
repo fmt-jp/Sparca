@@ -18,6 +18,33 @@ interface Section {
   body: ReactNode;
 }
 
+/**
+ * The 「花火 HANABI」 logo (same as public/logo.svg), drawn inline rather than as an image so
+ * its letters use exactly the help text's font (an <img> SVG can pick other fallback fonts).
+ */
+function HanabiLogo() {
+  return (
+    <svg className="help-logo" viewBox="0 0 160 184" width={120} height={138} role="img" aria-label="花火 HANABI">
+      <rect width="160" height="184" rx="14" fill="#0c163e" />
+      <g transform="translate(26 12) scale(1.69)">
+        <path
+          d="M32.00 26.70L32.00 4.40M34.48 22.73L37.59 11.14M34.65 27.41L45.80 8.10M38.79 25.21L47.27 16.73M36.59 29.35L55.90 18.20M41.27 29.52L52.86 26.41M37.30 32.00L59.60 32.00M41.27 34.48L52.86 37.59M36.59 34.65L55.90 45.80M38.79 38.79L47.27 47.27M34.65 36.59L45.80 55.90M34.48 41.27L37.59 52.86M32.00 37.30L32.00 59.60M29.52 41.27L26.41 52.86M29.35 36.59L18.20 55.90M25.21 38.79L16.73 47.27M27.41 34.65L8.10 45.80M22.73 34.48L11.14 37.59M26.70 32.00L4.40 32.00M22.73 29.52L11.14 26.41M27.41 29.35L8.10 18.20M25.21 25.21L16.73 16.73M29.35 27.41L18.20 8.10M29.52 22.73L26.41 11.14"
+          stroke="#e3a066"
+          strokeWidth={1.15}
+          strokeLinecap="round"
+          fill="none"
+        />
+      </g>
+      <text x="80" y="148" textAnchor="middle" fill="#f3eadf" fontSize={30} letterSpacing={6}>
+        花火
+      </text>
+      <text x="80" y="170" textAnchor="middle" fill="#f3eadf" fontWeight={500} fontSize={11} letterSpacing={3.5}>
+        HANABI
+      </text>
+    </svg>
+  );
+}
+
 export const HELP_SECTIONS: Section[] = [
   {
     id: 'start',
@@ -25,7 +52,7 @@ export const HELP_SECTIONS: Section[] = [
     body: (
       <>
         <div className="help-intro">
-          <img className="help-logo" src={`${import.meta.env.BASE_URL}logo.svg`} alt="花火 HANABI" width={120} height={138} />
+          <HanabiLogo />
           <div>
             <p className="help-version" data-testid="app-version">{APP_VERSION_LABEL}</p>
             <p>HANABI は、写真などの画像（ラスター）と、図形・テキスト（ベクター）を同じキャンバスで編集できるグラフィックエディタです。作ったオブジェクトは後から何度でも選び直して編集できます。</p>
