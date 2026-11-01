@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
-import { addEffect, canvasBox, decodePixels, disableNativePickers, drag, makePng, placePng, setColor } from './helpers';
+import { addEffect, canvasBox, decodePixels, disableNativePickers, drag, makePng, placePng, setColor, state } from './helpers';
 
 test.beforeEach(async ({ page }) => {
   await disableNativePickers(page);
@@ -36,6 +36,10 @@ async function buildScene(page: Page) {
   }
   await nd.getByLabel('透明な背景').check();
   await nd.getByRole('button', { name: '作成' }).click();
+  // A new canvas is zoomed to fit the view; draw at 100% so screen px = canvas px.
+  await expect.poll(() => state<number>(page, 's => s.zoom')).not.toBe(1);
+  await page.keyboard.press('Control+1');
+  await expect.poll(() => state<number>(page, 's => s.zoom')).toBe(1);
   const c = await canvasBox(page);
   await page.keyboard.press('r');
   await drag(page, { x: c.x + 10, y: c.y + 10 }, { x: c.x + 60, y: c.y + 60 });

@@ -45,7 +45,10 @@ test('each tab keeps its own document, undo history, selection and zoom', async 
   await w.press('Enter');
   await nd.getByRole('button', { name: '作成' }).click();
   await expect(page.getByRole('tab')).toHaveCount(2);
-  expect(await state<unknown>(page, 's => [s.doc.width, s.doc.layers[0].children.length, s.zoom, s.selection.length]')).toEqual([300, 0, 1, 0]);
+  expect(await state<unknown>(page, 's => [s.doc.width, s.doc.layers[0].children.length, s.selection.length]')).toEqual([300, 0, 0]);
+  // A new canvas is zoomed to fit the view (300 × 600 with a 20 px margin).
+  const fit = await page.getByTestId('workspace').evaluate((el) => Math.min((el.clientWidth - 40) / 300, (el.clientHeight - 40) / 600));
+  await expect.poll(() => state<number>(page, 's => s.zoom')).toBeCloseTo(fit, 3);
   await page.keyboard.press('Control+z'); // nothing to undo here
   expect(await state<number>(page, 's => s.doc.layers[0].children.length')).toBe(0);
 
