@@ -45,3 +45,31 @@ test('typing the numbers of a preset selects it', async ({ page }) => {
   }
   await expect(nd.getByLabel('サイズ')).toHaveValue('0');
 });
+
+test('a new canvas fills the view and sits in its middle, large or small', async ({ page }) => {
+  for (const [w, h] of [
+    ['1920', '1080'],
+    ['300', '200'],
+  ]) {
+    const nd = await openDialog(page);
+    for (const [label, v] of [['幅', w], ['高さ', h]]) {
+      const i = nd.locator(`input[aria-label="${label}"]`);
+      await i.fill(v);
+      await i.press('Enter');
+    }
+    await nd.getByRole('button', { name: '作成' }).click();
+    await expect.poll(() => state<number>(page, 's => s.doc.width')).toBe(Number(w));
+    const ws = (await page.getByTestId('workspace').boundingBox())!;
+    await expect
+      .poll(async () => {
+        const cv = (await page.getByTestId('canvas').boundingBox())!;
+        // Fits with its 20 px margin on the tighter side, centered both ways.
+        const fits = cv.width <= ws.width - 39 && cv.height <= ws.height - 39;
+        const tight = Math.min(ws.width - cv.width, ws.height - cv.height) <= 42;
+        const centered =
+          Math.abs(cv.x + cv.width / 2 - (ws.x + ws.width / 2)) < 10 && Math.abs(cv.y + cv.height / 2 - (ws.y + ws.height / 2)) < 10;
+        return fits && tight && centered;
+      })
+      .toBe(true);
+  }
+});

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { newDocument } from '../store/actions';
 import { ColorInput, Field, NumberInput, Toggle } from './controls';
 import { Dialog } from './Dialog';
+import { zoomToFit } from './MenuBar';
 import { editor } from './useEditor';
 
 /** Size presets of the new document dialog (decided with the user 2026-11-01). */
@@ -19,7 +20,10 @@ export function NewDocumentDialog({ onClose }: { onClose: () => void }) {
 
   function create() {
     const ok = newDocument(editor, width, height, transparent ? { kind: 'transparent' } : { kind: 'color', color });
-    if (ok) onClose();
+    if (!ok) return;
+    onClose();
+    // The new canvas fills the view, centered (once the new document is on screen).
+    requestAnimationFrame(() => zoomToFit());
   }
 
   return (
