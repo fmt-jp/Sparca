@@ -733,7 +733,8 @@ export function CanvasView() {
         break;
       }
       case 'resize': {
-        const opt = { keepAspect: e.shiftKey, fromCenter: e.altKey };
+        // From the center with Alt, or Ctrl (⌘ on a Mac).
+        const opt = { keepAspect: e.shiftKey, fromCenter: e.altKey || e.ctrlKey || e.metaKey };
         const p = editor.snap(toDoc(e.clientX, e.clientY));
         if (g.single) {
           const [id, orig] = [...g.originals][0];

@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { readFileSync } from 'node:fs';
-import { canvasBox, disableNativePickers, drag, makePng, state } from './helpers';
+import { canvasBox, disableNativePickers, drag, makePng, placePng, state } from './helpers';
 
 test.beforeEach(async ({ page }) => {
   await disableNativePickers(page);
@@ -228,4 +228,37 @@ test('Shift+drag on a selected object moves the whole selection along one axis; 
   await page.mouse.click(c.x + 185, c.y + 125);
   await page.keyboard.up('Shift');
   expect(await state<string[]>(page, 's => s.selection')).toHaveLength(2);
+});
+
+test('resizing an image with Ctrl held keeps its center; without it the opposite corner stays', async ({ page }) => {
+  await placePng(page, 'p.png', makePng(200, 100, () => [0, 128, 255, 255]));
+  const box = () => state<{ x: number; y: number; width: number; height: number }>(page, 's => s.doc.layers[0].children[0].box');
+  const start = await box();
+  const cx = start.x + start.width / 2;
+  const cy = start.y + start.height / 2;
+  const se = (await page.locator('[data-handle="se"]').boundingBox())!;
+  await page.mouse.move(se.x + se.width / 2, se.y + se.height / 2);
+  await page.mouse.down();
+  await page.keyboard.down('Control');
+  await page.mouse.move(se.x + se.width / 2 + 40, se.y + se.height / 2 + 20, { steps: 5 });
+  await page.mouse.up();
+  await page.keyboard.up('Control');
+  let b = await box();
+  expect(b.width).toBeCloseTo(start.width + 80, 0);
+  expect(b.height).toBeCloseTo(start.height + 40, 0);
+  expect(b.x + b.width / 2).toBeCloseTo(cx, 0);
+  expect(b.y + b.height / 2).toBeCloseTo(cy, 0);
+  // An undo step, and still selected (Ctrl did not duplicate or deselect).
+  expect(await state(page, 's => s.doc.layers[0].children.length')).toBe(1);
+  await page.keyboard.press('Control+z');
+  b = await box();
+  expect(b).toMatchObject(start);
+  // Without Ctrl the top-left corner stays put.
+  await page.mouse.move(se.x + se.width / 2, se.y + se.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(se.x + se.width / 2 + 40, se.y + se.height / 2 + 20, { steps: 5 });
+  await page.mouse.up();
+  b = await box();
+  expect([b.x, b.y]).toEqual([start.x, start.y]);
+  expect(b.width).toBeCloseTo(start.width + 40, 0);
 });
