@@ -96,6 +96,7 @@ export function PropertiesPanel() {
       {SELECTION_TOOLS.has(tool) && <SelectionEdgeSection />}
       {tool !== 'crop' && <PixelSelectionSection />}
       {tool === 'eyedropper' && <EyedropperSection />}
+      {tool === 'gradient' && <GradientToolSection />}
       {category && <ToolDefaultsSection category={category} />}
       {category && locs.length > 0 ? (
         <div className="selected-object-props" role="group" aria-label="選択中のオブジェクト">
@@ -662,6 +663,29 @@ function PathNodeSection({ o }: { o: PathObject }) {
       <Toggle checked={closed} onChange={(c) => setPathClosed(editor, c)}>
         パスを閉じる
       </Toggle>
+    </div>
+  );
+}
+
+/** グラデーションツール: what a drag sets. */
+function GradientToolSection() {
+  const target = useEditor((s) => s.gradientToolTarget);
+  const options = [
+    { value: 'fill', label: '塗り' },
+    { value: 'stroke', label: '線' },
+    { value: 'mask', label: 'マスク' },
+  ] as const;
+  return (
+    <div className="prop-section" data-testid="gradient-tool-panel">
+      <span className="hint">選択中のオブジェクトの上をドラッグすると、始点から終点へグラデーションが付きます（Shift で 45° 刻み）。単色の塗りは、その色から白への線形グラデーションになります。</span>
+      <div className="radio-row" role="radiogroup" aria-label="グラデーションの適用先">
+        {options.map((o) => (
+          <label key={o.value}>
+            <input type="radio" checked={target === o.value} onChange={() => editor.set({ gradientToolTarget: o.value })} /> {o.label}
+          </label>
+        ))}
+      </div>
+      <span className="hint">テキストは文字色、ラインと開いたパスは線、画像とグループはマスクに付きます。</span>
     </div>
   );
 }

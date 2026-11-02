@@ -19,6 +19,17 @@ const paths: Record<string, ReactElement> = {
       <path {...S} d="M12.5 7.5 L5 15 L4 18 L7 17 L14.5 9.5" />
     </>
   ),
+  gradient: (
+    <>
+      <defs>
+        <linearGradient id="icon-gradient-fill" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0" stopColor="currentColor" stopOpacity="1" />
+          <stop offset="1" stopColor="currentColor" stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <rect {...S} x="3" y="4" width="14" height="12" rx="1.5" fill="url(#icon-gradient-fill)" />
+    </>
+  ),
   hand: (
     <path
       {...S}

@@ -16,6 +16,7 @@ export type ToolId =
   | 'lasso'
   | 'polygon-lasso'
   | 'eyedropper'
+  | 'gradient'
   | 'hand'
   | 'zoom'
   | 'line'
@@ -133,6 +134,8 @@ export interface EditorState {
   compareImageId: Id | null;
   /** Where the eyedropper applies a picked color on selected shapes. */
   eyedropperTarget: 'fill' | 'stroke';
+  /** What the gradient tool sets (images and groups always get a mask). */
+  gradientToolTarget: 'fill' | 'stroke' | 'mask';
   /** Whose gradient handles the canvas shows when both fill and stroke are gradients. */
   gradientTarget: GradientTarget;
   /** Last color picked with the eyedropper. */
@@ -169,6 +172,7 @@ export class EditorStore {
       ...freshSession(doc, UNTITLED, null),
       tool: 'select',
       eyedropperTarget: 'fill',
+      gradientToolTarget: 'fill',
       gradientTarget: 'fill',
       grid: DEFAULT_GRID,
       selectionEdge: DEFAULT_SELECTION_EDGE,
