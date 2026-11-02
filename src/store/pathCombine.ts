@@ -100,6 +100,7 @@ export function combineSelection(ed: EditorStore, op: CombineOp, compute: Comput
     stroke: refitFill(paint?.stroke ?? null, bottom.box, geometry.box),
     strokeWidth: paint?.strokeWidth ?? 0,
     ...(paint?.strokeStyle ? { strokeStyle: paint.strokeStyle } : {}),
+    ...(bottom.mask ? { mask: { ...bottom.mask, gradient: refitFill(bottom.mask.gradient, bottom.box, geometry.box)! } } : {}),
     ...(paint?.strokeCap ? { strokeCap: paint.strokeCap } : {}),
     ...(paint?.strokeJoin ? { strokeJoin: paint.strokeJoin } : {}),
     ...geometry,

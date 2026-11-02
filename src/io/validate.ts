@@ -97,6 +97,7 @@ function checkObject(o: unknown, where: string, ids: Set<string>, assets: Obj): 
   o.visible = bool(o, 'visible', true);
   o.locked = bool(o, 'locked', false);
   o.opacity = typeof o.opacity === 'number' ? Math.min(1, Math.max(0, o.opacity)) : 1;
+  if (o.mask !== undefined) checkMask(o.mask, `${where}.mask`, type === 'group');
   if (type === 'group') {
     arr(o, 'children', where).forEach((c, j) => checkObject(c, `${where}.children[${j}]`, ids, assets));
     return;
@@ -310,6 +311,19 @@ function checkFill(v: unknown, where: string, allowNull: boolean, allowPattern =
     str(st, 'color', w);
     if (typeof st.opacity !== 'number') st.opacity = 1;
   });
+}
+
+/** A gradient mask: a gradient (no color or pattern), on/off, and for a group its frame. */
+function checkMask(v: unknown, where: string, group: boolean) {
+  if (!isObj(v)) throw new Invalid(`${where} が正しくありません`);
+  if (!isObj(v.gradient)) throw new Invalid(`${where}.gradient が正しくありません`);
+  checkFill(v.gradient, `${where}.gradient`, false, false);
+  v.enabled = bool(v, 'enabled', true);
+  if (group) {
+    const f = v.frame;
+    if (!isObj(f)) throw new Invalid(`${where}.frame がありません`);
+    for (const k of ['x', 'y', 'width', 'height', 'rotation']) num(f, k, `${where}.frame`);
+  } else delete v.frame;
 }
 
 function checkPaint(o: Obj, where: string) {

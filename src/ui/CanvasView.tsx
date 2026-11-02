@@ -729,7 +729,9 @@ export function CanvasView() {
         }
         const n = docToNormalized(box, q);
         const next = { ...cur.gradient, [g.which]: n };
-        editor.preview((d) => updateObject(d, g.id, { [cur.key]: next } as Partial<SceneObject>));
+        const mask = loc.object.mask;
+        const patch = cur.key === 'mask' && mask ? { mask: { ...mask, gradient: next } } : { [cur.key]: next };
+        editor.preview((d) => updateObject(d, g.id, patch as Partial<SceneObject>));
         break;
       }
       case 'resize': {
@@ -1493,14 +1495,15 @@ function GradientHandles({ o, zoom }: { o: SceneObject; zoom: number }) {
   const b = normalizedToDoc(cur.box, cur.gradient.end);
   const s = 9 * k;
   const label = { linear: ['始点', '終点'], radial: ['中心', '半径'], conic: ['中心', '開始方向'] }[cur.gradient.kind];
+  const whose = cur.key === 'stroke' ? '線の' : cur.key === 'mask' ? 'マスクの' : '';
   return (
-    <g className="gradient-handles" data-testid="gradient-handles">
+    <g className="gradient-handles" data-testid="gradient-handles" data-gradient-key={cur.key}>
       <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} className="gradient-line" strokeWidth={1.5 * k} />
       <circle data-gradient-handle="start" cx={a.x} cy={a.y} r={s / 2} className="gradient-handle" strokeWidth={1.5 * k}>
-        <title>{cur.key === 'stroke' ? '線の' : ''}グラデーションの{label[0]}（ドラッグで移動）</title>
+        <title>{whose}グラデーションの{label[0]}（ドラッグで移動）</title>
       </circle>
       <rect data-gradient-handle="end" x={b.x - s / 2} y={b.y - s / 2} width={s} height={s} className="gradient-handle" strokeWidth={1.5 * k}>
-        <title>{cur.key === 'stroke' ? '線の' : ''}グラデーションの{label[1]}（ドラッグで移動、Shift で 45° 刻み）</title>
+        <title>{whose}グラデーションの{label[1]}（ドラッグで移動、Shift で 45° 刻み）</title>
       </rect>
     </g>
   );

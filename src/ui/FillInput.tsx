@@ -73,7 +73,7 @@ export function FillInput({
 
 const REMOVE_DISTANCE = 30;
 
-function GradientEditor({
+export function GradientEditor({
   g,
   label,
   size,

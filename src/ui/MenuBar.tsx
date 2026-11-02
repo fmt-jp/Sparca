@@ -11,6 +11,7 @@ import {
   selectAll,
   ungroupSelection,
 } from '../store/actions';
+import { addGradientMask, canAddMask, canRemoveMask, removeMask } from '../store/maskActions';
 import { autoColor, eraseSelection, fitCanvasToContent, pixelTargetImage, selectedImage } from '../store/imageActions';
 import { ZOOM_STEPS } from './CanvasView';
 import { openDialog } from './dialogs';
@@ -135,6 +136,9 @@ export function MenuBar({ onNew }: { onNew: () => void }) {
         { separator: true, label: '' },
         { label: 'テキストをパスに添付', shortcut: `${mod}Shift+Y`, action: () => attachTextToPath(editor), disabled: !canAttachTextToPath(editor) },
         { label: 'テキストをパスから外す', action: () => detachTextFromPath(editor), disabled: !canDetachTextFromPath(editor) },
+        { separator: true, label: '' },
+        { label: 'グラデーションマスクを追加', action: () => addGradientMask(editor), disabled: !canAddMask(editor) },
+        { label: 'マスクを削除', action: () => removeMask(editor), disabled: !canRemoveMask(editor) },
         { separator: true, label: '' },
         ...ALIGN.map((a) => ({
           label: `整列：${a.label}`,

@@ -2,7 +2,7 @@
 import { transformObjects, updateObject } from '../model/commands';
 import { boxCenter, unionBounds } from '../model/geometry';
 import { findObject, isEffectivelyLocked } from '../model/tree';
-import type { ColorAdjust, LocalEdit, SceneObject, ShapeObject, TextObject, ImageObject, PathObject, Id, Box, Paint, Stroke, StrokeCap, StrokeJoin, StrokeStyle, TextPathOrientation } from '../model/types';
+import type { ColorAdjust, Gradient, LocalEdit, SceneObject, ShapeObject, TextObject, ImageObject, PathObject, Id, Box, Paint, Stroke, StrokeCap, StrokeJoin, StrokeStyle, TextPathOrientation } from '../model/types';
 import { detachTextFromPath, setTextPath } from '../store/textPathActions';
 import { pipelineOutputSize } from '../engine/pipeline';
 import { METHOD_LABELS } from '../engine/resample';
@@ -12,9 +12,11 @@ import { FEATHER_LIMITS, type SelectionEdge } from '../store/editor';
 import { moveAnchors } from '../model/pathEdit';
 import { convertSelectedNodes, deleteSelectedNodes, flatPath, selectedNodes, selectedOutline, setPathClosed, setPathNodes } from '../store/pathActions';
 import { fitTextBox } from '../render/text';
-import { isGradient } from '../model/gradient';
+import { GRADIENT_KINDS, isGradient, toGradient } from '../model/gradient';
+import { maskFrame } from '../model/mask';
+import { addGradientMask, removeMask, setMask } from '../store/maskActions';
 import { isPattern } from '../model/pattern';
-import { FillInput } from './FillInput';
+import { FillInput, GradientEditor } from './FillInput';
 import { FontPicker } from './FontPicker';
 import { EffectsPanel } from './EffectsPanel';
 import { arrowTipAngle, headForTipAngle } from '../render/shapes';
@@ -69,10 +71,21 @@ export function PropertiesPanel() {
         {o.type === 'text' && <TextSection o={o} />}
         {o.type === 'image' && <ImageSection o={o} />}
         <EffectsPanel o={o} />
+        <MaskSection o={o} />
       </fieldset>
     );
   } else {
-    content = <MultiSection ids={locs.map((l) => l.object.id)} objects={locs.map((l) => l.object)} />;
+    const group = locs.length === 1 ? locs[0] : null;
+    content = (
+      <>
+        <MultiSection ids={locs.map((l) => l.object.id)} objects={locs.map((l) => l.object)} />
+        {group && (
+          <fieldset disabled={isEffectivelyLocked(group)} className="prop-fieldset">
+            <MaskSection o={group.object} />
+          </fieldset>
+        )}
+      </>
+    );
   }
 
   // A drawing tool always shows the settings for what it will draw; a selected object's
@@ -898,6 +911,57 @@ export function AlignButtons({ single }: { single: boolean }) {
         </Toggle>
       )}
     </span>
+  );
+}
+
+/**
+ * グラデーションマスク: add one, or edit it (kind, colors — white shows, black hides —,
+ * angle), switch it off, or remove it. Its handles show on the canvas while it is edited.
+ */
+function MaskSection({ o }: { o: SceneObject }) {
+  const mask = o.mask;
+  const frame = maskFrame(o);
+  if (!mask || !frame) {
+    return (
+      <div className="prop-section" data-testid="mask-panel">
+        <span className="section-title">マスク</span>
+        <button type="button" title="白い所は見え、黒い所は透けるグラデーションで、オブジェクトをだんだん透明にする" onClick={() => addGradientMask(editor)}>
+          グラデーションマスクを追加
+        </button>
+      </div>
+    );
+  }
+  const size = o.type === 'group' ? frame : o.box;
+  return (
+    <div className="prop-section" data-testid="mask-panel">
+      <span className="section-title">マスク</span>
+      <Toggle checked={mask.enabled} onChange={(enabled) => setMask(editor, o.id, { enabled }, enabled ? 'マスクをオン' : 'マスクをオフ')}>
+        マスクを使う
+      </Toggle>
+      <button type="button" title="キャンバスにマスクのハンドルを表示する" onClick={() => editor.set({ gradientTarget: 'mask' })}>
+        ハンドルを表示
+      </button>
+      <button type="button" onClick={() => removeMask(editor)}>
+        マスクを削除
+      </button>
+      <span className="hint">白い所は見え、黒い所は透けます（灰色は半透明）。</span>
+      <Field label="種類" group wide>
+        <span className="fill-input">
+          <select
+            aria-label="マスクの種類"
+            value={mask.gradient.kind}
+            onChange={(e) => setMask(editor, o.id, { gradient: toGradient(e.target.value as Gradient['kind'], mask.gradient) }, 'マスクの種類の変更')}
+          >
+            {GRADIENT_KINDS.map((g) => (
+              <option key={g.kind} value={g.kind}>
+                {g.label}
+              </option>
+            ))}
+          </select>
+          <GradientEditor g={mask.gradient} label="マスク" size={size} onChange={(gradient, l, k) => setMask(editor, o.id, { gradient }, `マスクの${l}`, k ? `mask-${k}` : undefined)} />
+        </span>
+      </Field>
+    </div>
   );
 }
 

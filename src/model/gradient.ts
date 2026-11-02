@@ -1,6 +1,7 @@
 // Gradient fills: defaults, stop interpolation and handle geometry (see types.ts Gradient).
 import { boxCenter, rotatePoint } from './geometry';
 import type { Box, Fill, Gradient, GradientStop, Point, SceneObject } from './types';
+import { maskFrame } from './mask';
 import { isPattern } from './pattern';
 
 export const GRADIENT_KINDS: { kind: Gradient['kind']; label: string }[] = [
@@ -24,13 +25,22 @@ export function defaultGeometry(kind: Gradient['kind']): Pick<Gradient, 'start' 
   return { start: { x: 0.5, y: 0.5 }, end: { x: 0.8, y: 0.5 } };
 }
 
-export type GradientKey = 'fill' | 'stroke' | 'color';
+export type GradientKey = 'fill' | 'stroke' | 'color' | 'mask';
+export type GradientTarget = 'fill' | 'stroke' | 'mask';
 
 /**
  * The gradient whose handles an object shows: of the fill (of closed shapes/paths) or the
- * text color, or of the stroke. When both fill and stroke are gradients, `prefer` picks.
+ * text color, of the stroke, or of the gradient mask. `prefer` picks when there are several
+ * (the mask's handles show only when asked for, or when the object has no other gradient).
  */
-export function objectGradient(o: SceneObject, prefer: 'fill' | 'stroke' = 'fill'): { gradient: Gradient; key: GradientKey; box: Box } | null {
+export function objectGradient(o: SceneObject, prefer: GradientTarget = 'fill'): { gradient: Gradient; key: GradientKey; box: Box } | null {
+  const frame = o.mask ? maskFrame(o) : null;
+  const mask = o.mask && frame ? { gradient: o.mask.gradient, key: 'mask' as const, box: frame } : null;
+  if (prefer === 'mask' && mask) return mask;
+  return paintGradient(o, prefer === 'mask' ? 'fill' : prefer) ?? mask;
+}
+
+function paintGradient(o: SceneObject, prefer: 'fill' | 'stroke'): { gradient: Gradient; key: GradientKey; box: Box } | null {
   if (o.type === 'text') return isGradient(o.color) ? { gradient: o.color, key: 'color', box: o.box } : null;
   if (o.type !== 'path' && o.type !== 'shape') return null;
   const open = o.type === 'path' ? !o.closed : o.shape.kind === 'line' || o.shape.kind === 'arrow';
