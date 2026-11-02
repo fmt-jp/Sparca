@@ -53,6 +53,11 @@ export const TOOL_GROUPS: ToolGroup[] = [
   },
   { id: 'text', label: 'テキスト', tools: [{ id: 'text', label: 'テキストツール', key: 'T' }] },
   { id: 'eyedropper', label: 'スポイト', tools: [{ id: 'eyedropper', label: 'スポイトツール', key: 'I' }] },
+  {
+    id: 'gradient',
+    label: 'グラデーション',
+    tools: [{ id: 'gradient', label: 'グラデーションツール（選択中のオブジェクトの上をドラッグして向き・範囲を指定、Shift で 45° 刻み）', key: 'G' }],
+  },
   { id: 'hand', label: '手のひら', tools: [{ id: 'hand', label: '手のひらツール（Space 押下中も可）', key: 'H' }] },
   { id: 'zoom', label: 'ズーム', tools: [{ id: 'zoom', label: 'ズームツール（Alt+クリックで縮小）', key: 'Z' }] },
 ];

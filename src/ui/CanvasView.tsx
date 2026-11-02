@@ -28,6 +28,7 @@ import { placeImageFiles, writableLayer } from '../store/actions';
 import type { PixelSelection, ToolId } from '../store/editor';
 import { pickColorAt } from '../store/colorActions';
 import { isSmooth, locateNode, moveAnchors, moveHandle, nearestOnFlat, type DocNode } from '../model/pathEdit';
+import { applyGradientDrag, gradientSlot, type GradientSlot } from '../store/gradientTool';
 import { deleteSelectedNodes, editablePath, editLineAsPath, flatPath, insertNode, isLineShape, nudgeNodes, selectedNodes, toggleNodeType, writePathNodes } from '../store/pathActions';
 import { cancelCrop, commitCrop, startCrop } from '../store/imageActions';
 import { hasImageExtension } from '../io/imageFormats';
@@ -81,6 +82,8 @@ type Gesture =
       toggleOff?: Id;
     }
   | { kind: 'gradient'; id: Id; which: 'start' | 'end' }
+  /** Gradient tool: dragging out where the gradient starts and ends. */
+  | { kind: 'gradient-drag'; id: Id; slot: GradientSlot; start: Point; moved: boolean }
   | { kind: 'resize'; handle: Handle; originals: Map<Id, SceneObject>; single: Box | null; bounds: Rect }
   | { kind: 'rotate'; center: Point; startAngle: number; originals: Map<Id, SceneObject> }
   | { kind: 'marquee'; start: Point; current: Point; additive: boolean; base: Id[] }
@@ -435,6 +438,37 @@ export function CanvasView() {
       return;
     }
 
+    if (effectiveTool === 'gradient') {
+      // The handles of the gradient stay draggable, as with the select tool.
+      const gh = target.getAttribute('data-gradient-handle');
+      if (gh && selection.length === 1) {
+        editor.beginGesture();
+        gesture.current = { kind: 'gradient', id: selection[0], which: gh as 'start' | 'end' };
+        return;
+      }
+      // The drag sets the gradient of the selected object; with none (or several), of the one under the pointer.
+      let id = selection.length === 1 ? selection[0] : null;
+      const hit = hitObject(target);
+      if (!id && hit) {
+        editor.select([hit]);
+        id = hit;
+      }
+      const loc = id ? findObject(editor.getState().doc, id) : null;
+      if (!loc) {
+        editor.notify('error', 'グラデーションを付けるオブジェクトを選択してから、その上をドラッグしてください。');
+        return;
+      }
+      if (isEffectivelyLocked(loc)) {
+        editor.notify('error', 'ロック中のオブジェクトは変更できません。');
+        return;
+      }
+      const slot = gradientSlot(loc.object, editor.getState().gradientToolTarget);
+      editor.set({ gradientTarget: slot === 'mask' ? 'mask' : slot === 'stroke' ? 'stroke' : 'fill' });
+      editor.beginGesture();
+      gesture.current = { kind: 'gradient-drag', id: loc.object.id, slot, start: p, moved: false };
+      return;
+    }
+
     if (effectiveTool === 'eyedropper') {
       void pickColorAt(editor, p.x, p.y);
       return;
@@ -714,6 +748,13 @@ export function CanvasView() {
       case 'move':
         updateMove(g, p, e.shiftKey, duplicateKey(e));
         break;
+      case 'gradient-drag': {
+        if (!g.moved && Math.hypot(p.x - g.start.x, p.y - g.start.y) * zoom < 3) break;
+        g.moved = true;
+        const end = e.shiftKey ? snap45(g.start, p) : p;
+        editor.preview((d) => applyGradientDrag(d, g.id, g.slot, g.start, end));
+        break;
+      }
       case 'gradient': {
         const loc = findObject(editor.getState().doc, g.id);
         const cur = loc && objectGradient(loc.object, editor.getState().gradientTarget);
@@ -784,6 +825,10 @@ export function CanvasView() {
         break;
       case 'gradient':
         editor.endGesture('グラデーションの調整');
+        break;
+      case 'gradient-drag':
+        if (g.moved) editor.endGesture(g.slot === 'mask' ? 'マスクのグラデーションの指定' : 'グラデーションの指定');
+        else editor.cancelGesture();
         break;
       case 'resize':
         editor.endGesture('拡大縮小');
@@ -1175,7 +1220,7 @@ export function CanvasView() {
         >
           <GridOverlay width={doc.width} height={doc.height} zoom={zoom} />
           <SelectionOverlay locs={selectedObjects} zoom={zoom} showHandles={tool === 'select' && !editingText} />
-          {tool === 'select' && !editingText && selectedObjects.length === 1 && !isEffectivelyLocked(selectedObjects[0]) && (
+          {(tool === 'select' || tool === 'gradient') && !editingText && selectedObjects.length === 1 && !isEffectivelyLocked(selectedObjects[0]) && (
             <GradientHandles o={selectedObjects[0].object} zoom={zoom} />
           )}
           {pixelSelection && <PixelSelectionOutline sel={pixelSelection} zoom={zoom} />}
