@@ -138,6 +138,29 @@ describe('project format', () => {
     }
   });
 
+  it('keeps gradient masks (with the frame of a group) and rejects broken ones', async () => {
+    const gradient: Gradient = { kind: 'linear', start: { x: 0, y: 0.5 }, end: { x: 1, y: 0.5 }, stops: [{ offset: 0, color: '#ffffff', opacity: 1 }, { offset: 1, color: '#000000', opacity: 1 }] };
+    const doc = produce(createDocument(10, 10), (d) => {
+      addObject(d, d.layers[0].id, { ...createShape(defaultGeometry('rect'), { x: 0, y: 0, width: 5, height: 5, rotation: 0 }), mask: { gradient, enabled: false } });
+      addObject(d, d.layers[0].id, createShape(defaultGeometry('rect'), { x: 6, y: 6, width: 2, height: 2, rotation: 0 }));
+    });
+    const loaded = await readProject(await writeProject(doc, () => new Blob([bytes])));
+    expect(loaded.doc.layers[0].children[0].mask).toEqual({ gradient, enabled: false });
+    for (const mask of [{ gradient: '#ffffff', enabled: true }, { gradient: { ...gradient, kind: 'pattern' }, enabled: true }, { enabled: true }]) {
+      const raw = JSON.parse(JSON.stringify(doc));
+      raw.layers[0].children[0].mask = mask;
+      const zip = new JSZip();
+      zip.file('document.json', JSON.stringify(raw));
+      await expect(readProject(await zip.generateAsync({ type: 'uint8array' }))).rejects.toThrow(ProjectError);
+    }
+    // A group's mask needs its frame.
+    const raw = JSON.parse(JSON.stringify(doc));
+    raw.layers[0].children = [{ id: 'g1', name: 'g', type: 'group', visible: true, locked: false, opacity: 1, children: raw.layers[0].children, mask: { gradient, enabled: true } }];
+    const zip = new JSZip();
+    zip.file('document.json', JSON.stringify(raw));
+    await expect(readProject(await zip.generateAsync({ type: 'uint8array' }))).rejects.toThrow(/frame/);
+  });
+
   it('rejects an unknown line style', async () => {
     const doc = produce(createDocument(10, 10), (d) => {
       addObject(d, d.layers[0].id, createShape(defaultGeometry('rect'), { x: 0, y: 0, width: 5, height: 5, rotation: 0 }));

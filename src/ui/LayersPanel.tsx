@@ -269,6 +269,11 @@ function ObjectList(props: {
               onToggle={() => editor.edit('ロックの切り替え', (d) => updateObject(d, o.id, { locked: !o.locked }))}
             />
             <span className="type-badge">{TYPE_LABEL[o.type]}</span>
+            {o.mask && (
+              <span className={`type-badge mask-badge${o.mask.enabled ? '' : ' off'}`} title={o.mask.enabled ? 'グラデーションマスクあり' : 'グラデーションマスク（オフ）'}>
+                マスク
+              </span>
+            )}
             <EditableName
               name={o.name}
               className="object-name"

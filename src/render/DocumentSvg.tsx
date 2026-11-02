@@ -2,6 +2,9 @@
 // so what you see is what gets exported (docs/design.md §3).
 import type { ReactElement } from 'react';
 import type {
+  Box,
+  Gradient,
+  GroupObject,
   ImageObject,
   PathObject,
   SceneObject,
@@ -11,7 +14,9 @@ import type {
   StrokeStyle,
   TextObject,
 } from '../model/types';
-import { effectsFilter, splitAtZoomBlur, zoomBlurLayers, zoomBlurReach } from './effects';
+import { objectBounds, type Rect } from '../model/geometry';
+import { maskFrame } from '../model/mask';
+import { effectsFilter, effectsMargin, splitAtZoomBlur, zoomBlurLayers, zoomBlurReach } from './effects';
 import { cssFontFamily } from './fonts';
 import { fillPaint } from './gradient';
 import { pathNodesD, shapePaths } from './shapes';
@@ -70,9 +75,18 @@ export function DocumentSvg({
 function renderObject(o: SceneObject, opts: RenderOptions, prefix: string, canvas: { width: number; height: number }): ReactElement | null {
   if (!o.visible || o.id === opts.hiddenId) return null;
   if (o.type === 'group') {
+    const children = o.children.map((c) => renderObject(c, opts, prefix, canvas));
+    const mask = groupMask(o, `${prefix}-mask-${o.id}`);
     return (
       <g key={o.id} data-object-id={o.id} opacity={o.opacity}>
-        {o.children.map((c) => renderObject(c, opts, prefix, canvas))}
+        {mask ? (
+          <>
+            <defs>{mask.def}</defs>
+            <g mask={mask.ref}>{children}</g>
+          </>
+        ) : (
+          children
+        )}
       </g>
     );
   }
@@ -137,6 +151,13 @@ function renderObject(o: SceneObject, opts: RenderOptions, prefix: string, canva
       reach += zoomBlurReach(seg.zoom, w, h);
     }
   });
+  // The gradient mask fades the object together with its effects (decided with the user).
+  if (o.mask?.enabled && content) {
+    const m = strokeWidth + reach + effectsMargin(o.effects) + 1;
+    const mid = `${prefix}-mask-${o.id}`;
+    defs.push(<defs key={mid}>{maskDef(o.mask.gradient, mid, { x: -m, y: -m, width: w + 2 * m, height: h + 2 * m }, w, h, m)}</defs>);
+    content = <g mask={`url(#${mid})`}>{content}</g>;
+  }
   return (
     <g key={o.id} data-object-id={o.id} transform={transform} opacity={o.opacity}>
       {defs}
@@ -144,6 +165,84 @@ function renderObject(o: SceneObject, opts: RenderOptions, prefix: string, canva
       {opts.hitAreas && hitArea(o)}
     </g>
   );
+}
+
+/**
+ * A luminance <mask> painted with `gradient` over `region` (user space of the masked element).
+ * The gradient is normalized to a w×h frame at the origin, or to `frame` (document space, for
+ * groups); `margin` is how far the region reaches past the frame (for conic images).
+ */
+function maskDef(gradient: Gradient, id: string, region: Rect, w: number, h: number, margin: number, frame?: Box): ReactElement {
+  const paint = fillPaint(gradient, `${id}-g`, w, h, margin);
+  const local = frame ? toFrame(frame, region) : region;
+  const rect = <rect x={local.x} y={local.y} width={local.width} height={local.height} fill={paint.paint} />;
+  return (
+    <mask id={id} maskUnits="userSpaceOnUse" maskContentUnits="userSpaceOnUse" x={region.x} y={region.y} width={region.width} height={region.height}>
+      {paint.def}
+      {frame ? <g transform={`translate(${frame.x} ${frame.y})` + (frame.rotation ? ` rotate(${frame.rotation} ${frame.width / 2} ${frame.height / 2})` : '')}>{rect}</g> : rect}
+    </mask>
+  );
+}
+
+/** Bounds of a document-space rectangle in a frame's own (unrotated, origin at its corner) coordinates. */
+function toFrame(frame: Box, r: Rect): Rect {
+  const c = { x: frame.x + frame.width / 2, y: frame.y + frame.height / 2 };
+  const pts = [
+    { x: r.x, y: r.y },
+    { x: r.x + r.width, y: r.y },
+    { x: r.x, y: r.y + r.height },
+    { x: r.x + r.width, y: r.y + r.height },
+  ].map((p) => {
+    const a = (-frame.rotation * Math.PI) / 180;
+    const dx = p.x - c.x;
+    const dy = p.y - c.y;
+    return { x: c.x + dx * Math.cos(a) - dy * Math.sin(a) - frame.x, y: c.y + dx * Math.sin(a) + dy * Math.cos(a) - frame.y };
+  });
+  const xs = pts.map((p) => p.x);
+  const ys = pts.map((p) => p.y);
+  return { x: Math.min(...xs), y: Math.min(...ys), width: Math.max(...xs) - Math.min(...xs), height: Math.max(...ys) - Math.min(...ys) };
+}
+
+/** How far a leaf object shows past its box (stroke, letters on a path, effects). */
+function leafReach(o: Exclude<SceneObject, GroupObject>): number {
+  let m = effectsMargin(o.effects);
+  if ((o.type === 'shape' || o.type === 'path') && o.stroke) m += strokeReach(o);
+  if (o.type === 'text' && o.path) m += o.fontSize * 1.5 + Math.abs(o.path.shift);
+  for (const seg of splitAtZoomBlur(o.effects)) if (seg.zoom) m += zoomBlurReach(seg.zoom, o.box.width, o.box.height);
+  return m;
+}
+
+/** Document-space area a group's children can show in (boxes widened by what shows past them). */
+function groupReach(children: SceneObject[]): Rect | null {
+  const pts: { x: number; y: number }[] = [];
+  const visit = (list: SceneObject[]) => {
+    for (const c of list) {
+      if (c.type === 'group') {
+        visit(c.children);
+        continue;
+      }
+      const b = objectBounds(c);
+      if (!b) continue;
+      const m = leafReach(c) + 1;
+      pts.push({ x: b.x - m, y: b.y - m }, { x: b.x + b.width + m, y: b.y + b.height + m });
+    }
+  };
+  visit(children);
+  if (!pts.length) return null;
+  const x = Math.min(...pts.map((p) => p.x));
+  const y = Math.min(...pts.map((p) => p.y));
+  return { x, y, width: Math.max(...pts.map((p) => p.x)) - x, height: Math.max(...pts.map((p) => p.y)) - y };
+}
+
+/** The mask of a group (document space), if it has one switched on. */
+function groupMask(o: GroupObject, id: string): { def: ReactElement; ref: string } | null {
+  if (!o.mask?.enabled) return null;
+  const frame = maskFrame(o);
+  const region = groupReach(o.children);
+  if (!frame || !region) return null;
+  const local = toFrame(frame, region);
+  const margin = Math.max(0, -local.x, -local.y, local.x + local.width - frame.width, local.y + local.height - frame.height);
+  return { def: maskDef(o.mask.gradient, id, region, frame.width, frame.height, margin, frame), ref: `url(#${id})` };
 }
 
 /**

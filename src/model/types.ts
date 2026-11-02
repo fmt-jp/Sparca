@@ -101,6 +101,20 @@ export type Effect = EffectCommon &
 
 export type EffectKind = Effect['kind'];
 
+/**
+ * Gradient mask (decided with the user 2026-11-02, as Fireworks' grayscale masks): the
+ * object — with its effects — shows where the gradient is white, fades out where it is
+ * black, by luminance (stop opacity counts too). It moves, scales and turns with the object.
+ */
+export interface ObjectMask {
+  /** Box-normalized like a fill: to the object's box, or for a group to `frame`. */
+  gradient: Gradient;
+  /** Off: the mask is kept but not applied. */
+  enabled: boolean;
+  /** Groups only (they have no box): the frame the gradient is normalized to, in document coordinates, transformed with the group. */
+  frame?: Box;
+}
+
 interface BaseObject {
   id: Id;
   name: string;
@@ -110,6 +124,7 @@ interface BaseObject {
   box: Box;
   /** Applied first to last. */
   effects: Effect[];
+  mask?: ObjectMask;
 }
 
 export interface GradientStop {
@@ -397,6 +412,7 @@ export interface GroupObject {
   opacity: number;
   /** Children keep document coordinates; the group has no transform of its own. */
   children: SceneObject[];
+  mask?: ObjectMask;
 }
 
 export type LeafObject = ShapeObject | PathObject | TextObject | ImageObject;

@@ -1208,6 +1208,10 @@ kbd {
   display: block;
   border-radius: 2px;
 }
+.type-badge.mask-badge.off {
+  opacity: 0.45;
+  text-decoration: line-through;
+}
 .gradient-ramp {
   display: inline-flex;
   flex-direction: column;

@@ -1,3 +1,4 @@
+import type { GradientTarget } from '../model/gradient';
 import { produce, type Draft } from 'immer';
 import { emptyHistory, record, redo as historyRedo, undo as historyUndo, type HistoryState } from '../history/history';
 import { createDocument } from '../model/factory';
@@ -133,7 +134,7 @@ export interface EditorState {
   /** Where the eyedropper applies a picked color on selected shapes. */
   eyedropperTarget: 'fill' | 'stroke';
   /** Whose gradient handles the canvas shows when both fill and stroke are gradients. */
-  gradientTarget: 'fill' | 'stroke';
+  gradientTarget: GradientTarget;
   /** Last color picked with the eyedropper. */
   pickedColor: string | null;
   zoom: number;
