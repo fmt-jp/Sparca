@@ -66,8 +66,8 @@ test('in the save dialog the format can be .hnb; overwriting keeps the format of
   await redRect(page);
   await page.keyboard.press('Control+s');
   await expect.poll(() => page.evaluate(() => (window as unknown as { __writes: unknown[] }).__writes.length)).toBe(1);
-  // The dialog offered the editable PNG first, named untitled.hnb.png.
-  expect(await page.evaluate(() => (window as unknown as { __asked: unknown[] }).__asked)).toEqual([{ name: 'untitled.hnb.png', first: '編集できる PNG（HANABI）' }]);
+  // The dialog offered the editable PNG first, with the name only (it adds the extension of the chosen type).
+  expect(await page.evaluate(() => (window as unknown as { __asked: unknown[] }).__asked)).toEqual([{ name: 'untitled', first: '編集できる PNG（HANABI）' }]);
   // A .hnb name gets the ZIP project ("PK").
   expect(await page.evaluate(() => (window as unknown as { __writes: number[][] }).__writes[0].slice(0, 2))).toEqual([0x50, 0x4b]);
   expect(await state(page, 's => s.fileName')).toBe('作品.hnb');
@@ -79,7 +79,7 @@ test('in the save dialog the format can be .hnb; overwriting keeps the format of
   expect(await page.evaluate(() => (window as unknown as { __writes: number[][] }).__writes[1].slice(0, 2))).toEqual([0x50, 0x4b]);
 });
 
-test('save as from a .hnb offers the editable PNG with the .hnb.png extension (switching types renames to .hnb.png)', async ({ page }) => {
+test('save as from a .hnb gives the dialog the bare name and both types, .hnb first (each type adds its own extension)', async ({ page }) => {
   await page.addInitScript(() => {
     const w = window as unknown as Record<string, unknown>;
     w.__asked = [];
@@ -98,7 +98,7 @@ test('save as from a .hnb offers the editable PNG with the .hnb.png extension (s
   await page.keyboard.press('Control+Shift+S');
   await expect.poll(() => page.evaluate(() => (window as unknown as { __asked: unknown[] }).__asked.length)).toBe(1);
   expect(await page.evaluate(() => (window as unknown as { __asked: unknown[] }).__asked[0])).toEqual({
-    name: '作品.hnb',
+    name: '作品',
     types: [
       ['HANABI プロジェクト', ['.hnb']],
       ['編集できる PNG（HANABI）', ['.hnb.png', '.png']],
@@ -110,4 +110,25 @@ test('save as from a .hnb offers the editable PNG with the .hnb.png extension (s
   await expect.poll(() => page.evaluate(() => (window as unknown as { __asked: unknown[] }).__asked.length)).toBe(2);
   expect(await page.evaluate(() => (window as unknown as { __asked: { types: unknown[][] }[] }).__asked[1].types[1])).toEqual(['編集できる PNG（HANABI）', ['.png']]);
   await expect(page.locator('.notice.error')).toHaveCount(0);
+});
+
+test('a name that comes back without an extension keeps the suggested format', async ({ page }) => {
+  await page.addInitScript(() => {
+    const w = window as unknown as Record<string, unknown>;
+    w.__writes = [];
+    w.showSaveFilePicker = async () => ({
+      name: '作品',
+      getFile: async () => new File([], 'x'),
+      createWritable: async () => ({
+        write: async (b: Blob) => void (w.__writes as unknown[]).push(Array.from(new Uint8Array(await b.slice(0, 4).arrayBuffer()))),
+        close: async () => undefined,
+      }),
+    });
+  });
+  await page.goto('/');
+  await expect(props(page)).toBeVisible();
+  await page.keyboard.press('Control+s');
+  await expect.poll(() => page.evaluate(() => (window as unknown as { __writes: unknown[] }).__writes.length)).toBe(1);
+  // An editable PNG (the default for an untitled document): the PNG signature.
+  expect(await page.evaluate(() => (window as unknown as { __writes: number[][] }).__writes[0])).toEqual([0x89, 0x50, 0x4e, 0x47]);
 });
