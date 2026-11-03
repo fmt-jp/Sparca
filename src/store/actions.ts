@@ -110,8 +110,14 @@ export function projectName(fileName: string): string {
   return lower.endsWith(PROJECT_EXTENSION) || lower.endsWith('.png') ? base : `${base}${EDITABLE_PNG_EXTENSION}`;
 }
 
-// The save dialog gives a name the first extension of the chosen type when the type is
-// switched there (作品.hnb → 作品.hnb.png), so .hnb.png comes first.
+// The save dialog is given the name without its extension and adds the first extension of the
+// chosen type (作品 → 作品.hnb.png or 作品.hnb). With an extension in the name, switching the
+// type there replaces only its last part (作品.hnb.png → 作品.hnb.hnb).
+/** 作品.hnb.png / 作品.hnb / 作品.png → 作品. */
+export function withoutProjectExtension(name: string): string {
+  return name.replace(/(\.hnb)?\.png$/i, '').replace(/\.hnb$/i, '');
+}
+
 const PNG_TYPE = { description: '編集できる PNG（HANABI）', accept: { 'image/png': [EDITABLE_PNG_EXTENSION, '.png'] } };
 /** For browsers that refuse an extension with two dots. */
 const PNG_TYPE_PLAIN = { description: '編集できる PNG（HANABI）', accept: { 'image/png': ['.png'] } };
@@ -129,19 +135,22 @@ export async function saveProject(ed: EditorStore, saveAs = false): Promise<bool
     let target = saveAs ? null : fileHandle;
     if (!target) {
       const order = (png: typeof PNG_TYPE) => (isEditablePngName(suggested) ? [png, HNB_TYPE] : [HNB_TYPE, png]);
+      const bare = withoutProjectExtension(suggested);
       let picked;
       try {
-        picked = await pickSaveFile(suggested, order(PNG_TYPE));
+        picked = await pickSaveFile(bare, order(PNG_TYPE));
       } catch (e) {
         // An invalid accept list is refused before the dialog opens (TypeError).
         if (!(e instanceof TypeError)) throw e;
-        picked = await pickSaveFile(suggested, order(PNG_TYPE_PLAIN));
+        picked = await pickSaveFile(bare, order(PNG_TYPE_PLAIN));
       }
       if (picked === undefined) return false;
       target = picked;
     }
     const name = target?.name ?? suggested;
-    const asPng = isEditablePngName(name);
+    // A name without a known extension (a dialog that added none) keeps the suggested format.
+    const known = isEditablePngName(name) || name.toLowerCase().endsWith(PROJECT_EXTENSION);
+    const asPng = known ? isEditablePngName(name) : isEditablePngName(suggested);
     ed.set({ busy: '保存中…' });
     const data = await writeProject(doc, (id) => assets.get(id)?.blob);
     let blob = new Blob([data as BlobPart], { type: PROJECT_MIME });

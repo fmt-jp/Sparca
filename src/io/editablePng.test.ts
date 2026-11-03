@@ -55,3 +55,15 @@ describe('編集できる PNG', () => {
     await expect(readProject(fakePng())).rejects.toThrow(/画像として開いてください/);
   });
 });
+
+describe('save names', () => {
+  it('the save dialog gets the name without its extension', async () => {
+    const { withoutProjectExtension, projectName } = await import('../store/actions');
+    expect(withoutProjectExtension('作品.hnb.png')).toBe('作品');
+    expect(withoutProjectExtension('作品.hnb')).toBe('作品');
+    expect(withoutProjectExtension('作品.png')).toBe('作品');
+    expect(withoutProjectExtension('作品.hnb.hnb')).toBe('作品.hnb');
+    expect(projectName('photo')).toBe('photo.hnb.png');
+    expect(projectName('作品.hnb')).toBe('作品.hnb');
+  });
+});
