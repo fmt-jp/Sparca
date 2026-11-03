@@ -16,7 +16,9 @@ import { IDENTITY_TRANSFORM, unionBounds } from '../model/geometry';
 import { findObject, isEffectivelyLocked, walkObjects } from '../model/tree';
 import type { Background, SceneObject, SparcaDocument } from '../model/types';
 import { IMAGE_ACCEPT, stripImageExtension } from '../io/imageFormats';
-import { isAbort, pickFiles, saveBlob } from '../io/files';
+import { isAbort, pickFiles, pickSaveFile, saveBlob } from '../io/files';
+import { EDITABLE_PNG_EXTENSION, EditablePngError, embedProject, extractProject, isEditablePngName, isPng } from '../io/editablePng';
+import { exportImage, ExportError } from '../io/export';
 import { PROJECT_EXTENSION, PROJECT_MIME, ProjectError, readProject, writeProject } from '../io/project';
 import { assets, ImageLoadError, importImageFile, validateDimensions } from './assets';
 import { UNTITLED, type EditorStore } from './editor';
@@ -97,32 +99,56 @@ export function writableLayer(ed: EditorStore, preferredId: string): string | nu
 // ---- Project save / open ----
 
 
-/** File name suggested when saving. Untitled documents get an ASCII name, which every browser keeps. */
-function projectName(fileName: string): string {
+/**
+ * File name suggested when saving: kept when it already is a project (.hnb) or an editable
+ * PNG (.png); anything else (untitled, an opened photo) becomes an editable PNG, the default
+ * (decided with the user 2026-11-03). Untitled documents get an ASCII name, which every browser keeps.
+ */
+export function projectName(fileName: string): string {
   const base = fileName === UNTITLED ? 'untitled' : fileName;
-  return base.endsWith(PROJECT_EXTENSION) ? base : `${base}${PROJECT_EXTENSION}`;
+  const lower = base.toLowerCase();
+  return lower.endsWith(PROJECT_EXTENSION) || lower.endsWith('.png') ? base : `${base}${EDITABLE_PNG_EXTENSION}`;
 }
 
+const PNG_TYPE = { description: '編集できる PNG（HANABI）', accept: { 'image/png': ['.png'] } };
+const HNB_TYPE = { description: 'HANABI プロジェクト', accept: { [PROJECT_MIME]: [PROJECT_EXTENSION] } };
+
+/**
+ * Save (Ctrl+S) or save as (Ctrl+Shift+S) as an editable PNG (the canvas as a picture, with the
+ * project inside) or a .hnb project, by the file's name: a saved file keeps its format.
+ */
 export async function saveProject(ed: EditorStore, saveAs = false): Promise<boolean> {
   const { doc, fileName, fileHandle } = ed.getState();
   try {
+    const suggested = projectName(fileName);
+    // Ask where to save first (the chosen name decides the format); a known file is overwritten.
+    let target = saveAs ? null : fileHandle;
+    if (!target) {
+      const picked = await pickSaveFile(suggested, isEditablePngName(suggested) ? [PNG_TYPE, HNB_TYPE] : [HNB_TYPE, PNG_TYPE]);
+      if (picked === undefined) return false;
+      target = picked;
+    }
+    const name = target?.name ?? suggested;
+    const asPng = isEditablePngName(name);
     ed.set({ busy: '保存中…' });
     const data = await writeProject(doc, (id) => assets.get(id)?.blob);
-    const blob = new Blob([data as BlobPart], { type: PROJECT_MIME });
-    const handle = await saveBlob(
-      blob,
-      projectName(fileName),
-      { description: 'HANABI プロジェクト', accept: { [PROJECT_MIME]: [PROJECT_EXTENSION] } },
-      saveAs ? null : fileHandle,
-    );
+    let blob = new Blob([data as BlobPart], { type: PROJECT_MIME });
+    if (asPng) {
+      const picture = new Uint8Array(await (await exportImage(doc, { format: 'png', quality: 100, jpegBackground: '#ffffff' })).arrayBuffer());
+      blob = new Blob([embedProject(picture, data) as BlobPart], { type: 'image/png' });
+    }
+    const handle = await saveBlob(blob, name, asPng ? PNG_TYPE : HNB_TYPE, target);
     if (handle === undefined) return false;
     // The user may have switched tabs while saving: only mark the saved document.
-    if (ed.getState().doc === doc) ed.markSaved(handle ? handle.name : projectName(fileName), handle);
+    if (ed.getState().doc === doc) ed.markSaved(handle ? handle.name : name, handle);
     else ed.notify('info', `「${fileName}」を保存しました。保存後の変更は未保存です。`);
     ed.notify('info', '保存しました。');
     return true;
   } catch (e) {
-    ed.notify('error', e instanceof ProjectError ? e.message : `保存に失敗しました: ${describeError(e)}`);
+    ed.notify(
+      'error',
+      e instanceof ProjectError || e instanceof EditablePngError ? e.message : e instanceof ExportError ? `保存に失敗しました: ${e.message}` : `保存に失敗しました: ${describeError(e)}`,
+    );
     return false;
   } finally {
     ed.set({ busy: null });
@@ -164,10 +190,20 @@ export async function openImageFile(ed: EditorStore, file: File): Promise<void> 
   }
 }
 
-/** Projects are ZIP files: decide by content ("PK" signature), falling back to the extension. */
+/**
+ * Projects are ZIP files or editable PNGs: decide by content ("PK" signature, or a PNG that
+ * carries the project chunk), falling back to the .hnb extension.
+ */
 async function isProjectFile(file: File): Promise<boolean> {
-  const head = new Uint8Array(await file.slice(0, 2).arrayBuffer());
+  const head = new Uint8Array(await file.slice(0, 8).arrayBuffer());
   if (head[0] === 0x50 && head[1] === 0x4b) return true;
+  if (isPng(head)) {
+    try {
+      return extractProject(new Uint8Array(await file.arrayBuffer())) !== null;
+    } catch {
+      return true; // a damaged project chunk: report it as a project error
+    }
+  }
   return file.name.toLowerCase().endsWith(PROJECT_EXTENSION);
 }
 

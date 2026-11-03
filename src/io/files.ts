@@ -31,10 +31,10 @@ export function isAbort(e: unknown): boolean {
  * outlast the click that allows the dialog. Null without the File System Access API (the
  * file is then downloaded); undefined when the user cancelled.
  */
-export async function pickSaveFile(suggestedName: string, type: FilePickerType): Promise<FileSystemFileHandleLike | null | undefined> {
+export async function pickSaveFile(suggestedName: string, type: FilePickerType | FilePickerType[]): Promise<FileSystemFileHandleLike | null | undefined> {
   if (!hasFileSystemAccess()) return null;
   try {
-    return await fsWindow().showSaveFilePicker!({ suggestedName, types: [type] });
+    return await fsWindow().showSaveFilePicker!({ suggestedName, types: Array.isArray(type) ? type : [type] });
   } catch (e) {
     if (isAbort(e)) return undefined;
     throw e;

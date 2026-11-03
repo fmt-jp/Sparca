@@ -5,6 +5,7 @@ import { MAX_DIMENSION, MAX_PIXELS, type AssetId, type SparcaDocument } from '..
 import { IMAGE_FORMATS, sniffImageFormat } from './imageFormats';
 import { validateDocument } from './validate';
 
+import { extractProject, isPng } from './editablePng';
 export const PROJECT_EXTENSION = '.hnb';
 export const PROJECT_MIME = 'application/x-hanabi';
 
@@ -131,6 +132,18 @@ const ALLOWED_MIME = new Set(IMAGE_FORMATS.map((f) => f.mime));
 /** Parse and validate a project file. Throws ProjectError with a user-facing reason. */
 export async function readProject(data: ArrayBuffer | Uint8Array, limits: ReadLimits = READ_LIMITS): Promise<LoadedProject> {
   if (data.byteLength > limits.fileBytes) throw tooLarge('ファイル', limits.fileBytes);
+  // An editable PNG (.hnb.png) carries the project in a chunk.
+  const bytes = data instanceof Uint8Array ? data : new Uint8Array(data);
+  if (isPng(bytes)) {
+    let inner: Uint8Array | null;
+    try {
+      inner = extractProject(bytes);
+    } catch (e) {
+      throw new ProjectError(e instanceof Error ? e.message : String(e));
+    }
+    if (!inner) throw new ProjectError('この PNG には HANABI の編集データが入っていません（ほかのソフトで保存し直された可能性があります）。画像として開いてください。');
+    data = inner;
+  }
   let zip: JSZip;
   try {
     zip = await JSZip.loadAsync(data);

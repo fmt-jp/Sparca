@@ -9,7 +9,7 @@ import { editor, useEditor } from './useEditor';
 const FORMATS = Object.keys(FORMAT_INFO) as ExportFormat[];
 
 function baseName(fileName: string): string {
-  const n = fileName.replace(/\.hnb$/i, '');
+  const n = fileName.replace(/\.hnb(\.png)?$/i, '').replace(/\.png$/i, '');
   return n === '名称未設定' ? 'untitled' : n;
 }
 
@@ -64,12 +64,12 @@ export function ExportDialog({ onClose }: { onClose: () => void }) {
       {format === 'svg' ? (
         <div className="notice-inline" role="note">
           SVG は図形・パス・テキストをベクターのまま書き出します（Web ページなどにそのまま使えます）。HANABI で読み込み直して編集することはできないため、
-          後から編集するには「ファイル → 保存」で .hnb プロジェクトとして保存してください。
+          後から編集するには「ファイル → 保存」で保存してください（編集できる PNG または .hnb）。
         </div>
       ) : (
         <div className="notice-inline" role="note">
           書き出した画像は1枚に合成され、レイヤー構造や編集情報（テキスト・図形・調整値）は含まれません。
-          後から編集するには「ファイル → 保存」で .hnb プロジェクトとして保存してください。
+          後から編集するには「ファイル → 保存」で保存してください（編集できる PNG または .hnb）。
         </div>
       )}
       <div className="radio-row" role="radiogroup" aria-label="形式">
