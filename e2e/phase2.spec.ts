@@ -106,9 +106,12 @@ test('image size rejects invalid and huge sizes', async ({ page }) => {
 });
 
 test('canvas size with 9-point anchor moves content without scaling it', async ({ page }) => {
+  // At 50 % the whole canvas (and its top-left corner) is in view.
+  await page.evaluate(() => (window as unknown as { __sparca: { set(p: object): void } }).__sparca.set({ zoom: 0.5 }));
+  await expect.poll(async () => (await canvasBox(page)).width).toBe(400);
   const c = await canvasBox(page);
   await page.keyboard.press('r');
-  await drag(page, { x: c.x + 0, y: c.y + 0 }, { x: c.x + 100, y: c.y + 50 });
+  await drag(page, { x: c.x + 0, y: c.y + 0 }, { x: c.x + 50, y: c.y + 25 });
   await page.getByRole('button', { name: '変更' }).click();
   await page.getByRole('menuitem', { name: /キャンバスサイズ/ }).click();
   const dialog = page.getByRole('dialog', { name: 'キャンバスサイズ' });

@@ -256,7 +256,38 @@ kbd {
   min-height: 0;
   min-width: 0;
 }
+.workspace-frame {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  display: grid;
+  grid-template: 'ws' minmax(0, 1fr) / minmax(0, 1fr);
+}
+.workspace-frame.with-rulers {
+  grid-template:
+    'corner xruler' 20px
+    'yruler ws' minmax(0, 1fr)
+    / 20px minmax(0, 1fr);
+}
+.ruler-corner {
+  grid-area: corner;
+  background: var(--panel);
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+.ruler {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.ruler-x {
+  grid-area: xruler;
+}
+.ruler-y {
+  grid-area: yruler;
+}
 .workspace {
+  grid-area: ws;
   flex: 1;
   overflow: auto;
   background: var(--workspace);

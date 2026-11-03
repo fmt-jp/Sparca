@@ -36,6 +36,7 @@ import { anchorMenu, canvasMenu, objectMenu, segmentNextTo } from './canvasMenu'
 import { ContextMenu } from './ContextMenu';
 import { isTextEntry } from './keyboard';
 import type { MenuItem } from './MenuBar';
+import { Rulers } from './Rulers';
 import { TabBar } from './TabBar';
 import { editor, useEditor } from './useEditor';
 
@@ -1163,10 +1164,15 @@ export function CanvasView() {
             : 'crosshair';
 
   const editingObj = editingText ? findObject(doc, editingText.id)?.object : null;
+  const showRulers = useEditor((s) => s.rulers);
 
   return (
     <div className="center">
     <TabBar />
+    <div className={`workspace-frame${showRulers ? ' with-rulers' : ''}`}>
+    {showRulers && (
+      <Rulers workspaceRef={scrollRef} stageRef={stageRef} pad={PAD} zoom={zoom} docWidth={doc.width} docHeight={doc.height} cursor={cursorPos} />
+    )}
     <div
       className="workspace"
       ref={scrollRef}
@@ -1258,6 +1264,7 @@ export function CanvasView() {
           />
         )}
       </div>
+    </div>
     </div>
     <StatusBar cursor={cursorPos} />
     {menu && <ContextMenu x={menu.x} y={menu.y} items={menu.items} label={menu.label} onClose={closeMenu} />}
