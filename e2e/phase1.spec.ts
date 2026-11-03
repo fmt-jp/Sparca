@@ -160,7 +160,7 @@ test('saves a project and reopens it for further editing', async ({ page }) => {
   const dl = page.waitForEvent('download');
   await page.keyboard.press('Control+s');
   const download = await dl;
-  expect(download.suggestedFilename()).toMatch(/\.hnb$/);
+  expect(download.suggestedFilename()).toMatch(/\.hnb\.png$/);
   const path = await download.path();
   await expect(page.locator('.dirty-mark')).toHaveCount(0);
 
@@ -169,7 +169,7 @@ test('saves a project and reopens it for further editing', async ({ page }) => {
   const opener = page.waitForEvent('filechooser');
   await page.getByRole('button', { name: 'ファイル' }).click();
   await page.getByRole('menuitem', { name: /開く/ }).click();
-  await (await opener).setFiles({ name: 'project.hnb', mimeType: 'application/octet-stream', buffer: readFileSync(path!) });
+  await (await opener).setFiles({ name: 'project.hnb.png', mimeType: 'image/png', buffer: readFileSync(path!) });
   await expect(page.locator('[data-testid=canvas] image')).toHaveCount(1);
   expect(await state<unknown>(page, 's => s.doc')).toEqual(before);
   // Continue editing after reopening.
