@@ -110,7 +110,11 @@ export function projectName(fileName: string): string {
   return lower.endsWith(PROJECT_EXTENSION) || lower.endsWith('.png') ? base : `${base}${EDITABLE_PNG_EXTENSION}`;
 }
 
-const PNG_TYPE = { description: '編集できる PNG（HANABI）', accept: { 'image/png': ['.png'] } };
+// The save dialog gives a name the first extension of the chosen type when the type is
+// switched there (作品.hnb → 作品.hnb.png), so .hnb.png comes first.
+const PNG_TYPE = { description: '編集できる PNG（HANABI）', accept: { 'image/png': [EDITABLE_PNG_EXTENSION, '.png'] } };
+/** For browsers that refuse an extension with two dots. */
+const PNG_TYPE_PLAIN = { description: '編集できる PNG（HANABI）', accept: { 'image/png': ['.png'] } };
 const HNB_TYPE = { description: 'HANABI プロジェクト', accept: { [PROJECT_MIME]: [PROJECT_EXTENSION] } };
 
 /**
@@ -124,7 +128,15 @@ export async function saveProject(ed: EditorStore, saveAs = false): Promise<bool
     // Ask where to save first (the chosen name decides the format); a known file is overwritten.
     let target = saveAs ? null : fileHandle;
     if (!target) {
-      const picked = await pickSaveFile(suggested, isEditablePngName(suggested) ? [PNG_TYPE, HNB_TYPE] : [HNB_TYPE, PNG_TYPE]);
+      const order = (png: typeof PNG_TYPE) => (isEditablePngName(suggested) ? [png, HNB_TYPE] : [HNB_TYPE, png]);
+      let picked;
+      try {
+        picked = await pickSaveFile(suggested, order(PNG_TYPE));
+      } catch (e) {
+        // An invalid accept list is refused before the dialog opens (TypeError).
+        if (!(e instanceof TypeError)) throw e;
+        picked = await pickSaveFile(suggested, order(PNG_TYPE_PLAIN));
+      }
       if (picked === undefined) return false;
       target = picked;
     }
