@@ -94,6 +94,8 @@ export function MenuBar({ onNew }: { onNew: () => void }) {
         { separator: true, label: '' },
         { label: '保存', shortcut: `${mod}S`, action: () => void saveProject(editor) },
         { label: '名前を付けて保存…', shortcut: `${mod}Shift+S`, action: () => void saveProject(editor, true) },
+        { label: '編集できる PNG として保存…（.hnb.png）', action: () => void saveProject(editor, true, 'png') },
+        { label: 'HANABI プロジェクトとして保存…（.hnb）', action: () => void saveProject(editor, true, 'hnb') },
         { separator: true, label: '' },
         { label: '画像を配置…', shortcut: `${mod}Shift+I`, action: () => void chooseAndPlaceImage(editor) },
         { separator: true, label: '' },

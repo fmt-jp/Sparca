@@ -110,9 +110,10 @@ export function projectName(fileName: string): string {
   return lower.endsWith(PROJECT_EXTENSION) || lower.endsWith('.png') ? base : `${base}${EDITABLE_PNG_EXTENSION}`;
 }
 
-// The save dialog is given the name without its extension and adds the first extension of the
-// chosen type (作品 → 作品.hnb.png or 作品.hnb). With an extension in the name, switching the
-// type there replaces only its last part (作品.hnb.png → 作品.hnb.hnb).
+// The save dialog offers one type only, chosen in HANABI (保存 / 名前を付けて保存 keep the file's
+// format; 「編集できる PNG として保存」「HANABI プロジェクト（.hnb）として保存」 pick one): when it
+// offers both, switching the type there replaces only the last part of the extension
+// (作品.hnb.png → 作品.hnb.hnb), which cannot give the right name both ways (user report 2026-11-03).
 /** 作品.hnb.png / 作品.hnb / 作品.png → 作品. */
 export function withoutProjectExtension(name: string): string {
   return name.replace(/(\.hnb)?\.png$/i, '').replace(/\.hnb$/i, '');
@@ -123,34 +124,38 @@ const PNG_TYPE = { description: '編集できる PNG（HANABI）', accept: { 'im
 const PNG_TYPE_PLAIN = { description: '編集できる PNG（HANABI）', accept: { 'image/png': ['.png'] } };
 const HNB_TYPE = { description: 'HANABI プロジェクト', accept: { [PROJECT_MIME]: [PROJECT_EXTENSION] } };
 
+export type SaveFormat = 'png' | 'hnb';
+
 /**
- * Save (Ctrl+S) or save as (Ctrl+Shift+S) as an editable PNG (the canvas as a picture, with the
- * project inside) or a .hnb project, by the file's name: a saved file keeps its format.
+ * Save as an editable PNG (the canvas as a picture, with the project inside) or a .hnb project.
+ * - 保存 (Ctrl+S): overwrites the file (its format); the first save of a new document asks where.
+ * - 名前を付けて保存 (Ctrl+Shift+S): asks for a new name, same format as the file (new: PNG).
+ * - with `format`: asks for a name and saves in that format.
  */
-export async function saveProject(ed: EditorStore, saveAs = false): Promise<boolean> {
+export async function saveProject(ed: EditorStore, saveAs = false, format?: SaveFormat): Promise<boolean> {
   const { doc, fileName, fileHandle } = ed.getState();
   try {
-    const suggested = projectName(fileName);
-    // Ask where to save first (the chosen name decides the format); a known file is overwritten.
-    let target = saveAs ? null : fileHandle;
+    const current: SaveFormat = isEditablePngName(projectName(fileName)) ? 'png' : 'hnb';
+    const fmt = format ?? current;
+    const suggested = withoutProjectExtension(projectName(fileName)) + (fmt === 'png' ? EDITABLE_PNG_EXTENSION : PROJECT_EXTENSION);
+    // Ask where to save first; a known file in the same format is overwritten.
+    let target = saveAs || fmt !== current ? null : fileHandle;
     if (!target) {
-      const order = (png: typeof PNG_TYPE) => (isEditablePngName(suggested) ? [png, HNB_TYPE] : [HNB_TYPE, png]);
-      const bare = withoutProjectExtension(suggested);
       let picked;
       try {
-        picked = await pickSaveFile(bare, order(PNG_TYPE));
+        picked = await pickSaveFile(suggested, fmt === 'png' ? PNG_TYPE : HNB_TYPE);
       } catch (e) {
         // An invalid accept list is refused before the dialog opens (TypeError).
-        if (!(e instanceof TypeError)) throw e;
-        picked = await pickSaveFile(bare, order(PNG_TYPE_PLAIN));
+        if (!(e instanceof TypeError) || fmt !== 'png') throw e;
+        picked = await pickSaveFile(suggested, PNG_TYPE_PLAIN);
       }
       if (picked === undefined) return false;
       target = picked;
     }
     const name = target?.name ?? suggested;
-    // A name without a known extension (a dialog that added none) keeps the suggested format.
+    // The name decides when it says (a typed 作品.hnb in the PNG dialog); otherwise the chosen format.
     const known = isEditablePngName(name) || name.toLowerCase().endsWith(PROJECT_EXTENSION);
-    const asPng = known ? isEditablePngName(name) : isEditablePngName(suggested);
+    const asPng = known ? isEditablePngName(name) : fmt === 'png';
     ed.set({ busy: '保存中…' });
     const data = await writeProject(doc, (id) => assets.get(id)?.blob);
     let blob = new Blob([data as BlobPart], { type: PROJECT_MIME });
