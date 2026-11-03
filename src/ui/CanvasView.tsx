@@ -1165,13 +1165,23 @@ export function CanvasView() {
 
   const editingObj = editingText ? findObject(doc, editingText.id)?.object : null;
   const showRulers = useEditor((s) => s.rulers);
+  const rulerOrigin = useEditor((s) => s.rulerOrigin);
 
   return (
     <div className="center">
     <TabBar />
     <div className={`workspace-frame${showRulers ? ' with-rulers' : ''}`}>
     {showRulers && (
-      <Rulers workspaceRef={scrollRef} stageRef={stageRef} pad={PAD} zoom={zoom} docWidth={doc.width} docHeight={doc.height} cursor={cursorPos} />
+      <Rulers
+        workspaceRef={scrollRef}
+        stageRef={stageRef}
+        pad={PAD}
+        zoom={zoom}
+        docWidth={doc.width}
+        docHeight={doc.height}
+        centered={rulerOrigin === 'center'}
+        cursor={cursorPos}
+      />
     )}
     <div
       className="workspace"

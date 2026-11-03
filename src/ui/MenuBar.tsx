@@ -76,6 +76,7 @@ export function MenuBar({ onNew }: { onNew: () => void }) {
   const pixelSel = useEditor((s) => s.pixelSelection);
   const grid = useEditor((s) => s.grid);
   const rulers = useEditor((s) => s.rulers);
+  const rulerOrigin = useEditor((s) => s.rulerOrigin);
   const alignToCanvas = useEditor((s) => s.alignToCanvas);
   const [panels] = usePanelSizes();
   const image = selectedImage(editor);
@@ -184,6 +185,8 @@ export function MenuBar({ onNew }: { onNew: () => void }) {
         { label: '画面に合わせる', shortcut: `${mod}0`, action: zoomToFit },
         { separator: true, label: '' },
         { label: 'ルーラーを表示', checked: rulers, action: () => editor.set({ rulers: !rulers }) },
+        { label: 'ルーラー：キャンバスの左上を 0', checked: rulerOrigin === 'corner', action: () => editor.set({ rulerOrigin: 'corner', rulers: true }) },
+        { label: 'ルーラー：キャンバスの中心を 0', checked: rulerOrigin === 'center', action: () => editor.set({ rulerOrigin: 'center', rulers: true }) },
         { label: 'グリッドを表示', checked: grid.visible, action: () => editor.setGrid({ visible: !grid.visible }) },
         { label: 'グリッドにスナップ', checked: grid.snap, action: () => editor.setGrid({ snap: !grid.snap }) },
         { label: 'グリッド設定…', action: () => openDialog({ kind: 'grid' }) },

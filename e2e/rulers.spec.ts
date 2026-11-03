@@ -52,3 +52,23 @@ test('rulers show by default, line up with the canvas, and toggle from the 表�
   await toggleFromMenu(page);
   await expect(page.getByTestId('ruler-y')).toBeVisible();
 });
+
+test('the rulers can count from the canvas center (remembered)', async ({ page }) => {
+  await page.getByRole('button', { name: '表示', exact: true }).click();
+  await page.getByRole('menuitemcheckbox', { name: 'ルーラー：キャンバスの中心を 0' }).click();
+  expect(await state(page, 's => s.rulerOrigin')).toBe('center');
+  await page.evaluate(() => (window as unknown as { __sparca: { set(p: object): void } }).__sparca.set({ zoom: 0.5 }));
+  await page.waitForTimeout(100);
+  const c = await canvasBox(page);
+  // 0 is at the middle of the 800 px canvas (400 → 200 screen px at 50 %); labeled ticks every 100.
+  expect(await tickAt(page, c.x + c.width / 2)).toBe(true);
+  expect(await tickAt(page, c.x + c.width / 2 - 50)).toBe(true); // -100
+  expect(await tickAt(page, c.x + c.width / 2 + 25)).toBe(false); // 50: not labeled at 50 %
+  await page.reload();
+  await expect(page.getByRole('region', { name: 'プロパティ' })).toBeVisible();
+  expect(await state(page, 's => s.rulerOrigin')).toBe('center');
+  await page.getByRole('button', { name: '表示', exact: true }).click();
+  await expect(page.getByRole('menuitemcheckbox', { name: 'ルーラー：キャンバスの中心を 0' })).toHaveAttribute('aria-checked', 'true');
+  await page.getByRole('menuitemcheckbox', { name: 'ルーラー：キャンバスの左上を 0' }).click();
+  expect(await state(page, 's => s.rulerOrigin')).toBe('corner');
+});

@@ -144,6 +144,8 @@ export interface EditorState {
   grid: GridSettings;
   /** Rulers along the top and left of the workspace (a per-browser view preference). */
   rulers: boolean;
+  /** Where the rulers count from: the canvas's top-left corner or its center. */
+  rulerOrigin: 'corner' | 'center';
   /** Align multiple objects to the canvas instead of to each other. */
   alignToCanvas: boolean;
   /** Edge setting of the marquee / lasso tools. */
@@ -178,6 +180,7 @@ export class EditorStore {
       gradientTarget: 'fill',
       grid: DEFAULT_GRID,
       rulers: true,
+      rulerOrigin: 'corner',
       selectionEdge: DEFAULT_SELECTION_EDGE,
       toolDefaults: DEFAULT_TOOL_DEFAULTS,
       alignToCanvas: false,

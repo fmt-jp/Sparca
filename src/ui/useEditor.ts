@@ -28,19 +28,25 @@ editor.subscribe(() => {
 
 // Rulers on/off is a per-browser view preference as well.
 const RULERS_KEY = 'sparca.rulers';
+const RULER_ORIGIN_KEY = 'sparca.rulerOrigin';
 try {
   const saved = JSON.parse(localStorage.getItem(RULERS_KEY) ?? 'null') as unknown;
   if (typeof saved === 'boolean') editor.set({ rulers: saved });
+  const origin = localStorage.getItem(RULER_ORIGIN_KEY);
+  if (origin === 'corner' || origin === 'center') editor.set({ rulerOrigin: origin });
 } catch {
-  // Storage unavailable or corrupt: shown by default.
+  // Storage unavailable or corrupt: shown, counting from the corner, by default.
 }
 let lastRulers = editor.getState().rulers;
+let lastOrigin = editor.getState().rulerOrigin;
 editor.subscribe(() => {
-  const r = editor.getState().rulers;
-  if (r === lastRulers) return;
-  lastRulers = r;
+  const { rulers, rulerOrigin } = editor.getState();
+  if (rulers === lastRulers && rulerOrigin === lastOrigin) return;
+  lastRulers = rulers;
+  lastOrigin = rulerOrigin;
   try {
-    localStorage.setItem(RULERS_KEY, JSON.stringify(r));
+    localStorage.setItem(RULERS_KEY, JSON.stringify(rulers));
+    localStorage.setItem(RULER_ORIGIN_KEY, rulerOrigin);
   } catch {
     // Not remembered; harmless.
   }
