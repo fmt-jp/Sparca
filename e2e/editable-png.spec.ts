@@ -43,45 +43,11 @@ test('Ctrl+S saves an editable PNG: the picture of the canvas, and it reopens fo
   expect(await state(page, 's => s.fileName')).toBe('作品.hnb.png');
 });
 
-test('in the save dialog the format can be .hnb; overwriting keeps the format of the file', async ({ page }) => {
-  // A stand-in for the browser's save dialog: the user picks a name ending in .hnb.
-  await page.addInitScript(() => {
+/** A stand-in for the browser's save dialog: records what was asked, returns `name`, keeps what is written. */
+async function fakeSaveDialog(page: Page, name: string) {
+  await page.addInitScript((n) => {
     const w = window as unknown as Record<string, unknown>;
     w.__writes = [];
-    w.__asked = [];
-    w.showSaveFilePicker = async (o: { suggestedName: string; types: { description: string }[] }) => {
-      (w.__asked as unknown[]).push({ name: o.suggestedName, first: o.types[0].description });
-      return {
-        name: '作品.hnb',
-        getFile: async () => new File([], 'x'),
-        createWritable: async () => ({
-          write: async (b: Blob) => void (w.__writes as unknown[]).push(Array.from(new Uint8Array(await b.slice(0, 4).arrayBuffer()))),
-          close: async () => undefined,
-        }),
-      };
-    };
-  });
-  await page.goto('/');
-  await expect(props(page)).toBeVisible();
-  await redRect(page);
-  await page.keyboard.press('Control+s');
-  await expect.poll(() => page.evaluate(() => (window as unknown as { __writes: unknown[] }).__writes.length)).toBe(1);
-  // The dialog offered the editable PNG first, with the name only (it adds the extension of the chosen type).
-  expect(await page.evaluate(() => (window as unknown as { __asked: unknown[] }).__asked)).toEqual([{ name: 'untitled', first: '編集できる PNG（HANABI）' }]);
-  // A .hnb name gets the ZIP project ("PK").
-  expect(await page.evaluate(() => (window as unknown as { __writes: number[][] }).__writes[0].slice(0, 2))).toEqual([0x50, 0x4b]);
-  expect(await state(page, 's => s.fileName')).toBe('作品.hnb');
-  // Ctrl+S again overwrites the same file without asking, still as .hnb.
-  await page.keyboard.press('Delete');
-  await page.keyboard.press('Control+s');
-  await expect.poll(() => page.evaluate(() => (window as unknown as { __writes: unknown[] }).__writes.length)).toBe(2);
-  expect(await page.evaluate(() => (window as unknown as { __asked: unknown[] }).__asked.length)).toBe(1);
-  expect(await page.evaluate(() => (window as unknown as { __writes: number[][] }).__writes[1].slice(0, 2))).toEqual([0x50, 0x4b]);
-});
-
-test('save as from a .hnb gives the dialog the bare name and both types, .hnb first (each type adds its own extension)', async ({ page }) => {
-  await page.addInitScript(() => {
-    const w = window as unknown as Record<string, unknown>;
     w.__asked = [];
     w.showSaveFilePicker = async (o: { suggestedName: string; types: { description: string; accept: Record<string, string[]> }[] }) => {
       // Like Chrome when an accept list is not allowed: refuse before showing the dialog.
@@ -89,26 +55,72 @@ test('save as from a .hnb gives the dialog the bare name and both types, .hnb fi
         throw new TypeError('Extension is not valid');
       }
       (w.__asked as unknown[]).push({ name: o.suggestedName, types: o.types.map((t) => [t.description, Object.values(t.accept).flat()]) });
-      throw new DOMException('cancelled', 'AbortError');
+      return {
+        name: (w.__returnName as string) ?? n,
+        getFile: async () => new File([], 'x'),
+        createWritable: async () => ({
+          write: async (b: Blob) => void (w.__writes as unknown[]).push(Array.from(new Uint8Array(await b.slice(0, 4).arrayBuffer()))),
+          close: async () => undefined,
+        }),
+      };
     };
-  });
+  }, name);
+}
+const asked = (page: Page) => page.evaluate(() => (window as unknown as { __asked: unknown[] }).__asked);
+const writes = (page: Page) => page.evaluate(() => (window as unknown as { __writes: number[][] }).__writes);
+const PK = [0x50, 0x4b];
+const PNG = [0x89, 0x50, 0x4e, 0x47];
+
+async function fileMenu(page: Page, item: string | RegExp) {
+  await page.getByRole('button', { name: 'ファイル' }).click();
+  await page.getByRole('menuitem', { name: item }).click();
+}
+
+test('the save dialog offers one format only: a new document is saved as an editable PNG', async ({ page }) => {
+  await fakeSaveDialog(page, 'untitled.hnb.png');
+  await page.goto('/');
+  await expect(props(page)).toBeVisible();
+  await page.keyboard.press('Control+s');
+  await expect.poll(async () => (await writes(page)).length).toBe(1);
+  expect(await asked(page)).toEqual([{ name: 'untitled.hnb.png', types: [['編集できる PNG（HANABI）', ['.hnb.png', '.png']]] }]);
+  expect((await writes(page))[0]).toEqual(PNG);
+});
+
+test('HANABI プロジェクトとして保存 saves a .hnb; overwriting keeps the format of the file', async ({ page }) => {
+  await fakeSaveDialog(page, '作品.hnb');
+  await page.goto('/');
+  await expect(props(page)).toBeVisible();
+  await redRect(page);
+  await fileMenu(page, 'HANABI プロジェクトとして保存…（.hnb）');
+  await expect.poll(async () => (await writes(page)).length).toBe(1);
+  expect(await asked(page)).toEqual([{ name: 'untitled.hnb', types: [['HANABI プロジェクト', ['.hnb']]] }]);
+  expect((await writes(page))[0].slice(0, 2)).toEqual(PK);
+  expect(await state(page, 's => s.fileName')).toBe('作品.hnb');
+  // Ctrl+S overwrites the same file without asking, still as .hnb; 名前を付けて保存 stays .hnb too.
+  await page.keyboard.press('Delete');
+  await page.keyboard.press('Control+s');
+  await expect.poll(async () => (await writes(page)).length).toBe(2);
+  expect((await writes(page))[1].slice(0, 2)).toEqual(PK);
+  await page.keyboard.press('Control+Shift+S');
+  await expect.poll(async () => (await asked(page)).length).toBe(2);
+  expect((await asked(page))[1]).toEqual({ name: '作品.hnb', types: [['HANABI プロジェクト', ['.hnb']]] });
+});
+
+test('編集できる PNG として保存 turns a .hnb into 作品.hnb.png (also where two-dot extensions are refused)', async ({ page }) => {
+  await fakeSaveDialog(page, '作品.hnb.png');
   await page.goto('/');
   await expect(props(page)).toBeVisible();
   await page.evaluate(() => (window as unknown as { __sparca: { set(p: object): void } }).__sparca.set({ fileName: '作品.hnb' }));
-  await page.keyboard.press('Control+Shift+S');
-  await expect.poll(() => page.evaluate(() => (window as unknown as { __asked: unknown[] }).__asked.length)).toBe(1);
-  expect(await page.evaluate(() => (window as unknown as { __asked: unknown[] }).__asked[0])).toEqual({
-    name: '作品',
-    types: [
-      ['HANABI プロジェクト', ['.hnb']],
-      ['編集できる PNG（HANABI）', ['.hnb.png', '.png']],
-    ],
-  });
+  await fileMenu(page, '編集できる PNG として保存…（.hnb.png）');
+  await expect.poll(async () => (await writes(page)).length).toBe(1);
+  expect((await asked(page))[0]).toEqual({ name: '作品.hnb.png', types: [['編集できる PNG（HANABI）', ['.hnb.png', '.png']]] });
+  expect((await writes(page))[0]).toEqual(PNG);
+  expect(await state(page, 's => s.fileName')).toBe('作品.hnb.png');
   // A browser refusing two-dot extensions still gets a dialog (with .png).
   await page.evaluate(() => ((window as unknown as Record<string, unknown>).__refuseTwoDots = true));
   await page.keyboard.press('Control+Shift+S');
-  await expect.poll(() => page.evaluate(() => (window as unknown as { __asked: unknown[] }).__asked.length)).toBe(2);
-  expect(await page.evaluate(() => (window as unknown as { __asked: { types: unknown[][] }[] }).__asked[1].types[1])).toEqual(['編集できる PNG（HANABI）', ['.png']]);
+  await expect.poll(async () => (await asked(page)).length).toBe(2);
+  expect((await asked(page))[1]).toEqual({ name: '作品.hnb.png', types: [['編集できる PNG（HANABI）', ['.png']]] });
   await expect(page.locator('.notice.error')).toHaveCount(0);
 });
 
