@@ -1,5 +1,5 @@
 // Rulers along the top and left of the workspace (表示 → ルーラー). They count document px
-// from the canvas's top-left corner, follow scrolling and zooming, shade the canvas's extent
+// from the canvas's top-left corner or (表示 → ルーラーの原点) its center, follow scrolling and zooming, shade the canvas's extent
 // and mark the pointer position. Screen only: drawn on <canvas> outside the document.
 import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react';
 import type { Point } from '../model/types';
@@ -24,6 +24,8 @@ interface Props {
   zoom: number;
   docWidth: number;
   docHeight: number;
+  /** Count from the canvas's center instead of its top-left corner (negative to the left / above). */
+  centered: boolean;
   cursor: Point | null;
 }
 
@@ -56,7 +58,7 @@ export function Rulers(props: Props) {
   );
 }
 
-function Ruler({ axis, stageRef, pad, zoom, docWidth, docHeight, cursor }: Props & { axis: 'x' | 'y' }) {
+function Ruler({ axis, stageRef, pad, zoom, docWidth, docHeight, centered, cursor }: Props & { axis: 'x' | 'y' }) {
   const ref = useRef<HTMLCanvasElement>(null);
   useLayoutEffect(() => {
     const canvas = ref.current;
@@ -78,9 +80,11 @@ function Ruler({ axis, stageRef, pad, zoom, docWidth, docHeight, cursor }: Props
     const ink = color('--text-dim', '#9a9ea6');
     const accent = color('--accent', '#4c9bf5');
     const s = stage.getBoundingClientRect();
-    // Screen position (along the ruler) of document coordinate 0.
-    const origin = axis === 'x' ? s.left + pad - rect.left : s.top + pad - rect.top;
     const docLength = axis === 'x' ? docWidth : docHeight;
+    // Ruler values are document coordinates less `zero` (half the canvas when centered).
+    const zero = centered ? docLength / 2 : 0;
+    // Screen position (along the ruler) of ruler value 0.
+    const origin = (axis === 'x' ? s.left + pad - rect.left : s.top + pad - rect.top) + zero * zoom;
     const at = (v: number) => origin + v * zoom;
 
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -88,8 +92,8 @@ function Ruler({ axis, stageRef, pad, zoom, docWidth, docHeight, cursor }: Props
     ctx.fillRect(0, 0, rect.width, rect.height);
     // The canvas's extent.
     ctx.fillStyle = band;
-    const a = Math.max(0, at(0));
-    const b = Math.min(length, at(docLength));
+    const a = Math.max(0, at(-zero));
+    const b = Math.min(length, at(docLength - zero));
     if (b > a) {
       if (axis === 'x') ctx.fillRect(a, 0, b - a, RULER_SIZE);
       else ctx.fillRect(0, a, RULER_SIZE, b - a);
@@ -142,7 +146,7 @@ function Ruler({ axis, stageRef, pad, zoom, docWidth, docHeight, cursor }: Props
     ctx.stroke();
     // The pointer.
     if (cursor) {
-      const p = Math.round(at(axis === 'x' ? cursor.x : cursor.y)) + 0.5;
+      const p = Math.round(at((axis === 'x' ? cursor.x : cursor.y) - zero)) + 0.5;
       ctx.strokeStyle = accent;
       ctx.beginPath();
       if (axis === 'x') {
