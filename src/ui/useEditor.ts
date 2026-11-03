@@ -26,6 +26,26 @@ editor.subscribe(() => {
   }
 });
 
+// Rulers on/off is a per-browser view preference as well.
+const RULERS_KEY = 'sparca.rulers';
+try {
+  const saved = JSON.parse(localStorage.getItem(RULERS_KEY) ?? 'null') as unknown;
+  if (typeof saved === 'boolean') editor.set({ rulers: saved });
+} catch {
+  // Storage unavailable or corrupt: shown by default.
+}
+let lastRulers = editor.getState().rulers;
+editor.subscribe(() => {
+  const r = editor.getState().rulers;
+  if (r === lastRulers) return;
+  lastRulers = r;
+  try {
+    localStorage.setItem(RULERS_KEY, JSON.stringify(r));
+  } catch {
+    // Not remembered; harmless.
+  }
+});
+
 function sanitizeGrid(g: Partial<GridSettings>): Partial<GridSettings> {
   const out: Partial<GridSettings> = {};
   if (typeof g.visible === 'boolean') out.visible = g.visible;

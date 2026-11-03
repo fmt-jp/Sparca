@@ -142,6 +142,8 @@ export interface EditorState {
   pickedColor: string | null;
   zoom: number;
   grid: GridSettings;
+  /** Rulers along the top and left of the workspace (a per-browser view preference). */
+  rulers: boolean;
   /** Align multiple objects to the canvas instead of to each other. */
   alignToCanvas: boolean;
   /** Edge setting of the marquee / lasso tools. */
@@ -175,6 +177,7 @@ export class EditorStore {
       gradientToolTarget: 'fill',
       gradientTarget: 'fill',
       grid: DEFAULT_GRID,
+      rulers: true,
       selectionEdge: DEFAULT_SELECTION_EDGE,
       toolDefaults: DEFAULT_TOOL_DEFAULTS,
       alignToCanvas: false,
