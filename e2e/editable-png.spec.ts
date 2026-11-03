@@ -78,3 +78,36 @@ test('in the save dialog the format can be .hnb; overwriting keeps the format of
   expect(await page.evaluate(() => (window as unknown as { __asked: unknown[] }).__asked.length)).toBe(1);
   expect(await page.evaluate(() => (window as unknown as { __writes: number[][] }).__writes[1].slice(0, 2))).toEqual([0x50, 0x4b]);
 });
+
+test('save as from a .hnb offers the editable PNG with the .hnb.png extension (switching types renames to .hnb.png)', async ({ page }) => {
+  await page.addInitScript(() => {
+    const w = window as unknown as Record<string, unknown>;
+    w.__asked = [];
+    w.showSaveFilePicker = async (o: { suggestedName: string; types: { description: string; accept: Record<string, string[]> }[] }) => {
+      // Like Chrome when an accept list is not allowed: refuse before showing the dialog.
+      if ((w.__refuseTwoDots as boolean) && o.types.some((t) => Object.values(t.accept).flat().some((x) => x.split('.').length > 2))) {
+        throw new TypeError('Extension is not valid');
+      }
+      (w.__asked as unknown[]).push({ name: o.suggestedName, types: o.types.map((t) => [t.description, Object.values(t.accept).flat()]) });
+      throw new DOMException('cancelled', 'AbortError');
+    };
+  });
+  await page.goto('/');
+  await expect(props(page)).toBeVisible();
+  await page.evaluate(() => (window as unknown as { __sparca: { set(p: object): void } }).__sparca.set({ fileName: '作品.hnb' }));
+  await page.keyboard.press('Control+Shift+S');
+  await expect.poll(() => page.evaluate(() => (window as unknown as { __asked: unknown[] }).__asked.length)).toBe(1);
+  expect(await page.evaluate(() => (window as unknown as { __asked: unknown[] }).__asked[0])).toEqual({
+    name: '作品.hnb',
+    types: [
+      ['HANABI プロジェクト', ['.hnb']],
+      ['編集できる PNG（HANABI）', ['.hnb.png', '.png']],
+    ],
+  });
+  // A browser refusing two-dot extensions still gets a dialog (with .png).
+  await page.evaluate(() => ((window as unknown as Record<string, unknown>).__refuseTwoDots = true));
+  await page.keyboard.press('Control+Shift+S');
+  await expect.poll(() => page.evaluate(() => (window as unknown as { __asked: unknown[] }).__asked.length)).toBe(2);
+  expect(await page.evaluate(() => (window as unknown as { __asked: { types: unknown[][] }[] }).__asked[1].types[1])).toEqual(['編集できる PNG（HANABI）', ['.png']]);
+  await expect(page.locator('.notice.error')).toHaveCount(0);
+});
