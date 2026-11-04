@@ -3,9 +3,9 @@
 // color) by default, or the stroke or the gradient mask as chosen in the tool settings; a
 // solid (or no) fill becomes a linear gradient from its color to white.
 import { docToNormalized, isGradient, toGradient } from '../model/gradient';
-import { maskFrame, newGradientMask } from '../model/mask';
+import { gradientRect, maskFrame, newMask, settleMask, WHITE_TO_BLACK } from '../model/mask';
 import { findObject } from '../model/tree';
-import type { Gradient, Point, SceneObject, SparcaDocument } from '../model/types';
+import type { Gradient, PathObject, Point, SceneObject, ShapeObject, SparcaDocument } from '../model/types';
 
 export type GradientToolTarget = 'fill' | 'stroke' | 'mask';
 
@@ -28,10 +28,21 @@ export function applyGradientDrag(d: SparcaDocument, id: string, slot: GradientS
   if (!loc) return;
   const o = loc.object;
   if (slot === 'mask') {
-    const mask = o.mask ?? newGradientMask(o);
-    const frame = o.mask ? maskFrame(o) : (mask?.frame ?? maskFrame(o));
-    if (!mask || !frame) return;
-    o.mask = { ...mask, gradient: { ...mask.gradient, start: docToNormalized(frame, from), end: docToNormalized(frame, to) } };
+    // Into the mask layer: the first gradient-filled shape there takes the drag; a mask
+    // without one gets a gradient rectangle (white to black), and no mask a new one.
+    const frame = maskFrame(o);
+    if (!frame) return;
+    const mask = settleMask(o) ?? newMask(o, 'black');
+    if (!mask) return;
+    let target = mask.children.find((c): c is ShapeObject | PathObject => (c.type === 'shape' || c.type === 'path') && isGradient(c.fill));
+    const children = [...mask.children];
+    if (!target) {
+      target = gradientRect(frame, WHITE_TO_BLACK);
+      children.push(target);
+    }
+    const g = target.fill as Gradient;
+    const updated = { ...target, fill: { ...g, start: docToNormalized(target.box, from), end: docToNormalized(target.box, to) } };
+    o.mask = { ...mask, children: children.map((c) => (c.id === updated.id ? updated : c)) };
     return;
   }
   if (o.type === 'group' || o.type === 'image') return;

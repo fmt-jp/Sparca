@@ -3,7 +3,6 @@
 import type { ReactElement } from 'react';
 import type {
   Box,
-  Gradient,
   GroupObject,
   ImageObject,
   PathObject,
@@ -15,7 +14,7 @@ import type {
   TextObject,
 } from '../model/types';
 import { objectBounds, type Rect } from '../model/geometry';
-import { maskFrame } from '../model/mask';
+import { maskContentTransform } from '../model/mask';
 import { effectsFilter, effectsMargin, splitAtZoomBlur, zoomBlurLayers, zoomBlurReach } from './effects';
 import { cssFontFamily } from './fonts';
 import { fillPaint } from './gradient';
@@ -32,6 +31,11 @@ export interface RenderOptions {
   hitAreas?: boolean;
   /** Prefix for filter ids, so several SVGs on one page do not collide. */
   idPrefix?: string;
+  /**
+   * The object whose mask layer is being edited (screen only): its mask content can be picked
+   * on the canvas; with view 'mask' the mask itself is shown in gray instead of the object.
+   */
+  maskEdit?: { id: string; view: 'result' | 'mask' } | null;
 }
 
 export function DocumentSvg({
@@ -73,10 +77,109 @@ export function DocumentSvg({
 }
 
 function renderObject(o: SceneObject, opts: RenderOptions, prefix: string, canvas: { width: number; height: number }): ReactElement | null {
+  if (opts.maskEdit?.id === o.id && o.mask && o.visible) return renderMaskEdit(o, opts, prefix, canvas);
+  return renderPlain(o, opts, prefix, canvas);
+}
+
+/**
+ * Small picture of an object's mask (for the layers panel): its background and content in
+ * gray, over the area of the object.
+ */
+export function MaskPreview({ o, size = 22 }: { o: SceneObject; size?: number }): ReactElement | null {
+  const mask = o.mask;
+  const b = mask ? objectBounds(o) : null;
+  if (!mask || !b) return null;
+  const opts: RenderOptions = { imageHref: () => undefined, idPrefix: `thumb-${o.id}` };
+  const content = mask.children.map((c) => renderObject(c, opts, `thumb-${o.id}`, { width: b.width, height: b.height }));
+  const placed = o.type !== 'group' && mask.frame ? <g transform={leafTransform(o.box) + ' ' + maskContentTransform(mask.frame, o.box)}>{content}</g> : content;
+  const fid = `thumb-${o.id}-gray`;
+  const w = size * Math.min(2, Math.max(0.5, b.width / (b.height || 1)));
+  return (
+    <svg width={w} height={size} viewBox={`${b.x} ${b.y} ${b.width} ${b.height}`} preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+      <defs>
+        <filter id={fid} colorInterpolationFilters="sRGB">
+          <feColorMatrix type="matrix" values={GRAY} />
+        </filter>
+      </defs>
+      <rect x={b.x} y={b.y} width={b.width} height={b.height} fill={mask.background === 'white' ? '#ffffff' : '#000000'} />
+      <g filter={`url(#${fid})`}>{placed}</g>
+    </svg>
+  );
+}
+
+/** Options for drawing mask content: no hit areas, nothing hidden, and ids of its own. */
+function contentOpts(opts: RenderOptions): RenderOptions {
+  return { ...opts, hitAreas: false, hiddenId: null, maskEdit: null };
+}
+
+/** Gray by luminance, the way a luminance mask reads the colors. */
+const GRAY = '0.2125 0.7154 0.0721 0 0  0.2125 0.7154 0.0721 0 0  0.2125 0.7154 0.0721 0 0  0 0 0 1 0';
+
+/**
+ * The object whose mask layer is being edited: as it looks (view 'result') with its mask
+ * content laid over it invisibly so it can be picked, or (view 'mask') the mask itself in gray.
+ */
+function renderMaskEdit(o: SceneObject, opts: RenderOptions, prefix: string, canvas: { width: number; height: number }): ReactElement {
+  const mask = o.mask!;
+  const content = mask.children.map((c) => renderObject(c, { ...opts, maskEdit: null }, `${prefix}-e`, canvas));
+  const mapped = o.type !== 'group' && mask.frame ? <g transform={leafTransform(o.box) + ' ' + maskContentTransform(mask.frame, o.box)}>{content}</g> : content;
+  if (opts.maskEdit?.view === 'mask') {
+    const fid = `${prefix}-maskview-${o.id}`;
+    const cid = `${fid}-clip`;
+    const region = maskRegion(o);
+    const bg = mask.background === 'white' ? '#ffffff' : '#000000';
+    // Shown only where the mask applies (its content may reach further).
+    const clipRect = region && <rect x={region.x} y={region.y} width={region.width} height={region.height} transform={o.type === 'group' ? undefined : leafTransform(o.box)} />;
+    return (
+      <g key={o.id} data-mask-of={o.id}>
+        <defs>
+          <filter id={fid} x="-50%" y="-50%" width="200%" height="200%" colorInterpolationFilters="sRGB">
+            <feColorMatrix type="matrix" values={GRAY} />
+          </filter>
+          <clipPath id={cid} clipPathUnits="userSpaceOnUse">
+            {clipRect}
+          </clipPath>
+        </defs>
+        <g filter={`url(#${fid})`} clipPath={region ? `url(#${cid})` : undefined}>
+          {region && (o.type === 'group' ? (
+            <rect x={region.x} y={region.y} width={region.width} height={region.height} fill={bg} pointerEvents="none" />
+          ) : (
+            <rect transform={leafTransform(o.box)} x={region.x} y={region.y} width={region.width} height={region.height} fill={bg} pointerEvents="none" />
+          ))}
+          {mapped}
+        </g>
+      </g>
+    );
+  }
+  return (
+    <g key={o.id}>
+      {renderPlain(o, opts, prefix, canvas)}
+      <g data-mask-of={o.id} opacity={0}>
+        {mapped}
+      </g>
+    </g>
+  );
+}
+
+function leafTransform(b: Box): string {
+  return `translate(${b.x} ${b.y})` + (b.rotation ? ` rotate(${b.rotation} ${b.width / 2} ${b.height / 2})` : '');
+}
+
+/**
+ * Where an object's mask applies: for a leaf, its box widened by what shows past it (in its
+ * own frame); for a group, the area its children show in (document coordinates).
+ */
+function maskRegion(o: SceneObject): Rect | null {
+  if (o.type === 'group') return groupReach(o.children);
+  const m = leafReach(o) + 1;
+  return { x: -m, y: -m, width: o.box.width + 2 * m, height: o.box.height + 2 * m };
+}
+
+function renderPlain(o: SceneObject, opts: RenderOptions, prefix: string, canvas: { width: number; height: number }): ReactElement | null {
   if (!o.visible || o.id === opts.hiddenId) return null;
   if (o.type === 'group') {
     const children = o.children.map((c) => renderObject(c, opts, prefix, canvas));
-    const mask = groupMask(o, `${prefix}-mask-${o.id}`);
+    const mask = groupMask(o, `${prefix}-mask-${o.id}`, opts, prefix, canvas);
     return (
       <g key={o.id} data-object-id={o.id} opacity={o.opacity}>
         {mask ? (
@@ -151,11 +254,13 @@ function renderObject(o: SceneObject, opts: RenderOptions, prefix: string, canva
       reach += zoomBlurReach(seg.zoom, w, h);
     }
   });
-  // The gradient mask fades the object together with its effects (decided with the user).
+  // The mask layer fades the object together with its effects (decided with the user).
   if (o.mask?.enabled && content) {
     const m = strokeWidth + reach + effectsMargin(o.effects) + 1;
     const mid = `${prefix}-mask-${o.id}`;
-    defs.push(<defs key={mid}>{maskDef(o.mask.gradient, mid, { x: -m, y: -m, width: w + 2 * m, height: h + 2 * m }, w, h, m)}</defs>);
+    const inner = o.mask.children.map((c) => renderObject(c, contentOpts(opts), `${prefix}-m`, canvas));
+    const placed = o.mask.frame ? <g transform={maskContentTransform(o.mask.frame, o.box)}>{inner}</g> : inner;
+    defs.push(<defs key={mid}>{maskDef(o.mask.background, mid, { x: -m, y: -m, width: w + 2 * m, height: h + 2 * m }, placed)}</defs>);
     content = <g mask={`url(#${mid})`}>{content}</g>;
   }
   return (
@@ -167,40 +272,14 @@ function renderObject(o: SceneObject, opts: RenderOptions, prefix: string, canva
   );
 }
 
-/**
- * A luminance <mask> painted with `gradient` over `region` (user space of the masked element).
- * The gradient is normalized to a w×h frame at the origin, or to `frame` (document space, for
- * groups); `margin` is how far the region reaches past the frame (for conic images).
- */
-function maskDef(gradient: Gradient, id: string, region: Rect, w: number, h: number, margin: number, frame?: Box): ReactElement {
-  const paint = fillPaint(gradient, `${id}-g`, w, h, margin);
-  const local = frame ? toFrame(frame, region) : region;
-  const rect = <rect x={local.x} y={local.y} width={local.width} height={local.height} fill={paint.paint} />;
+/** A luminance <mask> over `region` (user space of the masked element): the background, then the content. */
+function maskDef(background: 'white' | 'black', id: string, region: Rect, content: ReactElement | (ReactElement | null)[]): ReactElement {
   return (
     <mask id={id} maskUnits="userSpaceOnUse" maskContentUnits="userSpaceOnUse" x={region.x} y={region.y} width={region.width} height={region.height}>
-      {paint.def}
-      {frame ? <g transform={`translate(${frame.x} ${frame.y})` + (frame.rotation ? ` rotate(${frame.rotation} ${frame.width / 2} ${frame.height / 2})` : '')}>{rect}</g> : rect}
+      <rect x={region.x} y={region.y} width={region.width} height={region.height} fill={background === 'white' ? '#ffffff' : '#000000'} />
+      {content}
     </mask>
   );
-}
-
-/** Bounds of a document-space rectangle in a frame's own (unrotated, origin at its corner) coordinates. */
-function toFrame(frame: Box, r: Rect): Rect {
-  const c = { x: frame.x + frame.width / 2, y: frame.y + frame.height / 2 };
-  const pts = [
-    { x: r.x, y: r.y },
-    { x: r.x + r.width, y: r.y },
-    { x: r.x, y: r.y + r.height },
-    { x: r.x + r.width, y: r.y + r.height },
-  ].map((p) => {
-    const a = (-frame.rotation * Math.PI) / 180;
-    const dx = p.x - c.x;
-    const dy = p.y - c.y;
-    return { x: c.x + dx * Math.cos(a) - dy * Math.sin(a) - frame.x, y: c.y + dx * Math.sin(a) + dy * Math.cos(a) - frame.y };
-  });
-  const xs = pts.map((p) => p.x);
-  const ys = pts.map((p) => p.y);
-  return { x: Math.min(...xs), y: Math.min(...ys), width: Math.max(...xs) - Math.min(...xs), height: Math.max(...ys) - Math.min(...ys) };
 }
 
 /** How far a leaf object shows past its box (stroke, letters on a path, effects). */
@@ -235,14 +314,18 @@ function groupReach(children: SceneObject[]): Rect | null {
 }
 
 /** The mask of a group (document space), if it has one switched on. */
-function groupMask(o: GroupObject, id: string): { def: ReactElement; ref: string } | null {
+function groupMask(
+  o: GroupObject,
+  id: string,
+  opts: RenderOptions,
+  prefix: string,
+  canvas: { width: number; height: number },
+): { def: ReactElement; ref: string } | null {
   if (!o.mask?.enabled) return null;
-  const frame = maskFrame(o);
   const region = groupReach(o.children);
-  if (!frame || !region) return null;
-  const local = toFrame(frame, region);
-  const margin = Math.max(0, -local.x, -local.y, local.x + local.width - frame.width, local.y + local.height - frame.height);
-  return { def: maskDef(o.mask.gradient, id, region, frame.width, frame.height, margin, frame), ref: `url(#${id})` };
+  if (!region) return null;
+  const inner = o.mask.children.map((c) => renderObject(c, contentOpts(opts), `${prefix}-m`, canvas));
+  return { def: maskDef(o.mask.background, id, region, inner), ref: `url(#${id})` };
 }
 
 /**

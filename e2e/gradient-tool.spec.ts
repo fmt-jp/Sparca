@@ -79,8 +79,12 @@ test('the tool settings send the drag to the stroke or the mask', async ({ page 
   await props(page).getByRole('radiogroup', { name: 'グラデーションの適用先' }).getByLabel('マスク').check();
   // (Starting on a gradient handle would move that handle instead, so start off the stroke's handles.)
   await drag(page, { x: c.x + 130, y: c.y + 150 }, { x: c.x + 370, y: c.y + 150 });
-  expect(await first<G>(page, 'mask.gradient')).toMatchObject({ kind: 'linear', start: { x: 0.1, y: 0.25 }, end: { x: 0.9, y: 0.25 } });
-  await expect(page.getByTestId('gradient-handles')).toHaveAttribute('data-gradient-key', 'mask');
+  // A mask layer with a gradient rectangle that runs where the drag did (on the shape's box).
+  const g = await first<G>(page, 'mask.children[0].fill');
+  const rbox = await first<{ x: number; y: number; width: number; height: number }>(page, 'mask.children[0].box');
+  expect(g.kind).toBe('linear');
+  expect(rbox.x + g.start.x * rbox.width).toBeCloseTo(130, 0);
+  expect(rbox.x + g.end.x * rbox.width).toBeCloseTo(370, 0);
 });
 
 test('an image gets a mask; with nothing selected the object under the pointer is used', async ({ page }) => {
@@ -92,8 +96,8 @@ test('an image gets a mask; with nothing selected the object under the pointer i
   const c = await canvasBox(page);
   await drag(page, { x: c.x + box.x + 10, y: c.y + box.y + box.height / 2 }, { x: c.x + box.x + box.width - 10, y: c.y + box.y + box.height / 2 });
   expect(await state(page, 's => s.selection.length')).toBe(1);
-  expect(await first<G>(page, 'mask.gradient')).toMatchObject({ kind: 'linear' });
-  expect(await first<G>(page, 'mask.gradient.stops')).toEqual([
+  expect(await first<G>(page, 'mask.children[0].fill')).toMatchObject({ kind: 'linear' });
+  expect(await first<G>(page, 'mask.children[0].fill.stops')).toEqual([
     { offset: 0, color: '#ffffff', opacity: 1 },
     { offset: 1, color: '#000000', opacity: 1 },
   ]);

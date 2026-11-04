@@ -3,7 +3,7 @@ import { produce } from 'immer';
 import { describe, expect, it } from 'vitest';
 import { addLayer, addObject, groupObjects } from '../model/commands';
 import { createDocument, createImage, createShape, createText, defaultGeometry } from '../model/factory';
-import type { AssetMeta, Gradient, ImageObject, Pattern, SparcaDocument } from '../model/types';
+import type { AssetMeta, Gradient, ImageObject, Pattern, ShapeObject, SparcaDocument } from '../model/types';
 import { createEffect } from '../model/effects';
 import { ProjectError, READ_LIMITS, readProject, writeProject } from './project';
 
@@ -138,27 +138,52 @@ describe('project format', () => {
     }
   });
 
-  it('keeps gradient masks (with the frame of a group) and rejects broken ones', async () => {
-    const gradient: Gradient = { kind: 'linear', start: { x: 0, y: 0.5 }, end: { x: 1, y: 0.5 }, stops: [{ offset: 0, color: '#ffffff', opacity: 1 }, { offset: 1, color: '#000000', opacity: 1 }] };
+  it('keeps mask layers (their content is checked like any object) and rejects broken ones', async () => {
+    const inside = { ...createShape(defaultGeometry('ellipse'), { x: 1, y: 1, width: 3, height: 3, rotation: 0 }), fill: '#ffffff' };
+    const box = { x: 0, y: 0, width: 5, height: 5, rotation: 0 };
     const doc = produce(createDocument(10, 10), (d) => {
-      addObject(d, d.layers[0].id, { ...createShape(defaultGeometry('rect'), { x: 0, y: 0, width: 5, height: 5, rotation: 0 }), mask: { gradient, enabled: false } });
-      addObject(d, d.layers[0].id, createShape(defaultGeometry('rect'), { x: 6, y: 6, width: 2, height: 2, rotation: 0 }));
+      addObject(d, d.layers[0].id, { ...createShape(defaultGeometry('rect'), box), mask: { background: 'black', children: [inside], frame: box, enabled: false } });
     });
     const loaded = await readProject(await writeProject(doc, () => new Blob([bytes])));
-    expect(loaded.doc.layers[0].children[0].mask).toEqual({ gradient, enabled: false });
-    for (const mask of [{ gradient: '#ffffff', enabled: true }, { gradient: { ...gradient, kind: 'pattern' }, enabled: true }, { enabled: true }]) {
+    expect(loaded.doc.layers[0].children[0].mask).toEqual({ background: 'black', children: [inside], frame: box, enabled: false });
+    for (const mask of [
+      { background: 'gray', children: [], enabled: true },
+      { background: 'white', enabled: true },
+      { background: 'white', children: [{ id: 'x', type: 'shape' }], enabled: true },
+      { gradient: '#ffffff', enabled: true },
+    ]) {
       const raw = JSON.parse(JSON.stringify(doc));
       raw.layers[0].children[0].mask = mask;
       const zip = new JSZip();
       zip.file('document.json', JSON.stringify(raw));
       await expect(readProject(await zip.generateAsync({ type: 'uint8array' }))).rejects.toThrow(ProjectError);
     }
-    // A group's mask needs its frame.
+  });
+
+  it('opens the gradient masks of earlier versions as a mask layer with the same gradient', async () => {
+    const gradient: Gradient = { kind: 'linear', start: { x: 0, y: 0.5 }, end: { x: 1, y: 0.5 }, stops: [{ offset: 0, color: '#ffffff', opacity: 1 }, { offset: 1, color: '#000000', opacity: 1 }] };
+    const doc = produce(createDocument(100, 100), (d) => {
+      addObject(d, d.layers[0].id, createShape(defaultGeometry('rect'), { x: 10, y: 20, width: 40, height: 20, rotation: 0 }));
+    });
     const raw = JSON.parse(JSON.stringify(doc));
-    raw.layers[0].children = [{ id: 'g1', name: 'g', type: 'group', visible: true, locked: false, opacity: 1, children: raw.layers[0].children, mask: { gradient, enabled: true } }];
+    raw.layers[0].children[0].mask = { gradient, enabled: true };
+    // A group's old mask had a frame.
+    raw.layers[0].children.push({ id: 'g1', name: 'g', type: 'group', visible: true, locked: false, opacity: 1, children: [], mask: { gradient, enabled: false, frame: { x: 0, y: 0, width: 10, height: 10, rotation: 0 } } });
+    raw.layers[0].children[1].children.push({ ...raw.layers[0].children[0], id: 'inner', mask: undefined });
     const zip = new JSZip();
     zip.file('document.json', JSON.stringify(raw));
-    await expect(readProject(await zip.generateAsync({ type: 'uint8array' }))).rejects.toThrow(/frame/);
+    const loaded = await readProject(await zip.generateAsync({ type: 'uint8array' }));
+    const m = loaded.doc.layers[0].children[0].mask!;
+    expect(m).toMatchObject({ background: 'black', enabled: true, frame: { x: 10, y: 20, width: 40, height: 20 } });
+    expect(m.children).toHaveLength(1);
+    const rect = m.children[0] as ShapeObject;
+    // The rectangle covers the box with a margin (40 px each side); the gradient stays on the box.
+    expect(rect.box).toMatchObject({ x: -30, y: -20, width: 120, height: 100 });
+    expect((rect.fill as Gradient).start.x).toBeCloseTo(40 / 120);
+    expect((rect.fill as Gradient).end.x).toBeCloseTo(80 / 120);
+    const g = loaded.doc.layers[0].children[1].mask!;
+    expect(g).toMatchObject({ background: 'black', enabled: false });
+    expect(g.frame).toBeUndefined();
   });
 
   it('rejects an unknown line style', async () => {

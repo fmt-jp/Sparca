@@ -1,7 +1,6 @@
 // Gradient fills: defaults, stop interpolation and handle geometry (see types.ts Gradient).
 import { boxCenter, rotatePoint } from './geometry';
 import type { Box, Fill, Gradient, GradientStop, Point, SceneObject } from './types';
-import { maskFrame } from './mask';
 import { isPattern } from './pattern';
 
 export const GRADIENT_KINDS: { kind: Gradient['kind']; label: string }[] = [
@@ -30,14 +29,11 @@ export type GradientTarget = 'fill' | 'stroke' | 'mask';
 
 /**
  * The gradient whose handles an object shows: of the fill (of closed shapes/paths) or the
- * text color, of the stroke, or of the gradient mask. `prefer` picks when there are several
- * (the mask's handles show only when asked for, or when the object has no other gradient).
+ * text color, or of the stroke. `prefer` picks when both are gradients.
  */
 export function objectGradient(o: SceneObject, prefer: GradientTarget = 'fill'): { gradient: Gradient; key: GradientKey; box: Box } | null {
-  const frame = o.mask ? maskFrame(o) : null;
-  const mask = o.mask && frame ? { gradient: o.mask.gradient, key: 'mask' as const, box: frame } : null;
-  if (prefer === 'mask' && mask) return mask;
-  return paintGradient(o, prefer === 'mask' ? 'fill' : prefer) ?? mask;
+  // A mask's gradients belong to its content (edited in マスクの編集), not to the object.
+  return paintGradient(o, prefer === 'mask' ? 'fill' : prefer);
 }
 
 function paintGradient(o: SceneObject, prefer: 'fill' | 'stroke'): { gradient: Gradient; key: GradientKey; box: Box } | null {

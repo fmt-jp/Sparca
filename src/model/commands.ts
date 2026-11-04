@@ -4,10 +4,22 @@ import { transformObject, type ObjectTransform } from './geometry';
 import { cloneLayerWithNewIds, cloneWithNewIds, findObject, isEffectivelyLocked } from './tree';
 import type { Id, Layer, SceneObject, SparcaDocument } from './types';
 
-export function addObject(doc: SparcaDocument, layerId: Id, obj: SceneObject): void {
+/** Add an object on top of a layer, or — while editing a mask (`maskOf`) — on top of that mask's content. */
+export function addObject(doc: SparcaDocument, layerId: Id, obj: SceneObject, maskOf?: Id | null): void {
+  const target = maskTarget(doc, maskOf);
+  if (target) {
+    target.push(obj);
+    return;
+  }
   const layer = doc.layers.find((l) => l.id === layerId) ?? doc.layers[doc.layers.length - 1];
   if (!layer) throw new Error('レイヤーがありません');
   layer.children.push(obj);
+}
+
+/** The content of the mask being edited, if any. */
+function maskTarget(doc: SparcaDocument, maskOf?: Id | null): SceneObject[] | null {
+  if (!maskOf) return null;
+  return findObject(doc, maskOf)?.object.mask?.children ?? null;
 }
 
 /** Apply a partial update to a leaf or group (shallow merge). */
@@ -64,12 +76,13 @@ export function duplicateObjects(doc: SparcaDocument, ids: Id[], dx = 10, dy = 1
 }
 
 /** Insert copies of objects (clipboard paste) into a layer. Returns new ids. */
-export function pasteObjects(doc: SparcaDocument, layerId: Id, objects: SceneObject[], dx: number, dy: number): Id[] {
+export function pasteObjects(doc: SparcaDocument, layerId: Id, objects: SceneObject[], dx: number, dy: number, maskOf?: Id | null): Id[] {
   const layer = doc.layers.find((l) => l.id === layerId) ?? doc.layers[doc.layers.length - 1];
+  const target = maskTarget(doc, maskOf) ?? layer.children;
   const out: Id[] = [];
   for (const o of objects) {
     const copy = transformObject(cloneWithNewIds(o), { pivot: { x: 0, y: 0 }, sx: 1, sy: 1, rotation: 0, dx, dy });
-    layer.children.push(copy);
+    target.push(copy);
     out.push(copy.id);
   }
   return out;

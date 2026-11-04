@@ -35,8 +35,8 @@ async function setup(page: Page) {
 test('Ctrl+Shift+Y puts the text on the circle; settings change the layout; パスから外す restores both', async ({ page }) => {
   await setup(page);
   await page.keyboard.press('Control+Shift+Y');
+  await expect.poll(async () => (await objects(page)).length).toBe(1);
   let objs = await objects(page);
-  expect(objs).toHaveLength(1);
   expect(objs[0]).toMatchObject({ type: 'text', text: 'HANABI', path: { offset: 0, orientation: 'rotate', reverse: false, shift: 0 } });
   await expect(glyphs(page)).toHaveCount(6);
   await expect(glyphs(page).first()).toHaveAttribute('transform', /rotate\(/);
@@ -54,8 +54,7 @@ test('Ctrl+Shift+Y puts the text on the circle; settings change the layout; パ�
     await i.fill(v);
     await i.press('Enter');
   }
-  objs = await objects(page);
-  expect(objs[0].path).toMatchObject({ orientation: 'skew-horizontal', reverse: true, offset: 0.25, shift: 8 });
+  await expect.poll(async () => (await objects(page))[0].path).toMatchObject({ orientation: 'skew-horizontal', reverse: true, offset: 0.25, shift: 8 });
 
   // Double-click edits it in the properties panel (not in place).
   const g = (await glyphs(page).nth(2).boundingBox())!;
@@ -66,13 +65,13 @@ test('Ctrl+Shift+Y puts the text on the circle; settings change the layout; パ�
 
   // Detach: the circle comes back as a path under the text.
   await panel.getByRole('button', { name: 'パスから外す' }).click();
+  await expect.poll(async () => (await objects(page)).map((o) => o.type)).toEqual(['path', 'text']);
   objs = await objects(page);
-  expect(objs.map((o) => o.type)).toEqual(['path', 'text']);
   expect(objs[1].path).toBeUndefined();
   await expect(glyphs(page)).toHaveCount(0);
   // Undo twice: attached again, with the earlier settings.
   await page.keyboard.press('Control+z');
-  expect((await objects(page))[0].path).toMatchObject({ orientation: 'skew-horizontal' });
+  await expect.poll(async () => (await objects(page))[0].path).toMatchObject({ orientation: 'skew-horizontal' });
 });
 
 test('the 変更 menu and right-click attach; the letters are exported', async ({ page }) => {

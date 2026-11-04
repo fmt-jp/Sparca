@@ -4,7 +4,8 @@ import { createEffect, EFFECT_KINDS, migrateLegacyEffects } from '../model/effec
 import { MAX_CURVE_POINTS } from '../model/curves';
 import { defaultPipeline } from '../model/factory';
 import { PATTERN_MOTIFS, PATTERN_SIZE } from '../model/pattern';
-import type { EffectKind, PatternMotif } from '../model/types';
+import { gradientRect } from '../model/mask';
+import type { Box, EffectKind, Gradient, PatternMotif } from '../model/types';
 import type { SparcaDocument } from '../model/types';
 import { MAX_DIMENSION } from '../model/types';
 
@@ -97,14 +98,15 @@ function checkObject(o: unknown, where: string, ids: Set<string>, assets: Obj): 
   o.visible = bool(o, 'visible', true);
   o.locked = bool(o, 'locked', false);
   o.opacity = typeof o.opacity === 'number' ? Math.min(1, Math.max(0, o.opacity)) : 1;
-  if (o.mask !== undefined) checkMask(o.mask, `${where}.mask`, type === 'group');
   if (type === 'group') {
+    if (o.mask !== undefined) o.mask = checkMask(o.mask, `${where}.mask`, null, ids, assets);
     arr(o, 'children', where).forEach((c, j) => checkObject(c, `${where}.children[${j}]`, ids, assets));
     return;
   }
   const box = o.box;
   if (!isObj(box)) throw new Invalid(`${where}.box がありません`);
   for (const k of ['x', 'y', 'width', 'height', 'rotation']) num(box, k, `${where}.box`);
+  if (o.mask !== undefined) o.mask = checkMask(o.mask, `${where}.mask`, box as unknown as Box, ids, assets);
   o.effects = checkEffects(o.effects, `${where}.effects`);
   switch (type) {
     case 'shape': {
@@ -314,16 +316,33 @@ function checkFill(v: unknown, where: string, allowNull: boolean, allowPattern =
 }
 
 /** A gradient mask: a gradient (no color or pattern), on/off, and for a group its frame. */
-function checkMask(v: unknown, where: string, group: boolean) {
+function checkBox(v: unknown, where: string): Box {
+  if (!isObj(v)) throw new Invalid(`${where} がありません`);
+  for (const k of ['x', 'y', 'width', 'height', 'rotation']) num(v, k, where);
+  return v as unknown as Box;
+}
+
+/**
+ * A mask layer: background, content (ordinary objects, checked like the rest), on/off, and for
+ * a leaf (`box` given) the frame its content was placed against. The gradient masks of
+ * 0.14–0.19 ({ gradient, enabled, frame? }) are turned into a mask layer holding the same
+ * gradient as a rectangle, which looks the same.
+ */
+function checkMask(v: unknown, where: string, box: Box | null, ids: Set<string>, assets: Obj): Obj {
   if (!isObj(v)) throw new Invalid(`${where} が正しくありません`);
-  if (!isObj(v.gradient)) throw new Invalid(`${where}.gradient が正しくありません`);
-  checkFill(v.gradient, `${where}.gradient`, false, false);
+  if (v.gradient !== undefined && v.children === undefined) {
+    checkFill(v.gradient, `${where}.gradient`, false, false);
+    if (!isObj(v.gradient) || v.gradient.kind === 'pattern') throw new Invalid(`${where}.gradient が正しくありません`);
+    const frame = box ?? checkBox(v.frame, `${where}.frame`);
+    const rect = gradientRect(frame, v.gradient as unknown as Gradient);
+    return { background: 'black', children: [rect], enabled: bool(v, 'enabled', true), ...(box ? { frame: { ...box } } : {}) };
+  }
+  if (v.background !== 'white' && v.background !== 'black') throw new Invalid(`${where}.background が正しくありません`);
+  arr(v, 'children', where).forEach((c, j) => checkObject(c, `${where}.children[${j}]`, ids, assets));
   v.enabled = bool(v, 'enabled', true);
-  if (group) {
-    const f = v.frame;
-    if (!isObj(f)) throw new Invalid(`${where}.frame がありません`);
-    for (const k of ['x', 'y', 'width', 'height', 'rotation']) num(f, k, `${where}.frame`);
-  } else delete v.frame;
+  if (box) v.frame = v.frame === undefined ? { ...box } : checkBox(v.frame, `${where}.frame`);
+  else delete v.frame;
+  return v;
 }
 
 function checkPaint(o: Obj, where: string) {

@@ -64,7 +64,7 @@ export async function placeImageFiles(ed: EditorStore, files: File[]): Promise<v
       if (!layerId) return;
       ed.edit('画像を配置', (d) => {
         d.assets[meta.id] = meta;
-        addObject(d, layerId, img);
+        addObject(d, layerId, img, ed.getState().maskEdit);
       });
       placed.push(img.id);
     } catch (e) {
@@ -86,7 +86,10 @@ export async function chooseAndPlaceImage(ed: EditorStore): Promise<void> {
 
 /** Returns an unlocked, visible layer to draw into, notifying the user when there is none. */
 export function writableLayer(ed: EditorStore, preferredId: string): string | null {
-  const { doc } = ed.getState();
+  const { doc, maskEdit } = ed.getState();
+  // While editing a mask, new objects go into it (on the masked object's layer).
+  const owner = maskEdit ? findObject(doc, maskEdit) : null;
+  if (owner) return owner.layer.id;
   const layer = doc.layers.find((l) => l.id === preferredId);
   if (layer && !layer.locked) return layer.id;
   if (layer?.locked) {
@@ -305,7 +308,7 @@ export function paste(ed: EditorStore): void {
   const offset = pasteCount * 10;
   ed.edit('ペースト', (d) => {
     for (const [id, meta] of Object.entries(metas)) if (!d.assets[id]) d.assets[id] = meta;
-    ids = pasteObjects(d, layerId, objs, offset, offset);
+    ids = pasteObjects(d, layerId, objs, offset, offset, ed.getState().maskEdit);
   });
   ed.select(ids);
 }

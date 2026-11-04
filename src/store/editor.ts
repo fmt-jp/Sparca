@@ -6,6 +6,7 @@ import type { FileSystemFileHandleLike } from '../io/files';
 import { newId } from '../model/factory';
 import { DEFAULT_TOOL_DEFAULTS, type ToolCategory, type ToolDefaults } from '../model/toolDefaults';
 import type { Id, MaskShape, Point, SparcaDocument } from '../model/types';
+import { findObject } from '../model/tree';
 
 export type ToolId =
   | 'select'
@@ -108,6 +109,7 @@ const SESSION_KEYS = [
   'crop',
   'compareImageId',
   'zoom',
+  'maskEdit',
 ] as const;
 type SessionKey = (typeof SESSION_KEYS)[number];
 type Session = Pick<EditorState, SessionKey>;
@@ -118,6 +120,13 @@ export interface EditorState {
   activeTabId: string;
   doc: SparcaDocument;
   history: HistoryState<SparcaDocument>;
+  /**
+   * The object whose mask layer is being edited (マスクの編集), or null. Drawing and pasting
+   * then go into the mask; the selection is the mask content.
+   */
+  maskEdit: Id | null;
+  /** While editing a mask: show the result (標準) or the mask itself in gray. */
+  maskView: 'result' | 'mask';
   /** Document as last saved; dirty = doc !== savedDoc. */
   savedDoc: SparcaDocument;
   fileName: string;
@@ -176,6 +185,7 @@ export class EditorStore {
       ...freshSession(doc, UNTITLED, null),
       tool: 'select',
       eyedropperTarget: 'fill',
+      maskView: 'result',
       gradientToolTarget: 'fill',
       gradientTarget: 'fill',
       grid: DEFAULT_GRID,
@@ -366,7 +376,10 @@ export class EditorStore {
 
   select(ids: Id[]): void {
     const same = ids.length === this.state.selection.length && ids.every((id, i) => id === this.state.selection[i]);
-    this.set(same ? { selection: ids } : { selection: ids, nodeSelection: [] });
+    // Selecting anything outside the mask being edited ends マスクの編集.
+    const owner = this.state.maskEdit;
+    const leaves = owner && ids.some((id) => findObject(this.state.doc, id)?.maskOwner?.id !== owner);
+    this.set({ selection: ids, ...(same ? {} : { nodeSelection: [] }), ...(leaves ? { maskEdit: null } : {}) });
   }
 
   /** Change the selection edge setting; the current selection takes it too. */
@@ -448,5 +461,6 @@ function freshSession(doc: SparcaDocument, fileName: string, fileHandle: FileSys
     crop: null,
     compareImageId: null,
     zoom: 1,
+    maskEdit: null,
   };
 }

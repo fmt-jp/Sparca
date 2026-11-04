@@ -6,6 +6,7 @@
 import { removeObjects } from '../model/commands';
 import { boxCenter, rotatePoint } from '../model/geometry';
 import { docContoursToPath, pathContoursToDoc, type DocContour } from '../model/pathEdit';
+import { settleMask } from '../model/mask';
 import { canConvertToPath, shapeToPath } from '../model/shapeToPath';
 import { allObjects, findObject, isEffectivelyLocked } from '../model/tree';
 import type { Box, Fill, Gradient, PathObject, Point, SceneObject } from '../model/types';
@@ -100,7 +101,8 @@ export function combineSelection(ed: EditorStore, op: CombineOp, compute: Comput
     stroke: refitFill(paint?.stroke ?? null, bottom.box, geometry.box),
     strokeWidth: paint?.strokeWidth ?? 0,
     ...(paint?.strokeStyle ? { strokeStyle: paint.strokeStyle } : {}),
-    ...(bottom.mask ? { mask: { ...bottom.mask, gradient: refitFill(bottom.mask.gradient, bottom.box, geometry.box)! } } : {}),
+    // The mask content stays where it is on the canvas, placed against the new box.
+    ...(bottom.mask ? { mask: { ...settleMask(bottom)!, frame: geometry.box } } : {}),
     ...(paint?.strokeCap ? { strokeCap: paint.strokeCap } : {}),
     ...(paint?.strokeJoin ? { strokeJoin: paint.strokeJoin } : {}),
     ...geometry,

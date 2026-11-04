@@ -28,6 +28,7 @@ import { placeImageFiles, writableLayer } from '../store/actions';
 import type { PixelSelection, ToolId } from '../store/editor';
 import { pickColorAt } from '../store/colorActions';
 import { isSmooth, locateNode, moveAnchors, moveHandle, nearestOnFlat, type DocNode } from '../model/pathEdit';
+import { exitMaskEdit, maskOwner } from '../store/maskActions';
 import { applyGradientDrag, gradientSlot, type GradientSlot } from '../store/gradientTool';
 import { deleteSelectedNodes, editablePath, editLineAsPath, flatPath, insertNode, isLineShape, nudgeNodes, selectedNodes, toggleNodeType, writePathNodes } from '../store/pathActions';
 import { cancelCrop, commitCrop, startCrop } from '../store/imageActions';
@@ -319,6 +320,13 @@ export function CanvasView() {
           e.preventDefault();
           e.stopImmediatePropagation();
         }
+        return;
+      }
+      // Escape ends マスクの編集 (when nothing else is in progress).
+      if (e.key === 'Escape' && editor.getState().maskEdit && !gesture.current) {
+        exitMaskEdit(editor);
+        e.preventDefault();
+        e.stopImmediatePropagation();
       }
     };
     // Capture phase so these keys don't also reach the global shortcuts.
@@ -363,7 +371,7 @@ export function CanvasView() {
     };
     const layerId = writableLayer(editor, editor.getState().activeLayerId);
     if (!layerId) return;
-    editor.edit('パスの作成', (d) => addObject(d, layerId, path));
+    editor.edit('パスの作成', (d) => addObject(d, layerId, path, editor.getState().maskEdit));
     editor.select([path.id]);
     editor.setTool('select');
   }
@@ -411,11 +419,19 @@ export function CanvasView() {
     let el = target instanceof Element ? target : null;
     let topId: string | null = null;
     while (el && !el.hasAttribute('data-layer-id')) {
+      // Mask content being edited: the outermost object inside the mask.
+      if (el.hasAttribute('data-mask-of')) {
+        if (!topId) return null;
+        const loc = findObject(editor.getState().doc, topId);
+        return loc && !isEffectivelyLocked(loc) ? topId : null;
+      }
       const id = el.getAttribute('data-object-id');
       if (id) topId = id;
       el = el.parentElement;
     }
     if (!el || !topId) return null;
+    // While its mask is edited, the masked object itself is not picked (clicking it deselects).
+    if (topId === editor.getState().maskEdit) return null;
     const loc = findObject(editor.getState().doc, topId);
     if (!loc || isEffectivelyLocked(loc)) return null;
     return topId;
@@ -634,7 +650,7 @@ export function CanvasView() {
       t.box = { ...t.box, y: top, width: size.width, height: size.height };
       // The new text and its first edit form one undo step (see TextEditor.commit).
       editor.beginGesture();
-      editor.preview((d) => addObject(d, layerId, t));
+      editor.preview((d) => addObject(d, layerId, t, editor.getState().maskEdit));
       editor.select([t.id]);
       setEditingText({ id: t.id, isNew: true });
     }
@@ -933,7 +949,7 @@ export function CanvasView() {
         const line: PathObject = { ...createPath(nodes, false, box), name: '直線', ...newPaint('line'), fill: null };
         g.id = line.id;
         editor.beginGesture();
-        editor.preview((d) => addObject(d, layerId, line));
+        editor.preview((d) => addObject(d, layerId, line, editor.getState().maskEdit));
       } else {
         const id = g.id;
         editor.preview((d) => updateObject(d, id, { box, nodes } as Partial<SceneObject>));
@@ -949,7 +965,7 @@ export function CanvasView() {
       const shape: ShapeObject = { ...createShape(geometry, box), ...newPaint(g.tool === 'arrow' ? 'arrow' : 'shape') };
       g.id = shape.id;
       editor.beginGesture();
-      editor.preview((d) => addObject(d, layerId, shape));
+      editor.preview((d) => addObject(d, layerId, shape, editor.getState().maskEdit));
     } else {
       const id = g.id;
       editor.preview((d) => updateObject(d, id, { box, shape: geometry } as Partial<SceneObject>));
@@ -1165,6 +1181,9 @@ export function CanvasView() {
 
   const editingObj = editingText ? findObject(doc, editingText.id)?.object : null;
   const showRulers = useEditor((s) => s.rulers);
+  useEditor((s) => s.maskEdit);
+  const maskView = useEditor((s) => s.maskView);
+  const editingMask = maskOwner(editor);
   const rulerOrigin = useEditor((s) => s.rulerOrigin);
 
   return (
@@ -1223,7 +1242,13 @@ export function CanvasView() {
             doc={doc}
             width={doc.width * zoom}
             height={doc.height * zoom}
-            options={{ imageHref: (o) => imageCache.href(o, o.id === compareImageId), hitAreas: true, hiddenId: editingText?.id, idPrefix: 'screen' }}
+            options={{
+              imageHref: (o) => imageCache.href(o, o.id === compareImageId),
+              hitAreas: true,
+              hiddenId: editingText?.id,
+              idPrefix: 'screen',
+              maskEdit: editingMask ? { id: editingMask.id, view: maskView } : null,
+            }}
           />
         </div>
         <svg
@@ -1235,6 +1260,7 @@ export function CanvasView() {
           overflow="visible"
         >
           <GridOverlay width={doc.width} height={doc.height} zoom={zoom} />
+          {editingMask && <MaskEditFrame o={editingMask} zoom={zoom} />}
           <SelectionOverlay locs={selectedObjects} zoom={zoom} showHandles={tool === 'select' && !editingText} />
           {(tool === 'select' || tool === 'gradient') && !editingText && selectedObjects.length === 1 && !isEffectivelyLocked(selectedObjects[0]) && (
             <GradientHandles o={selectedObjects[0].object} zoom={zoom} />
@@ -1543,6 +1569,24 @@ function SelectionOverlay({
           })}
         </>
       )}
+    </g>
+  );
+}
+
+/** Around the object whose mask is being edited: a dashed frame and a 「マスクを編集中」 tag. */
+function MaskEditFrame({ o, zoom }: { o: SceneObject; zoom: number }) {
+  const b = objectBounds(o);
+  if (!b) return null;
+  const k = 1 / zoom;
+  return (
+    <g className="mask-edit-frame" data-testid="mask-edit-frame" pointerEvents="none">
+      <rect x={b.x} y={b.y} width={b.width} height={b.height} fill="none" strokeWidth={2 * k} strokeDasharray={`${8 * k} ${5 * k}`} />
+      <g transform={`translate(${b.x} ${b.y - 22 * k}) scale(${k})`}>
+        <rect width={96} height={18} rx={4} />
+        <text x={8} y={13}>
+          マスクを編集中
+        </text>
+      </g>
     </g>
   );
 }

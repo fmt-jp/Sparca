@@ -8,8 +8,10 @@ export interface ObjectLocation {
   siblings: SceneObject[];
   index: number;
   object: SceneObject;
-  /** Ancestor groups, outermost first. */
+  /** Ancestor groups (and the masked object, for mask content), outermost first. */
   ancestors: SceneObject[];
+  /** For an object inside a mask layer: the object the mask belongs to. */
+  maskOwner?: SceneObject;
 }
 
 export function findObject(doc: SparcaDocument, id: Id): ObjectLocation | null {
@@ -25,12 +27,18 @@ function findIn(
   siblings: SceneObject[],
   id: Id,
   ancestors: SceneObject[],
+  maskOwner?: SceneObject,
 ): ObjectLocation | null {
   for (let i = 0; i < siblings.length; i++) {
     const o = siblings[i];
-    if (o.id === id) return { layer, siblings, index: i, object: o, ancestors };
+    if (o.id === id) return { layer, siblings, index: i, object: o, ancestors, ...(maskOwner ? { maskOwner } : {}) };
     if (o.type === 'group') {
-      const found = findIn(layer, o.children, id, [...ancestors, o]);
+      const found = findIn(layer, o.children, id, [...ancestors, o], maskOwner);
+      if (found) return found;
+    }
+    // Objects inside a mask layer are found too, so the ordinary edits work on them.
+    if (o.mask) {
+      const found = findIn(layer, o.mask.children, id, [...ancestors, o], o);
       if (found) return found;
     }
   }
@@ -79,6 +87,7 @@ export function cloneWithNewIds<T extends SceneObject>(o: T): T {
 function reassign(o: SceneObject) {
   o.id = newId(o.type === 'group' ? 'g' : 'o');
   if (o.type === 'group') o.children.forEach(reassign);
+  o.mask?.children.forEach(reassign);
 }
 
 export function cloneLayerWithNewIds(layer: Layer): Layer {
@@ -88,9 +97,14 @@ export function cloneLayerWithNewIds(layer: Layer): Layer {
   return copy;
 }
 
-/** Asset ids referenced anywhere in the document. */
+/** Asset ids referenced anywhere in the document (mask layers included). */
 export function referencedAssets(doc: SparcaDocument): Set<string> {
   const ids = new Set<string>();
-  for (const o of allObjects(doc)) if (o.type === 'image') ids.add(o.assetId);
+  const visit = (list: SceneObject[]) =>
+    walkObjects(list, (o) => {
+      if (o.type === 'image') ids.add(o.assetId);
+      if (o.mask) visit(o.mask.children);
+    });
+  for (const l of doc.layers) visit(l.children);
   return ids;
 }

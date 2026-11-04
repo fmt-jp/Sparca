@@ -1239,9 +1239,20 @@ kbd {
   display: block;
   border-radius: 2px;
 }
-.type-badge.mask-badge.off {
-  opacity: 0.45;
-  text-decoration: line-through;
+.mask-thumb {
+  padding: 0;
+  line-height: 0;
+  border: 1px solid #888;
+  border-radius: 2px;
+  background: #000;
+  overflow: hidden;
+}
+.mask-thumb.off {
+  opacity: 0.4;
+}
+.mask-thumb.editing {
+  outline: 2px solid #e8572a;
+  outline-offset: 1px;
 }
 .gradient-ramp {
   display: inline-flex;
@@ -1722,4 +1733,21 @@ kbd {
   border-top: 1px solid var(--border);
   margin-top: 4px;
   padding-top: 2px;
+}
+
+/* マスクの編集: the frame and tag around the masked object. */
+.mask-edit-frame > rect {
+  stroke: #e8572a;
+}
+.mask-edit-frame g rect {
+  fill: #e8572a;
+}
+.mask-edit-frame text {
+  fill: #fff;
+  font-size: 12px;
+  font-family: system-ui, sans-serif;
+}
+.mask-edit-section {
+  border-left: 3px solid #e8572a;
+  padding-left: 8px;
 }

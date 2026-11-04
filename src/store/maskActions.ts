@@ -1,16 +1,24 @@
-// グラデーションマスク (types.ts ObjectMask): add, change and remove the mask of the selected object.
+// マスクレイヤー (types.ts ObjectMask): add, edit (マスクの編集), switch off and remove the mask
+// of the selected object.
 import { updateObject } from '../model/commands';
-import { newGradientMask } from '../model/mask';
+import { newGradientMask, newMask, settleMask } from '../model/mask';
 import { findObject, isEffectivelyLocked } from '../model/tree';
-import type { ObjectMask, SceneObject } from '../model/types';
+import type { Id, ObjectMask, SceneObject } from '../model/types';
 import type { EditorStore } from './editor';
 
-/** The one selected, unlocked object. */
+/** The one selected, unlocked object (not inside a mask). */
 function selectedObject(ed: EditorStore): SceneObject | null {
   const { doc, selection } = ed.getState();
   if (selection.length !== 1) return null;
   const loc = findObject(doc, selection[0]);
-  return loc && !isEffectivelyLocked(loc) ? loc.object : null;
+  return loc && !loc.maskOwner && !isEffectivelyLocked(loc) ? loc.object : null;
+}
+
+/** The object whose mask is being edited, if it still has one. */
+export function maskOwner(ed: EditorStore): SceneObject | null {
+  const { doc, maskEdit } = ed.getState();
+  const o = maskEdit ? findObject(doc, maskEdit)?.object : null;
+  return o?.mask ? o : null;
 }
 
 export function canAddMask(ed: EditorStore): boolean {
@@ -19,13 +27,32 @@ export function canAddMask(ed: EditorStore): boolean {
 }
 
 export function canRemoveMask(ed: EditorStore): boolean {
-  return !!selectedObject(ed)?.mask;
+  return !!(selectedObject(ed) ?? maskOwner(ed))?.mask;
+}
+
+function add(ed: EditorStore, mask: ObjectMask | null, id: Id, label: string): boolean {
+  if (!mask) return false;
+  ed.edit(label, (d) => updateObject(d, id, { mask } as Partial<SceneObject>));
+  enterMaskEdit(ed, id);
+  return true;
 }
 
 /**
- * Give the selected object (image, shape, path, text or group) a gradient mask: white on the
- * left fading to black on the right. The canvas then shows the mask's handles. One undo step.
+ * Give the selected object (image, shape, path, text or group) an empty mask layer — white
+ * (all shows; draw black to hide) or black (all hidden; draw white to show) — and start
+ * editing it. One undo step.
  */
+export function addMask(ed: EditorStore, background: 'white' | 'black'): boolean {
+  const o = selectedObject(ed);
+  if (!o) {
+    ed.notify('error', 'マスクを付けるオブジェクトを 1 つ選択してください。');
+    return false;
+  }
+  if (o.mask) return false;
+  return add(ed, newMask(o, background), o.id, 'マスクの追加');
+}
+
+/** A mask layer holding a white-to-black gradient rectangle (左が見え、右へ消える). */
 export function addGradientMask(ed: EditorStore): boolean {
   const o = selectedObject(ed);
   if (!o) {
@@ -33,30 +60,47 @@ export function addGradientMask(ed: EditorStore): boolean {
     return false;
   }
   if (o.mask) return false;
-  const mask = newGradientMask(o);
-  if (!mask) return false;
-  ed.edit('グラデーションマスクの追加', (d) => updateObject(d, o.id, { mask } as Partial<SceneObject>));
-  ed.set({ gradientTarget: 'mask' });
-  return true;
+  return add(ed, newGradientMask(o), o.id, 'グラデーションマスクの追加');
 }
 
-/** Change the selected object's mask (merging repeated slider steps by key). */
-export function setMask(ed: EditorStore, id: string, patch: Partial<ObjectMask>, label: string, mergeKey?: string): void {
+/**
+ * Start editing the mask of object `id`: drawing, pasting and selecting then work on the mask
+ * content. The content is first placed against the object's current box (it is drawn there anyway).
+ */
+export function enterMaskEdit(ed: EditorStore, id: Id): void {
+  const loc = findObject(ed.getState().doc, id);
+  if (!loc?.object.mask || isEffectivelyLocked(loc)) return;
+  const settled = settleMask(loc.object);
+  if (settled !== loc.object.mask) ed.edit('マスクの編集', (d) => updateObject(d, id, { mask: settled } as Partial<SceneObject>));
+  ed.select([]);
+  ed.set({ maskEdit: id, tool: 'select' });
+}
+
+/** Stop editing the mask; the masked object is selected again. */
+export function exitMaskEdit(ed: EditorStore): void {
+  const id = ed.getState().maskEdit;
+  if (!id) return;
+  ed.set({ maskEdit: null });
+  if (findObject(ed.getState().doc, id)) ed.select([id]);
+}
+
+/** Change the mask of object `id` (on/off, background). */
+export function setMask(ed: EditorStore, id: Id, patch: Partial<Pick<ObjectMask, 'enabled' | 'background'>>, label: string): void {
   const loc = findObject(ed.getState().doc, id);
   const mask = loc?.object.mask;
   if (!mask) return;
-  ed.edit(label, (d) => updateObject(d, id, { mask: { ...mask, ...patch } } as Partial<SceneObject>), mergeKey ? `${mergeKey}:${id}` : null);
-  ed.set({ gradientTarget: 'mask' });
+  ed.edit(label, (d) => updateObject(d, id, { mask: { ...mask, ...patch } } as Partial<SceneObject>));
 }
 
-/** Remove the selected object's mask (the object shows in full again). One undo step. */
+/** Remove the mask of the selected object (or the one being edited): it shows in full again. One undo step. */
 export function removeMask(ed: EditorStore): boolean {
-  const o = selectedObject(ed);
+  const o = maskOwner(ed) ?? selectedObject(ed);
   if (!o?.mask) return false;
+  ed.set({ maskEdit: null });
   ed.edit('マスクの削除', (d) => {
     const loc = findObject(d, o.id);
     if (loc) delete loc.object.mask;
   });
-  if (ed.getState().gradientTarget === 'mask') ed.set({ gradientTarget: 'fill' });
+  ed.select([o.id]);
   return true;
 }
