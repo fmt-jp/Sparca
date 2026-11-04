@@ -37,19 +37,27 @@ const isRed = (p: number[]) => p[0] > 230 && p[1] < 30 && p[2] < 30;
 const isWhite = (p: number[]) => p[0] > 245 && p[1] > 245 && p[2] > 245;
 const isPink = (p: number[]) => p[0] > 230 && p[1] > 60 && p[1] < 200; // half faded red on white
 
-test('a gradient mask fades the shape from left to right; it can be turned off, moved and removed', async ({ page }) => {
-  await redRect(page);
+const owner = (page: Page) => state<{ id: string; mask: { background: string; enabled: boolean; children: { type: string; fill: unknown }[] } | null }>(page, 's => { const o = s.doc.layers[0].children[0]; return { id: o.id, mask: o.mask ?? null }; }');
+
+test('グラデーションマスク: fades the shape; editing the mask moves its gradient; off, view, remove', async ({ page }) => {
+  const c = await redRect(page);
   await props(page).getByRole('button', { name: 'グラデーションマスクを追加' }).click();
-  expect(await state(page, 's => s.doc.layers[0].children[0].mask.gradient.kind')).toBe('linear');
-  await expect(page.getByTestId('gradient-handles')).toHaveAttribute('data-gradient-key', 'mask');
-  await expect(page.locator('.mask-badge')).toHaveCount(1);
+  // A mask layer holding a gradient rectangle, and editing it starts.
+  let o = await owner(page);
+  expect(o.mask).toMatchObject({ background: 'black', enabled: true });
+  expect(o.mask!.children).toHaveLength(1);
+  await expect(page.getByTestId('mask-edit-panel')).toBeVisible();
+  await expect(page.getByTestId('mask-edit-frame')).toBeVisible();
+  await expect(page.locator('.mask-thumb.editing')).toHaveCount(1);
   // White (shows) at 10 % of the width, black (hidden) at 90 %.
   let px = await exportPng(page, [[110, 200], [250, 200], [395, 200]]);
   expect(isRed(px[0])).toBe(true);
   expect(isPink(px[1])).toBe(true);
   expect(isWhite(px[2])).toBe(true);
-  // Turn it the other way: drag the end handle to the left edge.
-  const c = await canvasBox(page);
+  // Click the shape: the gradient rectangle of the mask is picked; turn its gradient around.
+  await page.mouse.click(c.x + 250, c.y + 200);
+  expect(await state(page, 's => s.selection')).toEqual([await state(page, 's => s.doc.layers[0].children[0].mask.children[0].id')]);
+  await expect(page.getByTestId('gradient-handles')).toHaveAttribute('data-gradient-key', 'fill');
   const end = (await page.locator('[data-gradient-handle="end"]').boundingBox())!;
   await drag(page, { x: end.x + end.width / 2, y: end.y + end.height / 2 }, { x: c.x + 100, y: c.y + 200 });
   const start = (await page.locator('[data-gradient-handle="start"]').boundingBox())!;
@@ -57,26 +65,56 @@ test('a gradient mask fades the shape from left to right; it can be turned off, 
   px = await exportPng(page, [[105, 200], [395, 200]]);
   expect(isWhite(px[0])).toBe(true);
   expect(isRed(px[1])).toBe(true);
+  // The mask itself in gray, and back.
+  await props(page).getByLabel('マスクのみ（白黒）').check();
+  await expect(page.locator(`[data-testid=canvas] g[data-mask-of="${o.id}"] filter`)).toHaveCount(1);
+  await props(page).getByLabel('仕上がり').check();
+  // Escape ends editing; the shape is selected again.
+  await page.keyboard.press('Escape');
+  expect(await state(page, 's => s.maskEdit')).toBeNull();
+  expect(await state(page, 's => s.selection')).toEqual([o.id]);
   // Off: the whole shape shows again; the mask is kept.
   await props(page).getByLabel('マスクを使う').uncheck();
   px = await exportPng(page, [[105, 200], [395, 200]]);
   expect(isRed(px[0]) && isRed(px[1])).toBe(true);
   await props(page).getByLabel('マスクを使う').check();
-  // Radial: the middle shows, the corners fade.
-  await props(page).getByLabel('マスクの種類').selectOption('radial');
-  px = await exportPng(page, [[250, 200], [103, 103]]);
-  expect(isRed(px[0])).toBe(true);
-  expect(isRed(px[1])).toBe(false);
   // Remove: back to the plain shape, in one undo step back.
   await props(page).getByRole('button', { name: 'マスクを削除' }).click();
-  expect(await state(page, 's => s.doc.layers[0].children[0].mask ?? null')).toBeNull();
+  expect((await owner(page)).mask).toBeNull();
   await page.keyboard.press('Control+z');
-  expect(await state(page, 's => s.doc.layers[0].children[0].mask.gradient.kind')).toBe('radial');
+  o = await owner(page);
+  expect(o.mask!.children).toHaveLength(1);
+});
+
+test('a black mask hides all; a white shape drawn while editing shows through it', async ({ page }) => {
+  const c = await redRect(page);
+  await props(page).getByRole('button', { name: 'マスクを追加（黒）' }).click();
+  let px = await exportPng(page, [[250, 200]]);
+  expect(isWhite(px[0])).toBe(true); // all hidden
+  // Draw an ellipse while editing: it goes into the mask; make it white.
+  await page.keyboard.press('r');
+  await page.keyboard.press('r');
+  await page.keyboard.press('r'); // 矩形 → 角丸矩形 → 楕円
+  await drag(page, { x: c.x + 150, y: c.y + 150 }, { x: c.x + 250, y: c.y + 250 });
+  await setColor(page, props(page), '塗り', '#ffffff');
+  const o = await owner(page);
+  expect(o.mask!.children.map((k) => k.type)).toEqual(['shape']);
+  expect(await state(page, 's => s.doc.layers[0].children.length')).toBe(1); // not on the layer
+  px = await exportPng(page, [[200, 200], [350, 200], [155, 155]]);
+  expect(isRed(px[0])).toBe(true); // inside the ellipse
+  expect(isWhite(px[1])).toBe(true); // outside
+  expect(isWhite(px[2])).toBe(true); // in its box but outside the ellipse
+  // The layers panel's mask thumbnail ends and starts editing.
+  await page.locator('.mask-thumb').click();
+  expect(await state(page, 's => s.maskEdit')).toBeNull();
+  await page.locator('.mask-thumb').click();
+  expect(await state(page, 's => s.maskEdit')).toBe(o.id);
 });
 
 test('the mask moves with the shape', async ({ page }) => {
   const c = await redRect(page);
   await props(page).getByRole('button', { name: 'グラデーションマスクを追加' }).click();
+  await page.keyboard.press('Escape');
   await page.keyboard.press('v');
   await drag(page, { x: c.x + 200, y: c.y + 200 }, { x: c.x + 300, y: c.y + 250 }); // move by (100, 50)
   const px = await exportPng(page, [[210, 250], [495, 250]]);
@@ -92,10 +130,11 @@ test('a group gets a mask from the 変更 menu that covers all its members', asy
   await page.getByRole('button', { name: '変更', exact: true }).click();
   await page.getByRole('menuitem', { name: 'グラデーションマスクを追加' }).click();
   expect(await state(page, 's => s.doc.layers[0].children[0].type')).toBe('group');
-  expect(await state(page, 's => s.doc.layers[0].children[0].mask.frame')).toEqual({ x: 100, y: 100, width: 300, height: 200, rotation: 0 });
+  expect(await state(page, 's => s.doc.layers[0].children[0].mask.children.length')).toBe(1);
   const px = await exportPng(page, [[110, 200], [395, 200]]);
   expect(isRed(px[0])).toBe(true); // left member shows
   expect(isWhite(px[1])).toBe(true); // right member faded out
+  await page.keyboard.press('Escape');
   await page.getByRole('button', { name: '変更', exact: true }).click();
   await expect(page.getByRole('menuitem', { name: 'グラデーションマスクを追加' })).toBeDisabled();
 });

@@ -116,6 +116,7 @@ test('text can be filled with a pattern; the color field remembers the motif col
   const c = await canvasBox(page);
   await page.keyboard.press('t');
   await page.mouse.click(c.x + 100, c.y + 100);
+  await expect(page.locator('textarea.text-editor')).toBeFocused();
   await page.keyboard.type('柄');
   await page.keyboard.press('Escape');
   await props(page).getByLabel('文字色の種類').selectOption('pattern');

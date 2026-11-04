@@ -132,8 +132,8 @@ export function normalizeAngle(deg: number): number {
 
 export function transformObject<T extends SceneObject>(o: T, t: ObjectTransform): T {
   if (o.type === 'group') {
-    // A group's mask frame moves, scales and turns with it (a leaf's mask follows its box).
-    const mask = o.mask?.frame ? { ...o.mask, frame: transformBox(o.mask.frame, t) } : o.mask;
+    // A group's mask content moves, scales and turns with it (a leaf's follows its box).
+    const mask = o.mask ? { ...o.mask, children: o.mask.children.map((c) => transformObject(c, t)) } : o.mask;
     return { ...o, children: o.children.map((c) => transformObject(c, t)), ...(mask ? { mask } : {}) };
   }
   return { ...o, box: transformBox(o.box, t) };

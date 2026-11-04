@@ -1,3 +1,5 @@
+import { enterMaskEdit, exitMaskEdit } from '../store/maskActions';
+import { MaskPreview } from '../render/DocumentSvg';
 import { useState } from 'react';
 import {
   duplicateLayer,
@@ -221,6 +223,7 @@ function ObjectList(props: {
   setDropTarget: (d: DropPos | null) => void;
 }) {
   const { objects, layer, depth, selection } = props;
+  const maskEdit = useEditor((s) => s.maskEdit);
   const topFirst = [...objects].reverse();
   return (
     <ul role="group">
@@ -270,9 +273,20 @@ function ObjectList(props: {
             />
             <span className="type-badge">{TYPE_LABEL[o.type]}</span>
             {o.mask && (
-              <span className={`type-badge mask-badge${o.mask.enabled ? '' : ' off'}`} title={o.mask.enabled ? 'グラデーションマスクあり' : 'グラデーションマスク（オフ）'}>
-                マスク
-              </span>
+              <button
+                type="button"
+                className={`mask-thumb${o.mask.enabled ? '' : ' off'}${maskEdit === o.id ? ' editing' : ''}`}
+                aria-label={maskEdit === o.id ? `「${o.name}」のマスクの編集を終了` : `「${o.name}」のマスクを編集`}
+                aria-pressed={maskEdit === o.id}
+                title={(maskEdit === o.id ? 'クリックでマスクの編集を終了' : 'クリックでマスクを編集') + (o.mask.enabled ? '' : '（マスクはオフ）')}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (maskEdit === o.id) exitMaskEdit(editor);
+                  else enterMaskEdit(editor, o.id);
+                }}
+              >
+                <MaskPreview o={o} />
+              </button>
             )}
             <EditableName
               name={o.name}

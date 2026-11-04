@@ -2,7 +2,7 @@
 import { transformObjects, updateObject } from '../model/commands';
 import { boxCenter, unionBounds } from '../model/geometry';
 import { findObject, isEffectivelyLocked } from '../model/tree';
-import type { ColorAdjust, Gradient, LocalEdit, SceneObject, ShapeObject, TextObject, ImageObject, PathObject, Id, Box, Paint, Stroke, StrokeCap, StrokeJoin, StrokeStyle, TextPathOrientation } from '../model/types';
+import type { ColorAdjust, LocalEdit, SceneObject, ShapeObject, TextObject, ImageObject, PathObject, Id, Box, Paint, Stroke, StrokeCap, StrokeJoin, StrokeStyle, TextPathOrientation } from '../model/types';
 import { detachTextFromPath, setTextPath } from '../store/textPathActions';
 import { pipelineOutputSize } from '../engine/pipeline';
 import { METHOD_LABELS } from '../engine/resample';
@@ -12,11 +12,10 @@ import { FEATHER_LIMITS, type SelectionEdge } from '../store/editor';
 import { moveAnchors } from '../model/pathEdit';
 import { convertSelectedNodes, deleteSelectedNodes, flatPath, selectedNodes, selectedOutline, setPathClosed, setPathNodes } from '../store/pathActions';
 import { fitTextBox } from '../render/text';
-import { GRADIENT_KINDS, isGradient, toGradient } from '../model/gradient';
-import { maskFrame } from '../model/mask';
-import { addGradientMask, removeMask, setMask } from '../store/maskActions';
+import { isGradient } from '../model/gradient';
+import { addGradientMask, addMask, enterMaskEdit, exitMaskEdit, maskOwner, removeMask, setMask } from '../store/maskActions';
 import { isPattern } from '../model/pattern';
-import { FillInput, GradientEditor } from './FillInput';
+import { FillInput } from './FillInput';
 import { FontPicker } from './FontPicker';
 import { EffectsPanel } from './EffectsPanel';
 import { arrowTipAngle, headForTipAngle } from '../render/shapes';
@@ -43,6 +42,8 @@ export function PropertiesPanel() {
   const selection = useEditor((s) => s.selection);
   const tool = useEditor((s) => s.tool);
   const locs = selection.map((id) => findObject(doc, id)).filter((l): l is NonNullable<typeof l> => !!l);
+  useEditor((s) => s.maskEdit);
+  const editingMask = maskOwner(editor);
 
   let content: React.ReactNode;
   if (tool === 'crop') {
@@ -71,7 +72,7 @@ export function PropertiesPanel() {
         {o.type === 'text' && <TextSection o={o} />}
         {o.type === 'image' && <ImageSection o={o} />}
         <EffectsPanel o={o} />
-        <MaskSection o={o} />
+        {!locs[0].maskOwner && <MaskSection o={o} />}
       </fieldset>
     );
   } else {
@@ -79,7 +80,7 @@ export function PropertiesPanel() {
     content = (
       <>
         <MultiSection ids={locs.map((l) => l.object.id)} objects={locs.map((l) => l.object)} />
-        {group && (
+        {group && !group.maskOwner && (
           <fieldset disabled={isEffectivelyLocked(group)} className="prop-fieldset">
             <MaskSection o={group.object} />
           </fieldset>
@@ -93,6 +94,7 @@ export function PropertiesPanel() {
   const category = toolCategory(tool);
   return (
     <section className="properties" aria-label="プロパティ">
+      {editingMask && <MaskEditSection owner={editingMask} />}
       {SELECTION_TOOLS.has(tool) && <SelectionEdgeSection />}
       {tool !== 'crop' && <PixelSelectionSection />}
       {tool === 'eyedropper' && <EyedropperSection />}
@@ -939,52 +941,76 @@ export function AlignButtons({ single }: { single: boolean }) {
 }
 
 /**
- * グラデーションマスク: add one, or edit it (kind, colors — white shows, black hides —,
- * angle), switch it off, or remove it. Its handles show on the canvas while it is edited.
+ * マスク of the selected object: add one (white: all shows / black: all hidden / a gradient),
+ * or edit it (マスクの編集), switch it off, or remove it.
  */
 function MaskSection({ o }: { o: SceneObject }) {
   const mask = o.mask;
-  const frame = maskFrame(o);
-  if (!mask || !frame) {
+  if (!mask) {
     return (
       <div className="prop-section" data-testid="mask-panel">
         <span className="section-title">マスク</span>
-        <button type="button" title="白い所は見え、黒い所は透けるグラデーションで、オブジェクトをだんだん透明にする" onClick={() => addGradientMask(editor)}>
+        <button type="button" title="白から黒のグラデーションのマスク：だんだん透明にする" onClick={() => addGradientMask(editor)}>
           グラデーションマスクを追加
+        </button>
+        <button type="button" title="全体が見えるマスク（黒く描いた所が透ける）" onClick={() => addMask(editor, 'white')}>
+          マスクを追加（白）
+        </button>
+        <button type="button" title="全体が隠れるマスク（白く描いた所だけが見える）" onClick={() => addMask(editor, 'black')}>
+          マスクを追加（黒）
         </button>
       </div>
     );
   }
-  const size = o.type === 'group' ? frame : o.box;
   return (
     <div className="prop-section" data-testid="mask-panel">
       <span className="section-title">マスク</span>
       <Toggle checked={mask.enabled} onChange={(enabled) => setMask(editor, o.id, { enabled }, enabled ? 'マスクをオン' : 'マスクをオフ')}>
         マスクを使う
       </Toggle>
-      <button type="button" title="キャンバスにマスクのハンドルを表示する" onClick={() => editor.set({ gradientTarget: 'mask' })}>
-        ハンドルを表示
+      <button type="button" className="primary" onClick={() => enterMaskEdit(editor, o.id)}>
+        マスクを編集
       </button>
       <button type="button" onClick={() => removeMask(editor)}>
         マスクを削除
       </button>
-      <span className="hint">白い所は見え、黒い所は透けます（灰色は半透明）。</span>
-      <Field label="種類" group wide>
-        <span className="fill-input">
-          <select
-            aria-label="マスクの種類"
-            value={mask.gradient.kind}
-            onChange={(e) => setMask(editor, o.id, { gradient: toGradient(e.target.value as Gradient['kind'], mask.gradient) }, 'マスクの種類の変更')}
-          >
-            {GRADIENT_KINDS.map((g) => (
-              <option key={g.kind} value={g.kind}>
-                {g.label}
-              </option>
-            ))}
-          </select>
-          <GradientEditor g={mask.gradient} label="マスク" size={size} onChange={(gradient, l, k) => setMask(editor, o.id, { gradient }, `マスクの${l}`, k ? `mask-${k}` : undefined)} />
-        </span>
-      </Field>
+      <span className="hint">
+        マスクの中身（{mask.children.length} 個）の白い所は見え、黒い所は透けます（灰色は半透明）。何もない所は{mask.background === 'white' ? '白（見える）' : '黒（透ける）'}。
+      </span>
+    </div>
+  );
+}
+
+/** While editing a mask: what is being edited, how it shows, its background, and the way out. */
+function MaskEditSection({ owner }: { owner: SceneObject }) {
+  const view = useEditor((s) => s.maskView);
+  const mask = owner.mask!;
+  return (
+    <div className="prop-section mask-edit-section" data-testid="mask-edit-panel">
+      <span className="section-title">マスクを編集中：{owner.name || 'オブジェクト'}</span>
+      <div className="radio-row" role="radiogroup" aria-label="マスクの表示">
+        <label>
+          <input type="radio" checked={view === 'result'} onChange={() => editor.set({ maskView: 'result' })} /> 仕上がり
+        </label>
+        <label>
+          <input type="radio" checked={view === 'mask'} onChange={() => editor.set({ maskView: 'mask' })} /> マスクのみ（白黒）
+        </label>
+      </div>
+      <div className="radio-row" role="radiogroup" aria-label="マスクの背景">
+        <span className="field-label">何もない所</span>
+        <label>
+          <input type="radio" checked={mask.background === 'white'} onChange={() => setMask(editor, owner.id, { background: 'white' }, 'マスクの背景の変更')} /> 白（見える）
+        </label>
+        <label>
+          <input type="radio" checked={mask.background === 'black'} onChange={() => setMask(editor, owner.id, { background: 'black' }, 'マスクの背景の変更')} /> 黒（透ける）
+        </label>
+      </div>
+      <button type="button" className="primary" onClick={() => exitMaskEdit(editor)}>
+        マスクの編集を終了
+      </button>
+      <span className="hint">
+        描いた図形・テキスト・貼り付けたものはマスクの中に入ります。白い所は見え、黒い所は透けます（灰色は半透明。グラデーションやぼかしも使えます）。Esc でも終了します。
+      </span>
     </div>
   );
 }
