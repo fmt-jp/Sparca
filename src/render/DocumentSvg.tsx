@@ -282,6 +282,12 @@ function maskDef(background: 'white' | 'black', id: string, region: Rect, conten
   );
 }
 
+/** How far an object shows past its box (its children's, for a group), whole px. */
+export function reachOf(o: SceneObject): number {
+  if (o.type !== 'group') return Math.ceil(leafReach(o));
+  return o.children.reduce((m, c) => Math.max(m, reachOf(c)), 0);
+}
+
 /** How far a leaf object shows past its box (stroke, letters on a path, effects). */
 function leafReach(o: Exclude<SceneObject, GroupObject>): number {
   let m = effectsMargin(o.effects);

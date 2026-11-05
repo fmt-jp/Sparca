@@ -20,11 +20,12 @@ export function newMask(o: SceneObject, background: 'white' | 'black'): ObjectMa
 }
 
 /**
- * A rectangle over `frame` widened by a margin on every side (so strokes and effects past the
- * box are covered too), filled with `gradient` given in coordinates normalized to `frame`.
+ * A rectangle over `frame` widened by `margin` on every side (how far strokes and effects show
+ * past the box, so they are covered too), filled with `gradient` given in coordinates
+ * normalized to `frame`.
  */
-export function gradientRect(frame: Box, gradient: Gradient, name = 'グラデーション'): ShapeObject {
-  const m = Math.max(frame.width, frame.height, 1);
+export function gradientRect(frame: Box, gradient: Gradient, margin = 0, name = 'グラデーション'): ShapeObject {
+  const m = Math.max(0, margin);
   const w = frame.width + 2 * m;
   const h = frame.height + 2 * m;
   const c = boxCenter(frame);
@@ -48,12 +49,15 @@ export const WHITE_TO_BLACK: Gradient = {
   ],
 };
 
-/** A mask with a white-to-black gradient (left shows, right fades out): the グラデーションマスク. */
-export function newGradientMask(o: SceneObject, gradient: Gradient = WHITE_TO_BLACK): ObjectMask | null {
+/**
+ * A mask with a white-to-black gradient (left shows, right fades out): the グラデーションマスク.
+ * `margin`: how far the object shows past its box (strokes, effects).
+ */
+export function newGradientMask(o: SceneObject, margin = 0, gradient: Gradient = WHITE_TO_BLACK): ObjectMask | null {
   const mask = newMask(o, 'black');
   const frame = maskFrame(o);
   if (!mask || !frame) return null;
-  return { ...mask, children: [gradientRect(frame, gradient)] };
+  return { ...mask, children: [gradientRect(frame, gradient, margin)] };
 }
 
 /** Whether a leaf's mask content needs mapping (its box changed since the content was placed). */

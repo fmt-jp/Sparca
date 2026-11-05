@@ -1751,3 +1751,8 @@ kbd {
   border-left: 3px solid #e8572a;
   padding-left: 8px;
 }
+.mask-content-list button.on {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+}

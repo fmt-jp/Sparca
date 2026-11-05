@@ -5,7 +5,8 @@ import { MAX_CURVE_POINTS } from '../model/curves';
 import { defaultPipeline } from '../model/factory';
 import { PATTERN_MOTIFS, PATTERN_SIZE } from '../model/pattern';
 import { gradientRect } from '../model/mask';
-import type { Box, EffectKind, Gradient, PatternMotif } from '../model/types';
+import { effectsMargin } from '../render/effects';
+import type { Box, Effect, EffectKind, Gradient, PatternMotif } from '../model/types';
 import type { SparcaDocument } from '../model/types';
 import { MAX_DIMENSION } from '../model/types';
 
@@ -99,15 +100,19 @@ function checkObject(o: unknown, where: string, ids: Set<string>, assets: Obj): 
   o.locked = bool(o, 'locked', false);
   o.opacity = typeof o.opacity === 'number' ? Math.min(1, Math.max(0, o.opacity)) : 1;
   if (type === 'group') {
-    if (o.mask !== undefined) o.mask = checkMask(o.mask, `${where}.mask`, null, ids, assets);
+    // (An old group mask's rectangle gets a quarter of the frame around it for the members' effects.)
+    if (o.mask !== undefined) o.mask = checkMask(o.mask, `${where}.mask`, null, ids, assets, -1);
     arr(o, 'children', where).forEach((c, j) => checkObject(c, `${where}.children[${j}]`, ids, assets));
     return;
   }
   const box = o.box;
   if (!isObj(box)) throw new Invalid(`${where}.box がありません`);
   for (const k of ['x', 'y', 'width', 'height', 'rotation']) num(box, k, `${where}.box`);
-  if (o.mask !== undefined) o.mask = checkMask(o.mask, `${where}.mask`, box as unknown as Box, ids, assets);
   o.effects = checkEffects(o.effects, `${where}.effects`);
+  if (o.mask !== undefined) {
+    const reach = effectsMargin(o.effects as Effect[]) + (typeof o.strokeWidth === 'number' ? Math.max(0, o.strokeWidth) : 0) + 2;
+    o.mask = checkMask(o.mask, `${where}.mask`, box as unknown as Box, ids, assets, Math.ceil(reach));
+  }
   switch (type) {
     case 'shape': {
       const s = o.shape;
@@ -328,13 +333,15 @@ function checkBox(v: unknown, where: string): Box {
  * 0.14–0.19 ({ gradient, enabled, frame? }) are turned into a mask layer holding the same
  * gradient as a rectangle, which looks the same.
  */
-function checkMask(v: unknown, where: string, box: Box | null, ids: Set<string>, assets: Obj): Obj {
+function checkMask(v: unknown, where: string, box: Box | null, ids: Set<string>, assets: Obj, margin = 0): Obj {
   if (!isObj(v)) throw new Invalid(`${where} が正しくありません`);
   if (v.gradient !== undefined && v.children === undefined) {
     checkFill(v.gradient, `${where}.gradient`, false, false);
     if (!isObj(v.gradient) || v.gradient.kind === 'pattern') throw new Invalid(`${where}.gradient が正しくありません`);
     const frame = box ?? checkBox(v.frame, `${where}.frame`);
-    const rect = gradientRect(frame, v.gradient as unknown as Gradient);
+    if (margin < 0) margin = Math.ceil(Math.max(frame.width, frame.height) / 4);
+    // Covered as far as the gradient mask reached before (strokes and effects past the box).
+    const rect = gradientRect(frame, v.gradient as unknown as Gradient, margin);
     return { background: 'black', children: [rect], enabled: bool(v, 'enabled', true), ...(box ? { frame: { ...box } } : {}) };
   }
   if (v.background !== 'white' && v.background !== 'black') throw new Invalid(`${where}.background が正しくありません`);

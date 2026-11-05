@@ -49,6 +49,11 @@ test('グラデーションマスク: fades the shape; editing the mask moves it
   await expect(page.getByTestId('mask-edit-panel')).toBeVisible();
   await expect(page.getByTestId('mask-edit-frame')).toBeVisible();
   await expect(page.locator('.mask-thumb.editing')).toHaveCount(1);
+  // Its gradient rectangle is selected at once, so the colors can be changed right away.
+  const rectId = await state<string>(page, 's => s.doc.layers[0].children[0].mask.children[0].id');
+  expect(await state(page, 's => s.selection')).toEqual([rectId]);
+  await expect(props(page).getByRole('button', { name: /^塗りの色1/ })).toBeVisible();
+  await expect(props(page).getByRole('group', { name: 'マスクの中身' }).getByRole('button', { name: 'グラデーション' })).toHaveAttribute('aria-pressed', 'true');
   // White (shows) at 10 % of the width, black (hidden) at 90 %.
   let px = await exportPng(page, [[110, 200], [250, 200], [395, 200]]);
   expect(isRed(px[0])).toBe(true);
@@ -96,6 +101,12 @@ test('a black mask hides all; a white shape drawn while editing shows through it
   await page.keyboard.press('r');
   await page.keyboard.press('r'); // 矩形 → 角丸矩形 → 楕円
   await drag(page, { x: c.x + 150, y: c.y + 150 }, { x: c.x + 250, y: c.y + 250 });
+  // The content list selects it too.
+  await page.keyboard.press('v');
+  await page.mouse.click(c.x + 600, c.y + 500); // empty: nothing selected, still editing
+  expect(await state(page, 's => s.selection')).toEqual([]);
+  await props(page).getByRole('group', { name: 'マスクの中身' }).getByRole('button').first().click();
+  expect(await state(page, 's => s.selection.length')).toBe(1);
   // It stays selected through edits, so its color can be changed again and again.
   await setColor(page, props(page), '塗り', '#808080');
   const ellipseId = await state<string>(page, 's => s.doc.layers[0].children[0].mask.children[0].id');
