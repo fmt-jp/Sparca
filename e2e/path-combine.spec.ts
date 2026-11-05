@@ -97,6 +97,7 @@ test('the right-click menu has パスの結合; text cannot take part', async ({
   // With a text in the selection the commands are disabled.
   await setTool(page, 'text');
   await page.mouse.click(c.x + 400, c.y + 400);
+  await expect(page.locator('textarea.text-editor')).toBeFocused();
   await page.keyboard.type('T');
   await page.keyboard.press('Escape');
   await page.keyboard.press('Control+a');

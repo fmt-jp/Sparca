@@ -58,6 +58,9 @@ describe('マスクレイヤー', () => {
     expect(findObject(ed.getState().doc, 's')?.maskOwner?.id).toBe('r');
     ed.select(['s']);
     expect(ed.getState().maskEdit).toBe('r');
+    // Editing mask content keeps it selected (its color can be changed again).
+    ed.edit('color', (d) => updateObject(d, 's', { fill: '#ffffff' } as Partial<SceneObject>));
+    expect(ed.getState().selection).toEqual(['s']);
     ed.select(['other']);
     expect(ed.getState().maskEdit).toBeNull();
   });

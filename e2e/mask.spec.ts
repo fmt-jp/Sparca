@@ -96,7 +96,13 @@ test('a black mask hides all; a white shape drawn while editing shows through it
   await page.keyboard.press('r');
   await page.keyboard.press('r'); // 矩形 → 角丸矩形 → 楕円
   await drag(page, { x: c.x + 150, y: c.y + 150 }, { x: c.x + 250, y: c.y + 250 });
+  // It stays selected through edits, so its color can be changed again and again.
+  await setColor(page, props(page), '塗り', '#808080');
+  const ellipseId = await state<string>(page, 's => s.doc.layers[0].children[0].mask.children[0].id');
+  expect(await state(page, 's => s.selection')).toEqual([ellipseId]);
   await setColor(page, props(page), '塗り', '#ffffff');
+  expect(await state(page, 's => s.selection')).toEqual([ellipseId]);
+  expect(await state(page, 's => s.doc.layers[0].children[0].mask.children[0].fill')).toBe('#ffffff');
   const o = await owner(page);
   expect(o.mask!.children.map((k) => k.type)).toEqual(['shape']);
   expect(await state(page, 's => s.doc.layers[0].children.length')).toBe(1); // not on the layer
