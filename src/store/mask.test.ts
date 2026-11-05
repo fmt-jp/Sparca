@@ -9,7 +9,7 @@ import { findObject } from '../model/tree';
 import type { GroupObject, SceneObject, ShapeObject } from '../model/types';
 import { DocumentSvg } from '../render/DocumentSvg';
 import { EditorStore } from './editor';
-import { addGradientMask, addMask, canAddMask, enterMaskEdit, exitMaskEdit, maskOwner, removeMask, setMask } from './maskActions';
+import { addGradientMask, addMask, canAddMask, enterMaskEdit, exitMaskEdit, groupAsMask, maskOwner, removeMask, setMask, setMaskLinked } from './maskActions';
 
 const rect = (id: string, x: number, y: number, w = 100, h = 50): ShapeObject => ({
   ...createShape(defaultGeometry('rect'), { x, y, width: w, height: h, rotation: 0 }),
@@ -146,5 +146,81 @@ describe('the gradient rectangle of a グラデーションマスク', () => {
     const g = first(ed).mask!.children[0] as ShapeObject;
     // Reach: stroke 10 + shadow (4 + 2×3) → 20 px each side.
     expect(g.box).toMatchObject({ x: 80, y: 80, width: 240, height: 140 });
+  });
+});
+
+describe('マスク 第 2 段階', () => {
+  it('マスクとして貼り付け: the copied object goes into the mask where it was; an existing mask gets it added', async () => {
+    const { copySelection, pasteAsMask } = await import('./actions');
+    const ed = editorWith([rect('r', 0, 0, 200, 100), { ...rect('star', 20, 20, 40, 40), fill: '#ffffff' }]);
+    ed.select(['star']);
+    copySelection(ed);
+    ed.select(['r']);
+    expect(pasteAsMask(ed)).toBe(true);
+    let m = first(ed).mask!;
+    expect(m.background).toBe('black');
+    expect(m.children).toHaveLength(1);
+    expect((m.children[0] as ShapeObject).box).toMatchObject({ x: 20, y: 20, width: 40, height: 40 });
+    expect(m.children[0].id).not.toBe('star'); // a copy
+    expect(ed.getState().doc.layers[0].children).toHaveLength(2); // the original stays
+    pasteAsMask(ed);
+    m = first(ed).mask!;
+    expect(m.children).toHaveLength(2);
+    ed.undo();
+    expect(first(ed).mask!.children).toHaveLength(1);
+  });
+
+  it('グループでマスク: the top object masks the one below; with more below, a group of them', () => {
+    const ed = editorWith([rect('a', 0, 0), rect('b', 50, 0), { ...rect('top', 10, 10, 30, 30), fill: '#ffffff' }]);
+    ed.select(['top', 'a']); // order of selection does not matter
+    expect(groupAsMask(ed)).toBe(true);
+    let kids = ed.getState().doc.layers[0].children;
+    expect(kids.map((k) => k.id)).toEqual(['a', 'b']);
+    expect(kids[0].mask!.children.map((c) => c.id)).toEqual(['top']);
+    expect(ed.getState().selection).toEqual(['a']);
+    ed.undo();
+    ed.select(['a', 'b', 'top']);
+    groupAsMask(ed);
+    kids = ed.getState().doc.layers[0].children;
+    expect(kids).toHaveLength(1);
+    expect(kids[0].type).toBe('group');
+    expect((kids[0] as GroupObject).children.map((c) => c.id)).toEqual(['a', 'b']);
+    expect(kids[0].mask!.children.map((c) => c.id)).toEqual(['top']);
+  });
+
+  it('反転 turns the mask over with a filter, keeping the content', () => {
+    const ed = editorWith([rect('r', 10, 10)]);
+    ed.select(['r']);
+    addGradientMask(ed);
+    exitMaskEdit(ed);
+    setMask(ed, 'r', { inverted: true }, 'inv');
+    const svg = svgOf(ed);
+    expect(svg).toContain('id="sp-mask-r-inv"');
+    expect(svg).toContain('filter="url(#sp-mask-r-inv)"');
+    setMask(ed, 'r', { inverted: false }, 'inv');
+    expect(svgOf(ed)).not.toContain('sp-mask-r-inv');
+  });
+
+  it('リンク解除: the mask stays put when the object moves; linking again keeps it where it is', () => {
+    const ed = editorWith([rect('r', 0, 0)]);
+    ed.select(['r']);
+    addMask(ed, 'black');
+    ed.edit('draw', (d) => addObject(d, d.layers[0].id, { ...rect('w', 10, 10, 20, 20), fill: '#ffffff' }, 'r'));
+    exitMaskEdit(ed);
+    setMaskLinked(ed, 'r', false);
+    expect(first(ed).mask!.linked).toBe(false);
+    ed.edit('move', (d) => updateObject(d, 'r', { box: { x: 100, y: 0, width: 100, height: 50, rotation: 0 } }));
+    // Drawn from where it is on the canvas: the content's frame is the box itself.
+    expect(svgOf(ed)).toContain('scale(1 1) translate(-100 0)');
+    setMaskLinked(ed, 'r', true);
+    expect(first(ed).mask).toMatchObject({ linked: true, frame: { x: 100 } });
+    expect((first(ed).mask!.children[0] as ShapeObject).box.x).toBe(10); // still where it was
+  });
+
+  it("an unlinked group's mask does not move with the group", () => {
+    const g: GroupObject = { id: 'g', name: 'g', type: 'group', visible: true, locked: false, opacity: 1, children: [rect('a', 0, 0)], mask: { background: 'black', children: [rect('m', 5, 5, 10, 10)], enabled: true, linked: false } };
+    const moved = transformObject(g, { ...IDENTITY_TRANSFORM, dx: 50 });
+    expect((moved.mask!.children[0] as ShapeObject).box.x).toBe(5);
+    expect((moved.children[0] as ShapeObject).box.x).toBe(50);
   });
 });

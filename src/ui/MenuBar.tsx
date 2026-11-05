@@ -8,10 +8,12 @@ import {
   duplicateSelection,
   groupSelection,
   saveProject,
+  pasteAsMask,
+  canPasteAsMask,
   selectAll,
   ungroupSelection,
 } from '../store/actions';
-import { addGradientMask, addMask, canAddMask, canRemoveMask, removeMask } from '../store/maskActions';
+import { addGradientMask, addMask, canAddMask, canGroupAsMask, canRemoveMask, groupAsMask, removeMask } from '../store/maskActions';
 import { autoColor, eraseSelection, fitCanvasToContent, pixelTargetImage, selectedImage } from '../store/imageActions';
 import { ZOOM_STEPS } from './CanvasView';
 import { openDialog } from './dialogs';
@@ -112,6 +114,7 @@ export function MenuBar({ onNew }: { onNew: () => void }) {
         { label: 'カット', shortcut: `${mod}X`, action: () => menuCopy(true), disabled: !hasSel && !(pixelSel && pixelTargetImage(editor)) },
         { label: 'コピー', shortcut: `${mod}C`, action: () => menuCopy(), disabled: !hasSel && !(pixelSel && pixelTargetImage(editor)) },
         { label: 'ペースト', shortcut: `${mod}V`, action: () => void menuPaste() },
+        { label: 'マスクとして貼り付け', action: () => pasteAsMask(editor), disabled: !canPasteAsMask(editor) },
         { label: '複製', shortcut: `${mod}D`, action: () => duplicateSelection(editor), disabled: !hasSel },
         { label: '削除', shortcut: 'Delete', action: () => deleteSelection(editor), disabled: !hasSel },
         { separator: true, label: '' },
@@ -142,6 +145,7 @@ export function MenuBar({ onNew }: { onNew: () => void }) {
         { label: 'テキストをパスから外す', action: () => detachTextFromPath(editor), disabled: !canDetachTextFromPath(editor) },
         { separator: true, label: '' },
         { label: 'グラデーションマスクを追加', action: () => addGradientMask(editor), disabled: !canAddMask(editor) },
+        { label: 'グループでマスク', action: () => groupAsMask(editor), disabled: !canGroupAsMask(editor) },
         { label: 'マスクを追加（白：全体を表示）', action: () => addMask(editor, 'white'), disabled: !canAddMask(editor) },
         { label: 'マスクを追加（黒：全体を隠す）', action: () => addMask(editor, 'black'), disabled: !canAddMask(editor) },
         { label: 'マスクを削除', action: () => removeMask(editor), disabled: !canRemoveMask(editor) },

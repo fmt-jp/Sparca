@@ -13,12 +13,13 @@ import {
 } from '../model/commands';
 import { createDocument, createImage } from '../model/factory';
 import { IDENTITY_TRANSFORM, unionBounds } from '../model/geometry';
-import { findObject, isEffectivelyLocked, walkObjects } from '../model/tree';
+import { cloneWithNewIds, findObject, isEffectivelyLocked, walkObjects } from '../model/tree';
 import type { Background, SceneObject, SparcaDocument } from '../model/types';
 import { IMAGE_ACCEPT, stripImageExtension } from '../io/imageFormats';
 import { isAbort, pickFiles, pickSaveFile, saveBlob } from '../io/files';
 import { EDITABLE_PNG_EXTENSION, EditablePngError, embedProject, extractProject, isEditablePngName, isPng } from '../io/editablePng';
 import { exportImage, ExportError } from '../io/export';
+import { newMask, settleMask } from '../model/mask';
 import { PROJECT_EXTENSION, PROJECT_MIME, ProjectError, readProject, writeProject } from '../io/project';
 import { assets, ImageLoadError, importImageFile, validateDimensions } from './assets';
 import { UNTITLED, type EditorStore } from './editor';
@@ -311,6 +312,43 @@ export function paste(ed: EditorStore): void {
     ids = pasteObjects(d, layerId, objs, offset, offset, ed.getState().maskEdit);
   });
   ed.select(ids);
+}
+
+/**
+ * マスクとして貼り付け: the copied objects become (more of) the mask of the one selected object,
+ * where they were copied (decided with the user 2026-11-05: an existing mask gets them added;
+ * a new mask has a black background, so their light parts show the object). One undo step.
+ */
+export function pasteAsMask(ed: EditorStore): boolean {
+  const { doc, selection } = ed.getState();
+  const loc = selection.length === 1 ? findObject(doc, selection[0]) : null;
+  if (!loc || loc.maskOwner || isEffectivelyLocked(loc)) {
+    ed.notify('error', 'マスクを付けるオブジェクトを 1 つ選択してください。');
+    return false;
+  }
+  if (!clipboard.length) {
+    ed.notify('error', 'マスクにするもの（図形・テキスト・画像など）を先にコピーしてください。');
+    return false;
+  }
+  const target = loc.object;
+  const objs = clipboard;
+  const metas = clipboardAssets;
+  ed.edit('マスクとして貼り付け', (d) => {
+    for (const [id, meta] of Object.entries(metas)) if (!d.assets[id]) d.assets[id] = meta;
+    const t = findObject(d, target.id);
+    if (!t) return;
+    const mask = settleMask(t.object) ?? newMask(t.object, 'black');
+    if (!mask) return;
+    t.object.mask = { ...mask, children: [...mask.children, ...objs.map((o) => cloneWithNewIds(o))] };
+  });
+  ed.select([target.id]);
+  return true;
+}
+
+export function canPasteAsMask(ed: EditorStore): boolean {
+  const { doc, selection } = ed.getState();
+  const loc = selection.length === 1 ? findObject(doc, selection[0]) : null;
+  return !!loc && !loc.maskOwner && !isEffectivelyLocked(loc) && clipboard.length > 0;
 }
 
 /** Size of the image a selection copy put on the clipboard (null when the clipboard holds objects). */

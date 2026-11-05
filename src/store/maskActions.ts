@@ -1,6 +1,6 @@
 // マスクレイヤー (types.ts ObjectMask): add, edit (マスクの編集), switch off and remove the mask
 // of the selected object.
-import { updateObject } from '../model/commands';
+import { groupObjects, updateObject } from '../model/commands';
 import { newGradientMask, newMask, settleMask } from '../model/mask';
 import { findObject, isEffectivelyLocked } from '../model/tree';
 import type { Id, ObjectMask, SceneObject } from '../model/types';
@@ -88,8 +88,8 @@ export function exitMaskEdit(ed: EditorStore): void {
   if (findObject(ed.getState().doc, id)) ed.select([id]);
 }
 
-/** Change the mask of object `id` (on/off, background). */
-export function setMask(ed: EditorStore, id: Id, patch: Partial<Pick<ObjectMask, 'enabled' | 'background'>>, label: string): void {
+/** Change the mask of object `id` (on/off, background, inverted). */
+export function setMask(ed: EditorStore, id: Id, patch: Partial<Pick<ObjectMask, 'enabled' | 'background' | 'inverted'>>, label: string): void {
   const loc = findObject(ed.getState().doc, id);
   const mask = loc?.object.mask;
   if (!mask) return;
@@ -106,5 +106,66 @@ export function removeMask(ed: EditorStore): boolean {
     if (loc) delete loc.object.mask;
   });
   ed.select([o.id]);
+  return true;
+}
+
+/**
+ * リンク: whether the mask moves with object `id`. Unlinking leaves the content where it is on
+ * the canvas (it no longer follows the object); linking again keeps it where it is now and
+ * from then on it moves with the object. One undo step.
+ */
+export function setMaskLinked(ed: EditorStore, id: Id, linked: boolean): void {
+  const loc = findObject(ed.getState().doc, id);
+  const o = loc?.object;
+  if (!o?.mask || (o.mask.linked !== false) === linked) return;
+  const mask = settleMask(o)!;
+  ed.edit(linked ? 'マスクのリンク' : 'マスクのリンク解除', (d) => {
+    const t = findObject(d, id);
+    if (!t) return;
+    t.object.mask = { ...mask, linked, ...(o.type === 'group' ? {} : { frame: { ...(o as Exclude<SceneObject, { type: 'group' }>).box } }) };
+  });
+}
+
+/** Whether 「グループでマスク」 can run: two or more unlocked objects side by side (same parent, not in a mask). */
+export function canGroupAsMask(ed: EditorStore): boolean {
+  return groupAsMaskInputs(ed) !== null;
+}
+
+function groupAsMaskInputs(ed: EditorStore): { top: Id; rest: Id[] } | null {
+  const { doc, selection } = ed.getState();
+  if (selection.length < 2) return null;
+  const locs = selection.map((id) => findObject(doc, id));
+  if (locs.some((l) => !l || l.maskOwner || isEffectivelyLocked(l))) return null;
+  const parent = locs[0]!.siblings;
+  if (locs.some((l) => l!.siblings !== parent)) return null;
+  const sorted = [...locs].sort((a, b) => a!.index - b!.index);
+  return { top: sorted[sorted.length - 1]!.object.id, rest: sorted.slice(0, -1).map((l) => l!.object.id) };
+}
+
+/**
+ * グループでマスク (decided with the user 2026-11-05): the topmost of the selected objects
+ * becomes the mask of the one below it — or, when there are several below, of a group made of
+ * them (as Fireworks). It stays where it is on the canvas; an existing mask gets it added; a new
+ * mask has a black background. One undo step; the masked object is selected.
+ */
+export function groupAsMask(ed: EditorStore): boolean {
+  const input = groupAsMaskInputs(ed);
+  if (!input) {
+    ed.notify('error', 'グループでマスクには、同じ階層のオブジェクトを 2 つ以上選択してください（いちばん上がマスクになります）。');
+    return false;
+  }
+  let targetId = input.rest[0];
+  ed.edit('グループでマスク', (d) => {
+    if (input.rest.length > 1) targetId = groupObjects(d, input.rest) ?? targetId;
+    const top = findObject(d, input.top);
+    const target = findObject(d, targetId);
+    if (!top || !target) return;
+    const maskObj = top.object;
+    top.siblings.splice(top.index, 1);
+    const mask = settleMask(target.object) ?? newMask(target.object, 'black');
+    if (!mask) return;
+    target.object.mask = { ...mask, children: [...mask.children, maskObj] };
+  });
+  ed.select([targetId]);
   return true;
 }

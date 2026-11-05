@@ -155,3 +155,57 @@ test('a group gets a mask from the 変更 menu that covers all its members', asy
   await page.getByRole('button', { name: '変更', exact: true }).click();
   await expect(page.getByRole('menuitem', { name: 'グラデーションマスクを追加' })).toBeDisabled();
 });
+
+/** A red rectangle (100,100)–(400,300) with a white ellipse (150,150)–(250,250) on top. */
+async function rectAndEllipse(page: Page) {
+  const c = await redRect(page);
+  await page.keyboard.press('r');
+  await page.keyboard.press('r');
+  await page.keyboard.press('r'); // 楕円
+  await drag(page, { x: c.x + 150, y: c.y + 150 }, { x: c.x + 250, y: c.y + 250 });
+  await setColor(page, props(page), '塗り', '#ffffff');
+  return c;
+}
+
+test('グループでマスク, 反転 and リンク解除: the ellipse masks the rectangle', async ({ page }) => {
+  const c = await rectAndEllipse(page);
+  await page.keyboard.press('Control+a');
+  await page.getByRole('button', { name: '変更', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'グループでマスク' }).click();
+  expect(await state(page, 's => s.doc.layers[0].children.length')).toBe(1);
+  expect(await state(page, 's => s.doc.layers[0].children[0].mask.children[0].shape.kind')).toBe('ellipse');
+  let px = await exportPng(page, [[200, 200], [350, 200]]);
+  expect(isRed(px[0])).toBe(true); // inside the ellipse
+  expect(isWhite(px[1])).toBe(true); // outside
+  // 反転: the other way round.
+  await props(page).getByLabel('反転').check();
+  px = await exportPng(page, [[200, 200], [350, 200]]);
+  expect(isWhite(px[0])).toBe(true);
+  expect(isRed(px[1])).toBe(true);
+  await props(page).getByLabel('反転').uncheck();
+  // リンク解除 (in the layers panel): the rectangle moves, the ellipse window stays.
+  await page.getByRole('button', { name: /のマスクのリンクを解除する/ }).click();
+  await expect(props(page).getByLabel('本体と一緒に動く（リンク）')).not.toBeChecked();
+  await page.keyboard.press('v');
+  await drag(page, { x: c.x + 350, y: c.y + 280 }, { x: c.x + 400, y: c.y + 280 }); // the rectangle 50 px right
+  expect(await state(page, 's => s.doc.layers[0].children[0].box.x')).toBeCloseTo(150, 0);
+  expect(await state(page, 's => s.doc.layers[0].children[0].mask.children[0].box.x')).toBeCloseTo(150, 0); // not moved
+  px = await exportPng(page, [[200, 200], [270, 200]]);
+  expect(isRed(px[0])).toBe(true); // still the same window on the canvas
+  expect(isWhite(px[1])).toBe(true);
+});
+
+test('マスクとして貼り付け: a copied ellipse becomes the mask of the selected rectangle', async ({ page }) => {
+  const c = await rectAndEllipse(page);
+  await page.keyboard.press('Control+c');
+  await page.keyboard.press('Delete');
+  await page.keyboard.press('v');
+  await page.mouse.click(c.x + 350, c.y + 280); // the rectangle
+  await page.getByRole('button', { name: '編集', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'マスクとして貼り付け' }).click();
+  expect(await state(page, 's => s.doc.layers[0].children.length')).toBe(1);
+  expect(await state(page, 's => s.doc.layers[0].children[0].mask.children.length')).toBe(1);
+  const px = await exportPng(page, [[200, 200], [350, 200]]);
+  expect(isRed(px[0])).toBe(true);
+  expect(isWhite(px[1])).toBe(true);
+});
