@@ -123,6 +123,13 @@ export interface ObjectMask {
   frame?: Box;
   /** Off: the mask is kept but not applied. */
   enabled: boolean;
+  /** 反転: white hides and black shows (the content stays as it is). Missing = false. */
+  inverted?: boolean;
+  /**
+   * リンク: the mask moves, scales and turns with the object. Unlinked (false), the content stays
+   * where it is on the canvas when the object is moved. Missing = true.
+   */
+  linked?: boolean;
 }
 
 interface BaseObject {

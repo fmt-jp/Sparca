@@ -77,13 +77,22 @@ export function maskContentTransform(frame: Box, box: Box): string {
 }
 
 /**
+ * For a leaf, the frame its mask content is mapped from onto its box: where the content was
+ * placed, or — unlinked — the box itself (the content stays put on the canvas). Null for groups.
+ */
+export function contentFrame(o: SceneObject): Box | null {
+  if (o.type === 'group' || !o.mask) return null;
+  return o.mask.linked === false ? o.box : (o.mask.frame ?? o.box);
+}
+
+/**
  * The leaf's mask with its content moved onto the current box (in document coordinates), and
  * `frame` set to the box — done before editing the content, so the ordinary tools work on it.
  * (Scaling along turned axes is approximated, as for groups.)
  */
 export function settleMask(o: SceneObject): ObjectMask | undefined {
   const mask = o.mask;
-  if (!mask || o.type === 'group' || !mask.frame || !moved(mask.frame, o.box)) return mask;
+  if (!mask || o.type === 'group' || mask.linked === false || !mask.frame || !moved(mask.frame, o.box)) return mask;
   const f = mask.frame;
   const b = o.box;
   const fc = boxCenter(f);

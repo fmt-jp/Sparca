@@ -1756,3 +1756,15 @@ kbd {
   background: var(--accent);
   color: #fff;
 }
+
+.mask-link {
+  padding: 0 2px;
+  border: none;
+  background: none;
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+}
+.mask-link.off {
+  opacity: 0.45;
+}

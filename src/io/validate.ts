@@ -347,6 +347,9 @@ function checkMask(v: unknown, where: string, box: Box | null, ids: Set<string>,
   if (v.background !== 'white' && v.background !== 'black') throw new Invalid(`${where}.background が正しくありません`);
   arr(v, 'children', where).forEach((c, j) => checkObject(c, `${where}.children[${j}]`, ids, assets));
   v.enabled = bool(v, 'enabled', true);
+  for (const k of ['inverted', 'linked']) {
+    if (v[k] !== undefined && typeof v[k] !== 'boolean') throw new Invalid(`${where}.${k} が正しくありません`);
+  }
   if (box) v.frame = v.frame === undefined ? { ...box } : checkBox(v.frame, `${where}.frame`);
   else delete v.frame;
   return v;

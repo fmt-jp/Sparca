@@ -5,6 +5,7 @@ import type {
   Box,
   GroupObject,
   ImageObject,
+  ObjectMask,
   PathObject,
   SceneObject,
   ShapeObject,
@@ -14,7 +15,7 @@ import type {
   TextObject,
 } from '../model/types';
 import { objectBounds, type Rect } from '../model/geometry';
-import { maskContentTransform } from '../model/mask';
+import { contentFrame, maskContentTransform } from '../model/mask';
 import { effectsFilter, effectsMargin, splitAtZoomBlur, zoomBlurLayers, zoomBlurReach } from './effects';
 import { cssFontFamily } from './fonts';
 import { fillPaint } from './gradient';
@@ -91,14 +92,15 @@ export function MaskPreview({ o, size = 22 }: { o: SceneObject; size?: number })
   if (!mask || !b) return null;
   const opts: RenderOptions = { imageHref: () => undefined, idPrefix: `thumb-${o.id}` };
   const content = mask.children.map((c) => renderObject(c, opts, `thumb-${o.id}`, { width: b.width, height: b.height }));
-  const placed = o.type !== 'group' && mask.frame ? <g transform={leafTransform(o.box) + ' ' + maskContentTransform(mask.frame, o.box)}>{content}</g> : content;
+  const cf = contentFrame(o);
+  const placed = cf && o.type !== 'group' ? <g transform={leafTransform(o.box) + ' ' + maskContentTransform(cf, o.box)}>{content}</g> : content;
   const fid = `thumb-${o.id}-gray`;
   const w = size * Math.min(2, Math.max(0.5, b.width / (b.height || 1)));
   return (
     <svg width={w} height={size} viewBox={`${b.x} ${b.y} ${b.width} ${b.height}`} preserveAspectRatio="xMidYMid meet" aria-hidden="true">
       <defs>
         <filter id={fid} colorInterpolationFilters="sRGB">
-          <feColorMatrix type="matrix" values={GRAY} />
+          <feColorMatrix type="matrix" values={mask.inverted ? GRAY_INVERTED : GRAY} />
         </filter>
       </defs>
       <rect x={b.x} y={b.y} width={b.width} height={b.height} fill={mask.background === 'white' ? '#ffffff' : '#000000'} />
@@ -114,6 +116,10 @@ function contentOpts(opts: RenderOptions): RenderOptions {
 
 /** Gray by luminance, the way a luminance mask reads the colors. */
 const GRAY = '0.2125 0.7154 0.0721 0 0  0.2125 0.7154 0.0721 0 0  0.2125 0.7154 0.0721 0 0  0 0 0 1 0';
+/** The same gray, turned over (white ↔ black), for an inverted mask. */
+const GRAY_INVERTED = '-0.2125 -0.7154 -0.0721 0 1  -0.2125 -0.7154 -0.0721 0 1  -0.2125 -0.7154 -0.0721 0 1  0 0 0 1 0';
+/** White ↔ black (and every color to its opposite), keeping alpha. */
+const INVERT = '-1 0 0 0 1  0 -1 0 0 1  0 0 -1 0 1  0 0 0 1 0';
 
 /**
  * The object whose mask layer is being edited: as it looks (view 'result') with its mask
@@ -122,7 +128,8 @@ const GRAY = '0.2125 0.7154 0.0721 0 0  0.2125 0.7154 0.0721 0 0  0.2125 0.7154 
 function renderMaskEdit(o: SceneObject, opts: RenderOptions, prefix: string, canvas: { width: number; height: number }): ReactElement {
   const mask = o.mask!;
   const content = mask.children.map((c) => renderObject(c, { ...opts, maskEdit: null }, `${prefix}-e`, canvas));
-  const mapped = o.type !== 'group' && mask.frame ? <g transform={leafTransform(o.box) + ' ' + maskContentTransform(mask.frame, o.box)}>{content}</g> : content;
+  const cf = contentFrame(o);
+  const mapped = cf && o.type !== 'group' ? <g transform={leafTransform(o.box) + ' ' + maskContentTransform(cf, o.box)}>{content}</g> : content;
   if (opts.maskEdit?.view === 'mask') {
     const fid = `${prefix}-maskview-${o.id}`;
     const cid = `${fid}-clip`;
@@ -134,7 +141,7 @@ function renderMaskEdit(o: SceneObject, opts: RenderOptions, prefix: string, can
       <g key={o.id} data-mask-of={o.id}>
         <defs>
           <filter id={fid} x="-50%" y="-50%" width="200%" height="200%" colorInterpolationFilters="sRGB">
-            <feColorMatrix type="matrix" values={GRAY} />
+            <feColorMatrix type="matrix" values={mask.inverted ? GRAY_INVERTED : GRAY} />
           </filter>
           <clipPath id={cid} clipPathUnits="userSpaceOnUse">
             {clipRect}
@@ -259,8 +266,9 @@ function renderPlain(o: SceneObject, opts: RenderOptions, prefix: string, canvas
     const m = strokeWidth + reach + effectsMargin(o.effects) + 1;
     const mid = `${prefix}-mask-${o.id}`;
     const inner = o.mask.children.map((c) => renderObject(c, contentOpts(opts), `${prefix}-m`, canvas));
-    const placed = o.mask.frame ? <g transform={maskContentTransform(o.mask.frame, o.box)}>{inner}</g> : inner;
-    defs.push(<defs key={mid}>{maskDef(o.mask.background, mid, { x: -m, y: -m, width: w + 2 * m, height: h + 2 * m }, placed)}</defs>);
+    const cf = contentFrame(o);
+    const placed = cf ? <g transform={maskContentTransform(cf, o.box)}>{inner}</g> : inner;
+    defs.push(<defs key={mid}>{maskDef(o.mask, mid, { x: -m, y: -m, width: w + 2 * m, height: h + 2 * m }, placed)}</defs>);
     content = <g mask={`url(#${mid})`}>{content}</g>;
   }
   return (
@@ -272,13 +280,29 @@ function renderPlain(o: SceneObject, opts: RenderOptions, prefix: string, canvas
   );
 }
 
-/** A luminance <mask> over `region` (user space of the masked element): the background, then the content. */
-function maskDef(background: 'white' | 'black', id: string, region: Rect, content: ReactElement | (ReactElement | null)[]): ReactElement {
-  return (
-    <mask id={id} maskUnits="userSpaceOnUse" maskContentUnits="userSpaceOnUse" x={region.x} y={region.y} width={region.width} height={region.height}>
-      <rect x={region.x} y={region.y} width={region.width} height={region.height} fill={background === 'white' ? '#ffffff' : '#000000'} />
+/**
+ * A luminance <mask> over `region` (user space of the masked element): the background, then
+ * the content — turned over (white ↔ black) for an inverted mask.
+ */
+function maskDef(mask: ObjectMask, id: string, region: Rect, content: ReactElement | (ReactElement | null)[]): ReactElement {
+  const drawn = (
+    <>
+      <rect x={region.x} y={region.y} width={region.width} height={region.height} fill={mask.background === 'white' ? '#ffffff' : '#000000'} />
       {content}
-    </mask>
+    </>
+  );
+  const fid = `${id}-inv`;
+  return (
+    <>
+      {mask.inverted && (
+        <filter id={fid} filterUnits="userSpaceOnUse" x={region.x} y={region.y} width={region.width} height={region.height} colorInterpolationFilters="sRGB">
+          <feColorMatrix type="matrix" values={INVERT} />
+        </filter>
+      )}
+      <mask id={id} maskUnits="userSpaceOnUse" maskContentUnits="userSpaceOnUse" x={region.x} y={region.y} width={region.width} height={region.height}>
+        {mask.inverted ? <g filter={`url(#${fid})`}>{drawn}</g> : drawn}
+      </mask>
+    </>
   );
 }
 
@@ -331,7 +355,7 @@ function groupMask(
   const region = groupReach(o.children);
   if (!region) return null;
   const inner = o.mask.children.map((c) => renderObject(c, contentOpts(opts), `${prefix}-m`, canvas));
-  return { def: maskDef(o.mask.background, id, region, inner), ref: `url(#${id})` };
+  return { def: maskDef(o.mask, id, region, inner), ref: `url(#${id})` };
 }
 
 /**

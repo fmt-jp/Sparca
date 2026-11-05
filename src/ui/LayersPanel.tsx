@@ -1,4 +1,4 @@
-import { enterMaskEdit, exitMaskEdit } from '../store/maskActions';
+import { enterMaskEdit, exitMaskEdit, setMaskLinked } from '../store/maskActions';
 import { MaskPreview } from '../render/DocumentSvg';
 import { useState } from 'react';
 import {
@@ -272,6 +272,21 @@ function ObjectList(props: {
               onToggle={() => editor.edit('ロックの切り替え', (d) => updateObject(d, o.id, { locked: !o.locked }))}
             />
             <span className="type-badge">{TYPE_LABEL[o.type]}</span>
+            {o.mask && (
+              <button
+                type="button"
+                className={`mask-link${o.mask.linked === false ? ' off' : ''}`}
+                aria-label={o.mask.linked === false ? `「${o.name}」のマスクをリンクする` : `「${o.name}」のマスクのリンクを解除する`}
+                aria-pressed={o.mask.linked !== false}
+                title={o.mask.linked === false ? 'マスクは本体と別に動く（クリックでリンク）' : 'マスクは本体と一緒に動く（クリックでリンク解除）'}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setMaskLinked(editor, o.id, o.mask!.linked === false);
+                }}
+              >
+                {o.mask.linked === false ? '⛓\u0338' : '🔗'}
+              </button>
+            )}
             {o.mask && (
               <button
                 type="button"

@@ -13,7 +13,7 @@ import { moveAnchors } from '../model/pathEdit';
 import { convertSelectedNodes, deleteSelectedNodes, flatPath, selectedNodes, selectedOutline, setPathClosed, setPathNodes } from '../store/pathActions';
 import { fitTextBox } from '../render/text';
 import { isGradient } from '../model/gradient';
-import { addGradientMask, addMask, enterMaskEdit, exitMaskEdit, maskOwner, removeMask, setMask } from '../store/maskActions';
+import { addGradientMask, addMask, enterMaskEdit, exitMaskEdit, maskOwner, removeMask, setMask, setMaskLinked } from '../store/maskActions';
 import { isPattern } from '../model/pattern';
 import { FillInput } from './FillInput';
 import { FontPicker } from './FontPicker';
@@ -968,6 +968,12 @@ function MaskSection({ o }: { o: SceneObject }) {
       <Toggle checked={mask.enabled} onChange={(enabled) => setMask(editor, o.id, { enabled }, enabled ? 'マスクをオン' : 'マスクをオフ')}>
         マスクを使う
       </Toggle>
+      <Toggle checked={!!mask.inverted} onChange={(inverted) => setMask(editor, o.id, { inverted }, inverted ? 'マスクの反転' : 'マスクの反転を解除')}>
+        反転
+      </Toggle>
+      <Toggle checked={mask.linked !== false} onChange={(linked) => setMaskLinked(editor, o.id, linked)}>
+        本体と一緒に動く（リンク）
+      </Toggle>
       <button type="button" className="primary" onClick={() => enterMaskEdit(editor, o.id)}>
         マスクを編集
       </button>
@@ -1006,6 +1012,9 @@ function MaskEditSection({ owner }: { owner: SceneObject }) {
           <input type="radio" checked={mask.background === 'black'} onChange={() => setMask(editor, owner.id, { background: 'black' }, 'マスクの背景の変更')} /> 黒（透ける）
         </label>
       </div>
+      <Toggle checked={!!mask.inverted} onChange={(inverted) => setMask(editor, owner.id, { inverted }, inverted ? 'マスクの反転' : 'マスクの反転を解除')}>
+        反転（白で透け、黒で見える）
+      </Toggle>
       <button type="button" className="primary" onClick={() => exitMaskEdit(editor)}>
         マスクの編集を終了
       </button>
