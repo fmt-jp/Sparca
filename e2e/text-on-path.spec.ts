@@ -25,6 +25,7 @@ async function setup(page: Page) {
   await drag(page, { x: c.x + 200, y: c.y + 150 }, { x: c.x + 400, y: c.y + 350 });
   await setTool(page, 'text');
   await page.mouse.click(c.x + 500, c.y + 450);
+  await expect(page.locator('textarea.text-editor')).toBeFocused();
   await page.keyboard.type('HANABI');
   await page.keyboard.press('Escape');
   await page.keyboard.press('v');

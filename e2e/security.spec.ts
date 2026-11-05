@@ -50,6 +50,7 @@ test('editing, effects, gradients, image processing, eyedropper, help and export
   expect(await state<string>(page, 's => s.doc.layers[0].children[1].fill.kind')).toBe('conic');
   await page.keyboard.press('t');
   await page.mouse.click(c.x + 300, c.y + 400);
+  await expect(page.locator('textarea.text-editor')).toBeFocused();
   await page.keyboard.type('CSP');
   await page.keyboard.press('Escape');
   // Eyedropper (renders the document through a blob: SVG image).

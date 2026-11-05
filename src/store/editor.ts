@@ -433,6 +433,8 @@ export class EditorStore {
       for (const o of objs) {
         exists.add(o.id);
         if (o.type === 'group') collect(o.children);
+        // Mask content is selectable too (while its mask is edited).
+        if (o.mask) collect(o.mask.children);
       }
     };
     doc.layers.forEach((l) => collect(l.children));

@@ -28,6 +28,7 @@ async function setup(page: Page) {
   await drag(page, { x: c.x + 200, y: c.y + 50 }, { x: c.x + 300, y: c.y + 150 });
   await page.keyboard.press('t');
   await page.mouse.click(c.x + 400, c.y + 300);
+  await expect(page.locator('textarea.text-editor')).toBeFocused();
   await page.keyboard.type('HANABI');
   await page.keyboard.press('Escape');
   await page.getByRole('button', { name: '新規レイヤー' }).click();
