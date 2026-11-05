@@ -5,6 +5,7 @@
 import { docToNormalized, isGradient, toGradient } from '../model/gradient';
 import { gradientRect, maskFrame, newMask, settleMask, WHITE_TO_BLACK } from '../model/mask';
 import { findObject } from '../model/tree';
+import { reachOf } from '../render/DocumentSvg';
 import type { Gradient, PathObject, Point, SceneObject, ShapeObject, SparcaDocument } from '../model/types';
 
 export type GradientToolTarget = 'fill' | 'stroke' | 'mask';
@@ -37,7 +38,7 @@ export function applyGradientDrag(d: SparcaDocument, id: string, slot: GradientS
     let target = mask.children.find((c): c is ShapeObject | PathObject => (c.type === 'shape' || c.type === 'path') && isGradient(c.fill));
     const children = [...mask.children];
     if (!target) {
-      target = gradientRect(frame, WHITE_TO_BLACK);
+      target = gradientRect(frame, WHITE_TO_BLACK, reachOf(o));
       children.push(target);
     }
     const g = target.fill as Gradient;

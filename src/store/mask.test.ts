@@ -136,3 +136,15 @@ describe('マスクレイヤー', () => {
     ed.getState().notices.forEach((n) => ed.dismiss(n.id));
   });
 });
+
+describe('the gradient rectangle of a グラデーションマスク', () => {
+  it('covers the box and what shows past it (stroke, shadow), not much more', () => {
+    const shadow = { id: 'e', kind: 'drop-shadow', enabled: true, strength: 1, distance: 4, angle: 45, blur: 2, color: '#000000', opacity: 0.5 } as ShapeObject['effects'][number];
+    const ed = editorWith([{ ...rect('r', 100, 100, 200, 100), stroke: '#000000', strokeWidth: 10, effects: [shadow] }]);
+    ed.select(['r']);
+    addGradientMask(ed);
+    const g = first(ed).mask!.children[0] as ShapeObject;
+    // Reach: stroke 10 + shadow (4 + 2×3) → 20 px each side.
+    expect(g.box).toMatchObject({ x: 80, y: 80, width: 240, height: 140 });
+  });
+});

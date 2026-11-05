@@ -56,7 +56,7 @@ export function PropertiesPanel() {
             {toolDef(tool)?.label ?? ''}：{TOOL_HINT[tool] ?? 'オブジェクトを選択するとプロパティを編集できます。'}
           </span>
         </div>
-        {tool === 'select' && <DocumentSection />}
+        {tool === 'select' && !editingMask && <DocumentSection />}
       </>
     );
   } else if (locs.length === 1 && locs[0].object.type !== 'group') {
@@ -984,6 +984,7 @@ function MaskSection({ o }: { o: SceneObject }) {
 /** While editing a mask: what is being edited, how it shows, its background, and the way out. */
 function MaskEditSection({ owner }: { owner: SceneObject }) {
   const view = useEditor((s) => s.maskView);
+  const selection = useEditor((s) => s.selection);
   const mask = owner.mask!;
   return (
     <div className="prop-section mask-edit-section" data-testid="mask-edit-panel">
@@ -1008,7 +1009,29 @@ function MaskEditSection({ owner }: { owner: SceneObject }) {
       <button type="button" className="primary" onClick={() => exitMaskEdit(editor)}>
         マスクの編集を終了
       </button>
+      <span className="field-label">中身</span>
+      <span className="button-row mask-content-list" role="group" aria-label="マスクの中身">
+        {mask.children.length ? (
+          [...mask.children].reverse().map((c) => (
+            <button
+              key={c.id}
+              type="button"
+              className={selection.includes(c.id) ? 'on' : ''}
+              aria-pressed={selection.includes(c.id)}
+              title="クリックで選択（色・形を変更できます）"
+              onClick={() => editor.select([c.id])}
+            >
+              {c.name || 'オブジェクト'}
+            </button>
+          ))
+        ) : (
+          <span className="hint">（まだありません）</span>
+        )}
+      </span>
       <span className="hint">
+        {selection.length
+          ? '選択中の中身の色・形は下で変更できます。'
+          : '中身を選ぶ（上のボタンか、キャンバスでクリック）と、色・グラデーション・形を変更できます。'}
         描いた図形・テキスト・貼り付けたものはマスクの中に入ります。白い所は見え、黒い所は透けます（灰色は半透明。グラデーションやぼかしも使えます）。Esc でも終了します。
       </span>
     </div>

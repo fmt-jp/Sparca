@@ -4,6 +4,7 @@ import { updateObject } from '../model/commands';
 import { newGradientMask, newMask, settleMask } from '../model/mask';
 import { findObject, isEffectivelyLocked } from '../model/tree';
 import type { Id, ObjectMask, SceneObject } from '../model/types';
+import { reachOf } from '../render/DocumentSvg';
 import type { EditorStore } from './editor';
 
 /** The one selected, unlocked object (not inside a mask). */
@@ -60,7 +61,7 @@ export function addGradientMask(ed: EditorStore): boolean {
     return false;
   }
   if (o.mask) return false;
-  return add(ed, newGradientMask(o), o.id, 'グラデーションマスクの追加');
+  return add(ed, newGradientMask(o, reachOf(o)), o.id, 'グラデーションマスクの追加');
 }
 
 /**
@@ -74,6 +75,9 @@ export function enterMaskEdit(ed: EditorStore, id: Id): void {
   if (settled !== loc.object.mask) ed.edit('マスクの編集', (d) => updateObject(d, id, { mask: settled } as Partial<SceneObject>));
   ed.select([]);
   ed.set({ maskEdit: id, tool: 'select' });
+  // A mask with one thing in it (e.g. a gradient mask) has it selected, so its colors show at once.
+  const children = findObject(ed.getState().doc, id)?.object.mask?.children ?? [];
+  if (children.length === 1) ed.select([children[0].id]);
 }
 
 /** Stop editing the mask; the masked object is selected again. */

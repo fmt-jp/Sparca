@@ -177,10 +177,10 @@ describe('project format', () => {
     expect(m).toMatchObject({ background: 'black', enabled: true, frame: { x: 10, y: 20, width: 40, height: 20 } });
     expect(m.children).toHaveLength(1);
     const rect = m.children[0] as ShapeObject;
-    // The rectangle covers the box with a margin (40 px each side); the gradient stays on the box.
-    expect(rect.box).toMatchObject({ x: -30, y: -20, width: 120, height: 100 });
-    expect((rect.fill as Gradient).start.x).toBeCloseTo(40 / 120);
-    expect((rect.fill as Gradient).end.x).toBeCloseTo(80 / 120);
+    // The rectangle covers the box with a small margin (2 px: no stroke or effects); the gradient stays on the box.
+    expect(rect.box).toMatchObject({ x: 8, y: 18, width: 44, height: 24 });
+    expect((rect.fill as Gradient).start.x).toBeCloseTo(2 / 44);
+    expect((rect.fill as Gradient).end.x).toBeCloseTo(42 / 44);
     const g = loaded.doc.layers[0].children[1].mask!;
     expect(g).toMatchObject({ background: 'black', enabled: false });
     expect(g.frame).toBeUndefined();
