@@ -42,17 +42,22 @@ export function newDocument(ed: EditorStore, width: number, height: number, back
   return true;
 }
 
-/** Place image files as new image objects, centered on the canvas (scaled down to fit). */
+/**
+ * Place image files as new image objects at their original pixel size, centered on the
+ * canvas on whole pixels (decided with the user 2026-11-06: scaling them down to fit made
+ * exports blurry). An image larger than the canvas sticks out, with a notice saying so.
+ */
 export async function placeImageFiles(ed: EditorStore, files: File[]): Promise<void> {
   const placed: string[] = [];
+  let overflow = false;
   for (const file of files) {
     try {
       ed.set({ busy: `「${file.name}」を読み込み中…` });
       const meta = await importImageFile(file, file.name);
       const { doc, activeLayerId } = ed.getState();
-      const scale = Math.min(1, doc.width / meta.width, doc.height / meta.height);
-      const w = meta.width * scale;
-      const h = meta.height * scale;
+      const w = meta.width;
+      const h = meta.height;
+      if (w > doc.width || h > doc.height) overflow = true;
       const offset = placed.length * 20;
       const img = createImage(meta, {
         x: Math.round((doc.width - w) / 2) + offset,
@@ -77,6 +82,9 @@ export async function placeImageFiles(ed: EditorStore, files: File[]): Promise<v
   if (placed.length) {
     ed.select(placed);
     ed.setTool('select');
+    if (overflow) {
+      ed.notify('info', '画像を原寸で配置しました。キャンバスからはみ出した部分は書き出されません。キャンバスを広げるには「変更」→「キャンバスを内容に合わせる」を使います。');
+    }
   }
 }
 
