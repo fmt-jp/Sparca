@@ -65,10 +65,30 @@ async function atOutputSize(o: ImageObject, blob: Blob, scale: number): Promise<
 }
 
 /**
+ * The document with every unrotated image (outside mask layers) moved onto whole output
+ * pixels, its size rounded to whole output pixels too, so the (resampled) pixels land 1:1
+ * instead of being blended with their neighbors (2026-11-06, user's choice). Shifts each by
+ * under half a pixel. The document itself is not changed.
+ */
+function snapImagesToPixels(doc: SparcaDocument, scale: number): SparcaDocument {
+  const snap = (o: SceneObject): SceneObject => {
+    if (o.type === 'group') return { ...o, children: o.children.map(snap) };
+    if (o.type !== 'image' || o.box.rotation % 360 !== 0) return o;
+    const x0 = Math.round(o.box.x * scale);
+    const y0 = Math.round(o.box.y * scale);
+    const w = Math.max(1, Math.round(o.box.width * scale));
+    const h = Math.max(1, Math.round(o.box.height * scale));
+    return { ...o, box: { ...o.box, x: x0 / scale, y: y0 / scale, width: w / scale, height: h / scale } };
+  };
+  return { ...doc, layers: doc.layers.map((l) => ({ ...l, children: l.children.map(snap) })) };
+}
+
+/**
  * Standalone SVG markup of the document with every image embedded as a data URL. With
  * `resampleImages` (raster export), scaled images are resampled to their output pixel size.
  */
-export async function documentSvgMarkup(doc: SparcaDocument, scale = 1, resampleImages = false): Promise<string> {
+export async function documentSvgMarkup(source: SparcaDocument, scale = 1, resampleImages = false): Promise<string> {
+  const doc = resampleImages ? snapImagesToPixels(source, scale) : source;
   const hrefs = new Map<string, string>();
   for (const { o, inMask } of allImages(doc)) {
     if (!o.visible) continue;
