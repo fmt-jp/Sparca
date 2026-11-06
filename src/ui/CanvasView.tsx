@@ -121,6 +121,8 @@ export function CanvasView() {
   const stageRef = useRef<HTMLDivElement>(null);
   const gesture = useRef<Gesture | null>(null);
   const [marquee, setMarquee] = useState<Rect | null>(null);
+  /** Smart guides shown while dragging: the moved objects' center is on the canvas's center line. */
+  const [guides, setGuides] = useState<{ v: boolean; h: boolean } | null>(null);
   const [spaceDown, setSpaceDown] = useState(false);
   const [editingText, setEditingText] = useState<{ id: Id; isNew: boolean } | null>(null);
   const [cursorPos, setCursorPos] = useState<Point | null>(null);
@@ -265,6 +267,7 @@ export function CanvasView() {
     setPenNodes(null);
     setEditingText(null);
     setMarquee(null);
+    setGuides(null);
     gesture.current = null;
   }, [activeTabId]);
 
@@ -837,6 +840,7 @@ export function CanvasView() {
     if (!g) return;
     switch (g.kind) {
       case 'move':
+        setGuides(null);
         editor.endGesture(g.copies ? '複製' : '移動');
         if (!g.moved && g.toggleOff) editor.select(editor.getState().selection.filter((s) => s !== g.toggleOff));
         break;
@@ -1012,6 +1016,27 @@ export function CanvasView() {
       dx = snapped.x - b.x;
       dy = snapped.y - b.y;
     }
+    // Smart guides: the center of the moved objects snaps to the canvas's center lines
+    // within a few screen px, and a guide line shows while it is there.
+    let v = false;
+    let h = false;
+    const st = editor.getState();
+    if (b && st.smartGuides) {
+      const tol = SMART_GUIDE_PX / zoom;
+      const ox = st.doc.width / 2 - (b.x + dx + b.width / 2);
+      const oy = st.doc.height / 2 - (b.y + dy + b.height / 2);
+      const freeX = !(shift && dx === 0);
+      const freeY = !(shift && dy === 0);
+      if (Math.abs(ox) <= tol && (freeX || Math.abs(ox) < 1e-6)) {
+        if (freeX) dx += ox;
+        v = true;
+      }
+      if (Math.abs(oy) <= tol && (freeY || Math.abs(oy) < 1e-6)) {
+        if (freeY) dy += oy;
+        h = true;
+      }
+    }
+    setGuides(v || h ? { v, h } : null);
     applyTransformed(moving, (o) => transformObject(o, { pivot: { x: 0, y: 0 }, sx: 1, sy: 1, rotation: 0, dx, dy }));
   }
 
@@ -1228,6 +1253,7 @@ export function CanvasView() {
           if (gesture.current && gesture.current.kind !== 'pan' && gesture.current.kind !== 'marquee') editor.cancelGesture();
           gesture.current = null;
           setMarquee(null);
+          setGuides(null);
         }}
         onPointerLeave={() => setCursorPos(null)}
         onDoubleClick={onDoubleClick}
@@ -1260,6 +1286,7 @@ export function CanvasView() {
           overflow="visible"
         >
           <GridOverlay width={doc.width} height={doc.height} zoom={zoom} />
+          {guides && <SmartGuides guides={guides} width={doc.width} height={doc.height} zoom={zoom} />}
           {editingMask && <MaskEditFrame o={editingMask} zoom={zoom} />}
           <SelectionOverlay locs={selectedObjects} zoom={zoom} showHandles={tool === 'select' && !editingText} />
           {(tool === 'select' || tool === 'gradient') && !editingText && selectedObjects.length === 1 && !isEffectivelyLocked(selectedObjects[0]) && (
@@ -1361,6 +1388,19 @@ function PathNodeOverlay({ zoom }: { zoom: number }) {
 }
 
 /** Grid lines over the canvas area (screen only, never exported). */
+/** Screen px within which a dragged object's center snaps to the canvas's center lines. */
+const SMART_GUIDE_PX = 6;
+
+/** Lines through the canvas's center, shown while a dragged object's center sits on them. */
+function SmartGuides({ guides, width, height, zoom }: { guides: { v: boolean; h: boolean }; width: number; height: number; zoom: number }) {
+  return (
+    <g className="smart-guides" pointerEvents="none">
+      {guides.v && <line data-testid="smart-guide-v" className="smart-guide" x1={width / 2} y1={0} x2={width / 2} y2={height} strokeWidth={1 / zoom} />}
+      {guides.h && <line data-testid="smart-guide-h" className="smart-guide" x1={0} y1={height / 2} x2={width} y2={height / 2} strokeWidth={1 / zoom} />}
+    </g>
+  );
+}
+
 function GridOverlay({ width, height, zoom }: { width: number; height: number; zoom: number }) {
   const grid = useEditor((s) => s.grid);
   // Too dense to be useful (and expensive) when lines would be closer than 4 screen px.

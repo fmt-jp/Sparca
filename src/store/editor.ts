@@ -155,6 +155,8 @@ export interface EditorState {
   rulers: boolean;
   /** Where the rulers count from: the canvas's top-left corner or its center. */
   rulerOrigin: 'corner' | 'center';
+  /** Snap dragged objects' centers to the canvas's center lines and show a guide there. */
+  smartGuides: boolean;
   /** Align multiple objects to the canvas instead of to each other. */
   alignToCanvas: boolean;
   /** Edge setting of the marquee / lasso tools. */
@@ -191,6 +193,7 @@ export class EditorStore {
       grid: DEFAULT_GRID,
       rulers: true,
       rulerOrigin: 'corner',
+      smartGuides: true,
       selectionEdge: DEFAULT_SELECTION_EDGE,
       toolDefaults: DEFAULT_TOOL_DEFAULTS,
       alignToCanvas: false,

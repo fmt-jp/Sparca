@@ -29,24 +29,30 @@ editor.subscribe(() => {
 // Rulers on/off is a per-browser view preference as well.
 const RULERS_KEY = 'sparca.rulers';
 const RULER_ORIGIN_KEY = 'sparca.rulerOrigin';
+const SMART_GUIDES_KEY = 'sparca.smartGuides';
 try {
   const saved = JSON.parse(localStorage.getItem(RULERS_KEY) ?? 'null') as unknown;
   if (typeof saved === 'boolean') editor.set({ rulers: saved });
   const origin = localStorage.getItem(RULER_ORIGIN_KEY);
   if (origin === 'corner' || origin === 'center') editor.set({ rulerOrigin: origin });
+  const guides = JSON.parse(localStorage.getItem(SMART_GUIDES_KEY) ?? 'null') as unknown;
+  if (typeof guides === 'boolean') editor.set({ smartGuides: guides });
 } catch {
   // Storage unavailable or corrupt: shown, counting from the corner, by default.
 }
 let lastRulers = editor.getState().rulers;
 let lastOrigin = editor.getState().rulerOrigin;
+let lastGuides = editor.getState().smartGuides;
 editor.subscribe(() => {
-  const { rulers, rulerOrigin } = editor.getState();
-  if (rulers === lastRulers && rulerOrigin === lastOrigin) return;
+  const { rulers, rulerOrigin, smartGuides } = editor.getState();
+  if (rulers === lastRulers && rulerOrigin === lastOrigin && smartGuides === lastGuides) return;
   lastRulers = rulers;
   lastOrigin = rulerOrigin;
+  lastGuides = smartGuides;
   try {
     localStorage.setItem(RULERS_KEY, JSON.stringify(rulers));
     localStorage.setItem(RULER_ORIGIN_KEY, rulerOrigin);
+    localStorage.setItem(SMART_GUIDES_KEY, JSON.stringify(smartGuides));
   } catch {
     // Not remembered; harmless.
   }

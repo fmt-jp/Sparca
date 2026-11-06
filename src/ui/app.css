@@ -1768,3 +1768,9 @@ kbd {
 .mask-link.off {
   opacity: 0.45;
 }
+
+/* Smart guide through the canvas's center while dragging (magenta, as is usual for guides). */
+.overlay .smart-guide {
+  stroke: #ff2fb4;
+  shape-rendering: crispEdges;
+}
