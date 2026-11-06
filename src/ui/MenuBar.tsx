@@ -13,7 +13,7 @@ import {
   selectAll,
   ungroupSelection,
 } from '../store/actions';
-import { addGradientMask, addMask, canAddMask, canGroupAsMask, canRemoveMask, groupAsMask, removeMask } from '../store/maskActions';
+import { addGradientMask, canAddMask, canGroupAsMask, canRemoveMask, groupAsMask, removeMask } from '../store/maskActions';
 import { autoColor, eraseSelection, fitCanvasToContent, pixelTargetImage, selectedImage } from '../store/imageActions';
 import { ZOOM_STEPS } from './CanvasView';
 import { openDialog } from './dialogs';
@@ -78,9 +78,6 @@ export function MenuBar({ onNew }: { onNew: () => void }) {
   const pixelSel = useEditor((s) => s.pixelSelection);
   const grid = useEditor((s) => s.grid);
   const rulers = useEditor((s) => s.rulers);
-  const rulerOrigin = useEditor((s) => s.rulerOrigin);
-  const smartGuides = useEditor((s) => s.smartGuides);
-  const imagePlacement = useEditor((s) => s.imagePlacement);
   const alignToCanvas = useEditor((s) => s.alignToCanvas);
   const [panels] = usePanelSizes();
   const image = selectedImage(editor);
@@ -102,9 +99,6 @@ export function MenuBar({ onNew }: { onNew: () => void }) {
         { label: 'HANABI プロジェクトとして保存…（.hnb）', action: () => void saveProject(editor, true, 'hnb') },
         { separator: true, label: '' },
         { label: '画像を配置…', shortcut: `${mod}Shift+I`, action: () => void chooseAndPlaceImage(editor) },
-        { label: 'キャンバスより大きい画像：毎回確認', checked: imagePlacement === 'ask', action: () => editor.set({ imagePlacement: 'ask' }) },
-        { label: 'キャンバスより大きい画像：原寸で配置', checked: imagePlacement === 'original', action: () => editor.set({ imagePlacement: 'original' }) },
-        { label: 'キャンバスより大きい画像：キャンバスに合わせる', checked: imagePlacement === 'fit', action: () => editor.set({ imagePlacement: 'fit' }) },
         { separator: true, label: '' },
         { label: '画像として書き出し…（PNG / JPEG / WebP / SVG）', shortcut: `${mod}Shift+E`, action: () => openDialog({ kind: 'export' }) },
       ],
@@ -125,6 +119,8 @@ export function MenuBar({ onNew }: { onNew: () => void }) {
         { separator: true, label: '' },
         { label: 'すべてを選択', shortcut: `${mod}A`, action: () => selectAll(editor) },
         { label: '選択解除', shortcut: 'Esc', action: () => editor.select([]), disabled: !hasSel },
+        { separator: true, label: '' },
+        { label: '環境設定…', action: () => openDialog({ kind: 'preferences' }) },
       ],
     },
     {
@@ -146,13 +142,14 @@ export function MenuBar({ onNew }: { onNew: () => void }) {
           children: COMBINE_OPS.map((op) => ({ label: COMBINE_LABELS[op], action: () => void runCombine(op) })),
         },
         { separator: true, label: '' },
-        { label: 'テキストをパスに添付', shortcut: `${mod}Shift+Y`, action: () => attachTextToPath(editor), disabled: !canAttachTextToPath(editor) },
-        { label: 'テキストをパスから外す', action: () => detachTextFromPath(editor), disabled: !canDetachTextFromPath(editor) },
+        // One item: 外す when the selected text is on a path, otherwise 添付.
+        canDetachTextFromPath(editor)
+          ? { label: 'テキストをパスから外す', action: () => detachTextFromPath(editor) }
+          : { label: 'テキストをパスに添付', shortcut: `${mod}Shift+Y`, action: () => attachTextToPath(editor), disabled: !canAttachTextToPath(editor) },
         { separator: true, label: '' },
         { label: 'グラデーションマスクを追加', action: () => addGradientMask(editor), disabled: !canAddMask(editor) },
         { label: 'グループでマスク', action: () => groupAsMask(editor), disabled: !canGroupAsMask(editor) },
-        { label: 'マスクを追加（白：全体を表示）', action: () => addMask(editor, 'white'), disabled: !canAddMask(editor) },
-        { label: 'マスクを追加（黒：全体を隠す）', action: () => addMask(editor, 'black'), disabled: !canAddMask(editor) },
+        { label: 'マスクを追加…（白／黒）', action: () => openDialog({ kind: 'add-mask' }), disabled: !canAddMask(editor) },
         { label: 'マスクを削除', action: () => removeMask(editor), disabled: !canRemoveMask(editor) },
         { separator: true, label: '' },
         {
@@ -175,17 +172,17 @@ export function MenuBar({ onNew }: { onNew: () => void }) {
             { label: 'キャンバスに対して整列', checked: alignToCanvas, action: () => editor.set({ alignToCanvas: !alignToCanvas }) },
           ],
         },
-        { separator: true, label: '' },
-        { label: 'キャンバスサイズ…', action: () => openDialog({ kind: 'canvas-size' }) },
-        { label: 'キャンバスを内容に合わせる', action: () => fitCanvasToContent(editor) },
-        { label: '画像サイズ…（選択中の画像）', action: () => image && openDialog({ kind: 'image-size', imageId: image.id }), disabled: !image },
-        { label: 'トリミング', shortcut: 'C', action: () => editor.setTool('crop') },
       ],
     },
     {
       id: 'image',
       label: '画像',
       items: [
+        { label: 'キャンバスサイズ…', action: () => openDialog({ kind: 'canvas-size' }) },
+        { label: 'キャンバスを内容に合わせる', action: () => fitCanvasToContent(editor) },
+        { label: '画像サイズ…（選択中の画像）', action: () => image && openDialog({ kind: 'image-size', imageId: image.id }), disabled: !image },
+        { label: 'トリミング', shortcut: 'C', action: () => editor.setTool('crop') },
+        { separator: true, label: '' },
         { label: '自動カラー調整', action: () => image && void autoColor(editor, image.id), disabled: !image },
         { label: '選択範囲にぼかし…', action: () => openDialog({ kind: 'blur-selection' }), disabled: !pixelSel || !pixelTargetImage(editor) },
         { label: '選択範囲にモザイク…', action: () => openDialog({ kind: 'mosaic-selection' }), disabled: !pixelSel || !pixelTargetImage(editor) },
@@ -205,12 +202,9 @@ export function MenuBar({ onNew }: { onNew: () => void }) {
         { label: '画面に合わせる', shortcut: `${mod}0`, action: zoomToFit },
         { separator: true, label: '' },
         { label: 'ルーラーを表示', checked: rulers, action: () => editor.set({ rulers: !rulers }) },
-        { label: 'ルーラー：キャンバスの左上を 0', checked: rulerOrigin === 'corner', action: () => editor.set({ rulerOrigin: 'corner', rulers: true }) },
-        { label: 'ルーラー：キャンバスの中心を 0', checked: rulerOrigin === 'center', action: () => editor.set({ rulerOrigin: 'center', rulers: true }) },
-        { label: 'スマートガイド（キャンバスの中央に合わせる）', checked: smartGuides, action: () => editor.set({ smartGuides: !smartGuides }) },
         { label: 'グリッドを表示', checked: grid.visible, action: () => editor.setGrid({ visible: !grid.visible }) },
         { label: 'グリッドにスナップ', checked: grid.snap, action: () => editor.setGrid({ snap: !grid.snap }) },
-        { label: 'グリッド設定…', action: () => openDialog({ kind: 'grid' }) },
+        { label: 'ルーラー・ガイド・グリッドの設定…（環境設定）', action: () => openDialog({ kind: 'preferences' }) },
         { separator: true, label: '' },
         { label: 'レイヤーパネル', checked: !panels.layersHidden, action: () => setPanelSizes({ layersHidden: !panels.layersHidden }) },
         { label: 'プロパティパネル', checked: !panels.propsHidden, action: () => setPanelSizes({ propsHidden: !panels.propsHidden }) },

@@ -1790,3 +1790,16 @@ kbd {
   left: auto;
   right: 100%;
 }
+
+.prefs-heading {
+  margin: 14px 0 6px;
+  font-size: 12px;
+  color: var(--text-dim);
+  font-weight: 600;
+}
+.prefs-heading:first-child {
+  margin-top: 0;
+}
+.prefs-radios {
+  flex-wrap: wrap;
+}

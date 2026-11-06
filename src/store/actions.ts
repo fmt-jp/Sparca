@@ -127,7 +127,7 @@ export async function placeImageFiles(ed: EditorStore, files: File[]): Promise<v
     ed.select(placed);
     ed.setTool('select');
     if (overflow) {
-      ed.notify('info', '画像を原寸で配置しました。キャンバスからはみ出した部分は書き出されません。キャンバスを広げるには「変更」→「キャンバスを内容に合わせる」を使います。');
+      ed.notify('info', '画像を原寸で配置しました。キャンバスからはみ出した部分は書き出されません。キャンバスを広げるには「画像」→「キャンバスを内容に合わせる」を使います。');
     }
   }
 }

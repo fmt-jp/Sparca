@@ -233,3 +233,16 @@ test('an image used as a mask is exported with its pixels', async ({ page }) => 
   expect(isRed(px[0])).toBe(true); // under the white half
   expect(isRed(px[1])).toBe(false); // under the black half
 });
+
+test('変更 → マスクを追加… asks for white or black', async ({ page }) => {
+  await redRect(page);
+  await page.getByRole('button', { name: '変更', exact: true }).click();
+  await page.getByRole('menuitem', { name: /マスクを追加…/ }).click();
+  const dlg = page.getByRole('dialog', { name: 'マスクを追加' });
+  await dlg.getByRole('button', { name: 'キャンセル' }).click();
+  expect(await state(page, 's => s.doc.layers[0].children[0].mask ?? null')).toBeNull();
+  await page.getByRole('button', { name: '変更', exact: true }).click();
+  await page.getByRole('menuitem', { name: /マスクを追加…/ }).click();
+  await dlg.getByRole('button', { name: /黒/ }).click();
+  expect(await state(page, 's => s.doc.layers[0].children[0].mask.background')).toBe('black');
+});

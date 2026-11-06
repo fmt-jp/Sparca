@@ -42,9 +42,9 @@ test('grid: show, spacing, color, and snapping (also remembered after reload)', 
   await page.getByRole('menuitemcheckbox', { name: 'グリッドを表示' }).click();
   await expect(page.getByTestId('grid')).toBeVisible();
   // Settings dialog: spacing 50, red, snap on.
-  await page.getByRole('button', { name: '表示', exact: true }).click();
-  await page.getByRole('menuitem', { name: 'グリッド設定…' }).click();
-  const dlg = page.getByRole('dialog', { name: 'グリッド設定' });
+  await page.getByRole('button', { name: '編集', exact: true }).click();
+  await page.getByRole('menuitem', { name: '環境設定…' }).click();
+  const dlg = page.getByRole('dialog', { name: '環境設定' });
   const size = dlg.locator('input[aria-label="グリッドの間隔"]');
   await size.fill('50');
   await size.press('Enter');
