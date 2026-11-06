@@ -3,7 +3,7 @@
 // Processing runs in a worker. While parameters change, a downscaled preview is computed
 // first; the full-resolution result follows once the parameters stay unchanged.
 import { APP_UPDATED_MESSAGE } from '../lazy';
-import type { AutoColorParams, ImageObject, ImagePipeline } from '../model/types';
+import type { AutoColorParams, ImageObject, ImagePipeline, ResampleMethod } from '../model/types';
 import type { WorkerRequest, WorkerResponse } from '../engine/worker';
 import { pipelineOutputSize } from '../engine/pipeline';
 import { assets } from '../store/assets';
@@ -56,6 +56,7 @@ export class ImageRenderCache {
   private running: (Job & { jobId: number }) | null = null;
   private jobSeq = 0;
   private analyzeWaiters = new Map<number, { resolve: (p: AutoColorParams) => void; reject: (e: Error) => void }>();
+  private resampleWaiters = new Map<number, { resolve: (b: Blob) => void; reject: (e: Error) => void }>();
   private fullTimers = new Map<string, number>();
   /** Pipelines that failed to process; not retried, so the user is told once. */
   private failed = new Set<string>();
@@ -191,6 +192,15 @@ export class ImageRenderCache {
     });
   }
 
+  /** The image resampled to width×height px with our own interpolation (in the worker; for export). */
+  resampleBlob(blob: Blob, width: number, height: number, method: ResampleMethod): Promise<Blob> {
+    const jobId = ++this.jobSeq;
+    return new Promise((resolve, reject) => {
+      this.resampleWaiters.set(jobId, { resolve, reject });
+      this.post({ type: 'resample', jobId, blob, width, height, method });
+    });
+  }
+
   private enqueue(assetId: string, pipeline: ImagePipeline, scale: number, full: boolean, objectId: string | null): Job | null {
     if (!this.ensureRegistered(assetId)) return null;
     const key = this.key(assetId, pipeline, full);
@@ -221,6 +231,13 @@ export class ImageRenderCache {
   }
 
   private onMessage(msg: WorkerResponse): void {
+    if (msg.type === 'resampled' || (msg.type === 'error' && this.resampleWaiters.has(msg.jobId))) {
+      const w = this.resampleWaiters.get(msg.jobId);
+      this.resampleWaiters.delete(msg.jobId);
+      if (msg.type === 'resampled') w?.resolve(msg.blob);
+      else w?.reject(new Error(msg.message));
+      return;
+    }
     if (msg.type === 'analyzed' || (msg.type === 'error' && this.analyzeWaiters.has(msg.jobId))) {
       const w = this.analyzeWaiters.get(msg.jobId);
       this.analyzeWaiters.delete(msg.jobId);

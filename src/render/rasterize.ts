@@ -2,8 +2,7 @@
 // screen (docs/design.md §3). Used by export and the eyedropper.
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { allObjects } from '../model/tree';
-import type { ImageObject, SparcaDocument } from '../model/types';
+import type { ImageObject, SceneObject, SparcaDocument } from '../model/types';
 import { DocumentSvg } from './DocumentSvg';
 import { imageCache } from './imageCache';
 
@@ -30,13 +29,54 @@ async function portableImage(blob: Blob): Promise<Blob> {
   return c.convertToBlob({ type: 'image/png' });
 }
 
-/** Standalone SVG markup of the document with every image embedded as a data URL. */
-export async function documentSvgMarkup(doc: SparcaDocument, scale = 1): Promise<string> {
+/** Every image object, including those inside mask layers. */
+function allImages(doc: SparcaDocument): { o: ImageObject; inMask: boolean }[] {
+  const out: { o: ImageObject; inMask: boolean }[] = [];
+  const walk = (list: SceneObject[], inMask: boolean) => {
+    for (const o of list) {
+      if (o.type === 'image') out.push({ o, inMask });
+      if (o.type === 'group') walk(o.children, inMask);
+      if (o.mask) walk(o.mask.children, true);
+    }
+  };
+  for (const l of doc.layers) walk(l.children, false);
+  return out;
+}
+
+/** Pixel size of an image blob. */
+async function blobSize(blob: Blob): Promise<{ width: number; height: number }> {
+  const bmp = await createImageBitmap(blob);
+  const size = { width: bmp.width, height: bmp.height };
+  bmp.close();
+  return size;
+}
+
+/**
+ * The image at the pixel size it covers in the output, resampled with our own interpolation
+ * instead of leaving the scaling to the browser (CLAUDE.md: the browser's resize ignores the
+ * interpolation setting). Uses the image's 画像サイズ method when it has one, else bicubic.
+ */
+async function atOutputSize(o: ImageObject, blob: Blob, scale: number): Promise<Blob> {
+  const w = Math.max(1, Math.round(o.box.width * scale));
+  const h = Math.max(1, Math.round(o.box.height * scale));
+  const size = await blobSize(blob);
+  if (size.width === w && size.height === h) return blob;
+  return imageCache.resampleBlob(blob, w, h, o.pipeline.resize?.method ?? 'bicubic');
+}
+
+/**
+ * Standalone SVG markup of the document with every image embedded as a data URL. With
+ * `resampleImages` (raster export), scaled images are resampled to their output pixel size.
+ */
+export async function documentSvgMarkup(doc: SparcaDocument, scale = 1, resampleImages = false): Promise<string> {
   const hrefs = new Map<string, string>();
-  for (const o of allObjects(doc)) {
-    if (o.type !== 'image' || !o.visible) continue;
+  for (const { o, inMask } of allImages(doc)) {
+    if (!o.visible) continue;
     try {
-      hrefs.set(o.id, await blobToDataUrl(await portableImage(await imageCache.fullBlob(o))));
+      let blob = await imageCache.fullBlob(o);
+      // Mask content is placed through the mask's own mapping; its size on the output is not the box.
+      if (resampleImages && !inMask) blob = await atOutputSize(o, blob, scale);
+      hrefs.set(o.id, await blobToDataUrl(await portableImage(blob)));
     } catch (e) {
       throw new RenderError(`画像「${o.name}」の処理に失敗しました: ${e instanceof Error ? e.message : String(e)}`);
     }
@@ -52,11 +92,14 @@ export async function documentSvgMarkup(doc: SparcaDocument, scale = 1): Promise
 }
 
 /** Render the canvas area into a 2D canvas. `background` fills transparent areas (e.g. for JPEG). */
-export async function rasterizeDocument(doc: SparcaDocument, opts: { scale?: number; background?: string | null } = {}): Promise<HTMLCanvasElement> {
+export async function rasterizeDocument(
+  doc: SparcaDocument,
+  opts: { scale?: number; background?: string | null; resampleImages?: boolean } = {},
+): Promise<HTMLCanvasElement> {
   const scale = opts.scale ?? 1;
   const w = Math.max(1, Math.round(doc.width * scale));
   const h = Math.max(1, Math.round(doc.height * scale));
-  const markup = await documentSvgMarkup(doc, scale);
+  const markup = await documentSvgMarkup(doc, scale, opts.resampleImages ?? false);
   const url = URL.createObjectURL(new Blob([markup], { type: 'image/svg+xml' }));
   try {
     const img = new Image();

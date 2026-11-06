@@ -1,6 +1,6 @@
 /// <reference lib="webworker" />
 // Image-processing worker: decodes assets, runs pipelines and encodes results off the UI thread.
-import type { ImagePipeline } from '../model/types';
+import type { ImagePipeline, ResampleMethod } from '../model/types';
 import { computeAutoColor } from './color';
 import { runPipeline } from './pipeline';
 import { cropRaster, type Raster } from './raster';
@@ -9,12 +9,15 @@ import { resample } from './resample';
 export type WorkerRequest =
   | { type: 'register'; assetId: string; blob: Blob }
   | { type: 'process'; jobId: number; assetId: string; pipeline: ImagePipeline; scale: number }
-  | { type: 'analyze'; jobId: number; assetId: string; crop: ImagePipeline['crop'] };
+  | { type: 'analyze'; jobId: number; assetId: string; crop: ImagePipeline['crop'] }
+  /** Resample an (already processed) image to another pixel size, for export. */
+  | { type: 'resample'; jobId: number; blob: Blob; width: number; height: number; method: ResampleMethod };
 
 export type WorkerResponse =
   | { type: 'progress'; jobId: number; fraction: number }
   | { type: 'done'; jobId: number; blob: Blob; width: number; height: number }
   | { type: 'analyzed'; jobId: number; params: ReturnType<typeof computeAutoColor> }
+  | { type: 'resampled'; jobId: number; blob: Blob }
   | { type: 'error'; jobId: number; message: string };
 
 const blobs = new Map<string, Blob>();
@@ -75,6 +78,15 @@ ctx.onmessage = async (e: MessageEvent<WorkerRequest>) => {
       );
       const blob = await encode(out);
       ctx.postMessage({ type: 'done', jobId: msg.jobId, blob, width: out.width, height: out.height } satisfies WorkerResponse);
+    } else if (msg.type === 'resample') {
+      const bmp = await createImageBitmap(msg.blob, { premultiplyAlpha: 'none', colorSpaceConversion: 'none' });
+      const canvas = new OffscreenCanvas(bmp.width, bmp.height);
+      const c = canvas.getContext('2d', { willReadFrequently: true })!;
+      c.drawImage(bmp, 0, 0);
+      bmp.close();
+      const img = c.getImageData(0, 0, canvas.width, canvas.height);
+      const out = resample({ width: img.width, height: img.height, data: img.data }, msg.width, msg.height, msg.method);
+      ctx.postMessage({ type: 'resampled', jobId: msg.jobId, blob: await encode(out) } satisfies WorkerResponse);
     } else if (msg.type === 'analyze') {
       const full = await decode(msg.assetId);
       const region = msg.crop ? cropRaster(full, msg.crop.x, msg.crop.y, msg.crop.width, msg.crop.height) : full;
