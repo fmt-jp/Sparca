@@ -25,8 +25,8 @@ test('the canvas properties fit the canvas to the drawn shapes, in one undo step
   await expect(props).toContainText('キャンバス 350 × 150 px');
   await page.keyboard.press('Control+z');
   expect(await state(page, 's => [s.doc.width, s.doc.height]')).toEqual([800, 600]);
-  // Also from the 変更 menu.
-  await page.getByRole('button', { name: '変更', exact: true }).click();
+  // Also from the 画像 menu.
+  await page.getByRole('button', { name: '画像', exact: true }).click();
   await page.getByRole('menuitem', { name: 'キャンバスを内容に合わせる' }).click();
   expect(await state(page, 's => [s.doc.width, s.doc.height]')).toEqual([350, 150]);
 });

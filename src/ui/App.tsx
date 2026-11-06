@@ -22,7 +22,8 @@ import { askImagePlacement, closeDialog, openDialog, useDialog } from './dialogs
 import { ImagePlacementDialog } from './ImagePlacementDialog';
 import { setPlacementPrompt } from '../store/actions';
 import { ExportDialog } from './ExportDialog';
-import { GridDialog } from './GridDialog';
+import { PreferencesDialog } from './PreferencesDialog';
+import { AddMaskDialog } from './AddMaskDialog';
 import { ImageSizeDialog } from './ImageSizeDialog';
 import { LayersPanel } from './LayersPanel';
 import { MenuBar, zoomIn, zoomOut, zoomToFit } from './MenuBar';
@@ -150,7 +151,8 @@ export function App() {
       {dialog?.kind === 'help' && <HelpDialog section={dialog.section} onClose={closeDialog} />}
       {dialog?.kind === 'grow-selection' && <GrowSelectionDialog contract={dialog.contract} onClose={closeDialog} />}
       {dialog?.kind === 'export' && <ExportDialog onClose={closeDialog} />}
-      {dialog?.kind === 'grid' && <GridDialog onClose={closeDialog} />}
+      {dialog?.kind === 'preferences' && <PreferencesDialog onClose={closeDialog} />}
+      {dialog?.kind === 'add-mask' && <AddMaskDialog onClose={closeDialog} />}
       {dialog?.kind === 'image-placement' && <ImagePlacementDialog question={dialog.question} answer={dialog.answer} />}
       <div className="notices" role="status" aria-live="polite">
         {notices.map((n) => (

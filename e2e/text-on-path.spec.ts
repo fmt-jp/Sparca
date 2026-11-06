@@ -96,3 +96,15 @@ test('the 変更 menu and right-click attach; the letters are exported', async (
   await page.getByRole('menuitem', { name: 'テキストをパスから外す' }).click();
   expect((await objects(page)).map((o) => o.type)).toEqual(['path', 'text']);
 });
+
+test('the 変更 menu has one text-on-path item that switches between 添付 and 外す', async ({ page }) => {
+  await setup(page);
+  await page.keyboard.press('Control+a');
+  await page.getByRole('button', { name: '変更', exact: true }).click();
+  await expect(page.getByRole('menuitem', { name: 'テキストをパスから外す' })).toHaveCount(0);
+  await page.getByRole('menuitem', { name: 'テキストをパスに添付' }).click();
+  await page.getByRole('button', { name: '変更', exact: true }).click();
+  await expect(page.getByRole('menuitem', { name: 'テキストをパスに添付' })).toHaveCount(0);
+  await expect(page.getByRole('menuitem', { name: 'テキストをパスから外す' })).toBeEnabled();
+  await page.keyboard.press('Escape');
+});

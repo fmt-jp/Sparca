@@ -112,7 +112,7 @@ test('canvas size with 9-point anchor moves content without scaling it', async (
   const c = await canvasBox(page);
   await page.keyboard.press('r');
   await drag(page, { x: c.x + 0, y: c.y + 0 }, { x: c.x + 50, y: c.y + 25 });
-  await page.getByRole('button', { name: '変更' }).click();
+  await page.getByRole('button', { name: '画像', exact: true }).click();
   await page.getByRole('menuitem', { name: /キャンバスサイズ/ }).click();
   const dialog = page.getByRole('dialog', { name: 'キャンバスサイズ' });
   await setNumber(page, '幅', '1000', dialog);

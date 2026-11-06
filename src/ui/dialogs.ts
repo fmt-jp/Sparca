@@ -9,7 +9,8 @@ export type DialogState =
   | { kind: 'mosaic-selection' }
   | { kind: 'grow-selection'; contract: boolean }
   | { kind: 'export' }
-  | { kind: 'grid' }
+  | { kind: 'preferences' }
+  | { kind: 'add-mask' }
   | { kind: 'image-placement'; question: PlacementQuestion; answer: (a: PlacementAnswer | null) => void }
   | { kind: 'help'; section?: string }
   | null;

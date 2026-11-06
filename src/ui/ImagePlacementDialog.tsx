@@ -33,14 +33,14 @@ export function ImagePlacementDialog({ question: q, answer }: { question: Placem
       </p>
       <ul className="placement-choices">
         <li>
-          <b>原寸で配置</b>：{q.width} × {q.height} px のまま中央に置く。はみ出した部分は書き出されません（「変更」→「キャンバスを内容に合わせる」で広げられます）。
+          <b>原寸で配置</b>：{q.width} × {q.height} px のまま中央に置く。はみ出した部分は書き出されません（「画像」→「キャンバスを内容に合わせる」で広げられます）。
         </li>
         <li>
           <b>キャンバスに合わせる</b>：{fitW} × {fitH} px に縮めて置く。元の画素は残り、書き出しではバイキュービックで縮小します。
         </li>
       </ul>
       <Toggle checked={remember} onChange={setRemember}>
-        次回から確認しない（「ファイル」メニューで変更できます）
+        次回から確認しない（「編集」→「環境設定…」で変更できます）
       </Toggle>
     </Dialog>
   );

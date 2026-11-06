@@ -80,9 +80,13 @@ test('cancel places nothing; a remembered answer is used without asking and can 
   await expect(page.locator('[data-testid=canvas] image')).toHaveCount(1);
   await expect(page.getByRole('dialog', { name: '画像の配置' })).toHaveCount(0);
   expect((await lastBox(page)).width).toBe(doc.w);
-  // ファイル menu: back to 毎回確認.
-  await page.getByRole('button', { name: 'ファイル' }).click();
-  await page.getByRole('menuitemcheckbox', { name: 'キャンバスより大きい画像：毎回確認' }).click();
+  // 環境設定: back to 毎回確認.
+  await page.getByRole('button', { name: '編集', exact: true }).click();
+  await page.getByRole('menuitem', { name: '環境設定…' }).click();
+  const prefs = page.getByRole('dialog', { name: '環境設定' });
+  await expect(prefs.getByRole('radio', { name: 'キャンバスに合わせる' })).toBeChecked();
+  await prefs.getByRole('radio', { name: '毎回確認' }).check();
+  await prefs.getByRole('button', { name: '閉じる' }).click();
   expect(await state(page, 's => s.imagePlacement')).toBe('ask');
   await place(page, 'big3.png', doc.w + 10, doc.h + 10);
   await expect(page.getByRole('dialog', { name: '画像の配置' })).toBeVisible();

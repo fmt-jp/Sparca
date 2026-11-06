@@ -57,9 +57,11 @@ test('a dragged object snaps its center to the canvas center and shows guides', 
   expect(b2.y + b2.height / 2).toBeCloseTo(h / 2, 5);
 });
 
-test('smart guides can be turned off from the 表示 menu (remembered)', async ({ page }) => {
-  await page.getByRole('button', { name: '表示', exact: true }).click();
-  await page.getByRole('menuitemcheckbox', { name: /スマートガイド/ }).click();
+test('smart guides can be turned off in 環境設定 (remembered)', async ({ page }) => {
+  await page.getByRole('button', { name: '編集', exact: true }).click();
+  await page.getByRole('menuitem', { name: '環境設定…' }).click();
+  await page.getByRole('dialog', { name: '環境設定' }).getByLabel(/スマートガイド/).uncheck();
+  await page.getByRole('dialog', { name: '環境設定' }).getByRole('button', { name: '閉じる' }).click();
   expect(await state(page, 's => s.smartGuides')).toBe(false);
   await page.reload();
   await expect(page.getByRole('region', { name: 'プロパティ' })).toBeVisible();
