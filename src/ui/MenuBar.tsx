@@ -80,6 +80,7 @@ export function MenuBar({ onNew }: { onNew: () => void }) {
   const rulers = useEditor((s) => s.rulers);
   const rulerOrigin = useEditor((s) => s.rulerOrigin);
   const smartGuides = useEditor((s) => s.smartGuides);
+  const imagePlacement = useEditor((s) => s.imagePlacement);
   const alignToCanvas = useEditor((s) => s.alignToCanvas);
   const [panels] = usePanelSizes();
   const image = selectedImage(editor);
@@ -101,6 +102,9 @@ export function MenuBar({ onNew }: { onNew: () => void }) {
         { label: 'HANABI プロジェクトとして保存…（.hnb）', action: () => void saveProject(editor, true, 'hnb') },
         { separator: true, label: '' },
         { label: '画像を配置…', shortcut: `${mod}Shift+I`, action: () => void chooseAndPlaceImage(editor) },
+        { label: 'キャンバスより大きい画像：毎回確認', checked: imagePlacement === 'ask', action: () => editor.set({ imagePlacement: 'ask' }) },
+        { label: 'キャンバスより大きい画像：原寸で配置', checked: imagePlacement === 'original', action: () => editor.set({ imagePlacement: 'original' }) },
+        { label: 'キャンバスより大きい画像：キャンバスに合わせる', checked: imagePlacement === 'fit', action: () => editor.set({ imagePlacement: 'fit' }) },
         { separator: true, label: '' },
         { label: '画像として書き出し…（PNG / JPEG / WebP / SVG）', shortcut: `${mod}Shift+E`, action: () => openDialog({ kind: 'export' }) },
       ],

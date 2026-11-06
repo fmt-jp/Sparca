@@ -1774,3 +1774,9 @@ kbd {
   stroke: #ff2fb4;
   shape-rendering: crispEdges;
 }
+
+.placement-choices {
+  margin: 0 0 12px;
+  padding-left: 18px;
+  line-height: 1.6;
+}

@@ -155,6 +155,11 @@ export interface EditorState {
   rulers: boolean;
   /** Where the rulers count from: the canvas's top-left corner or its center. */
   rulerOrigin: 'corner' | 'center';
+  /**
+   * Placing an image larger than the canvas: ask each time, keep its original size, or
+   * scale it down to fit the canvas (a per-browser preference).
+   */
+  imagePlacement: ImagePlacement;
   /** Snap dragged objects' centers to the canvas's center lines and show a guide there. */
   smartGuides: boolean;
   /** Align multiple objects to the canvas instead of to each other. */
@@ -167,6 +172,8 @@ export interface EditorState {
   /** Non-null while a long-running task is in progress. */
   busy: string | null;
 }
+
+export type ImagePlacement = 'ask' | 'original' | 'fit';
 
 type Listener = () => void;
 
@@ -194,6 +201,7 @@ export class EditorStore {
       rulers: true,
       rulerOrigin: 'corner',
       smartGuides: true,
+      imagePlacement: 'ask',
       selectionEdge: DEFAULT_SELECTION_EDGE,
       toolDefaults: DEFAULT_TOOL_DEFAULTS,
       alignToCanvas: false,

@@ -18,7 +18,9 @@ import type { ToolId } from '../store/editor';
 import { CanvasSizeDialog } from './CanvasSizeDialog';
 import { CanvasView } from './CanvasView';
 import { BlurSelectionDialog } from './BlurSelectionDialog';
-import { closeDialog, openDialog, useDialog } from './dialogs';
+import { askImagePlacement, closeDialog, openDialog, useDialog } from './dialogs';
+import { ImagePlacementDialog } from './ImagePlacementDialog';
+import { setPlacementPrompt } from '../store/actions';
 import { ExportDialog } from './ExportDialog';
 import { GridDialog } from './GridDialog';
 import { ImageSizeDialog } from './ImageSizeDialog';
@@ -61,6 +63,12 @@ export function App() {
   }, []);
 
   useEffect(() => installClipboardHandlers(), []);
+
+  // Placing an image larger than the canvas asks how (unless a choice is remembered).
+  useEffect(() => {
+    setPlacementPrompt(askImagePlacement);
+    return () => setPlacementPrompt(null);
+  }, []);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -143,6 +151,7 @@ export function App() {
       {dialog?.kind === 'grow-selection' && <GrowSelectionDialog contract={dialog.contract} onClose={closeDialog} />}
       {dialog?.kind === 'export' && <ExportDialog onClose={closeDialog} />}
       {dialog?.kind === 'grid' && <GridDialog onClose={closeDialog} />}
+      {dialog?.kind === 'image-placement' && <ImagePlacementDialog question={dialog.question} answer={dialog.answer} />}
       <div className="notices" role="status" aria-live="polite">
         {notices.map((n) => (
           <div key={n.id} className={`notice ${n.kind}`} onClick={() => editor.dismiss(n.id)}>

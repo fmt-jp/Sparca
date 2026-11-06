@@ -42,22 +42,66 @@ export function newDocument(ed: EditorStore, width: number, height: number, back
   return true;
 }
 
+/** What to do with an image larger than the canvas, as answered by the user. */
+export interface PlacementAnswer {
+  choice: 'original' | 'fit';
+  /** Use this answer from now on without asking. */
+  remember: boolean;
+}
+
+export interface PlacementQuestion {
+  name: string;
+  width: number;
+  height: number;
+  canvasWidth: number;
+  canvasHeight: number;
+}
+
+type PlacementPrompt = (q: PlacementQuestion) => Promise<PlacementAnswer | null>;
+let placementPrompt: PlacementPrompt | null = null;
+
+/** The UI's way of asking how to place a large image (null: cancelled). Without one, images keep their size. */
+export function setPlacementPrompt(fn: PlacementPrompt | null): void {
+  placementPrompt = fn;
+}
+
 /**
- * Place image files as new image objects at their original pixel size, centered on the
- * canvas on whole pixels (decided with the user 2026-11-06: scaling them down to fit made
- * exports blurry). An image larger than the canvas sticks out, with a notice saying so.
+ * Place image files as new image objects, centered on the canvas on whole pixels. An image
+ * larger than the canvas is placed at its original size or scaled down to fit (keeping its
+ * pixels), as chosen in a prompt or remembered (decided with the user 2026-11-06); a
+ * smaller one always keeps its size. Placed at original size it sticks out, with a notice.
  */
 export async function placeImageFiles(ed: EditorStore, files: File[]): Promise<void> {
   const placed: string[] = [];
   let overflow = false;
+  // One answer covers the rest of the files placed together.
+  let answer: 'original' | 'fit' | null = null;
   for (const file of files) {
     try {
       ed.set({ busy: `「${file.name}」を読み込み中…` });
       const meta = await importImageFile(file, file.name);
       const { doc, activeLayerId } = ed.getState();
-      const w = meta.width;
-      const h = meta.height;
-      if (w > doc.width || h > doc.height) overflow = true;
+      let w = meta.width;
+      let h = meta.height;
+      if (w > doc.width || h > doc.height) {
+        const pref = ed.getState().imagePlacement;
+        let choice: 'original' | 'fit' | null = answer ?? (pref === 'ask' ? null : pref);
+        if (!choice) {
+          if (placementPrompt) {
+            ed.set({ busy: null });
+            const a = await placementPrompt({ name: file.name, width: w, height: h, canvasWidth: doc.width, canvasHeight: doc.height });
+            if (!a) break;
+            if (a.remember) ed.set({ imagePlacement: a.choice });
+            choice = a.choice;
+          } else choice = 'original';
+          answer = choice;
+        }
+        if (choice === 'fit') {
+          const k = Math.min(doc.width / w, doc.height / h);
+          w = Math.max(1, Math.round(w * k));
+          h = Math.max(1, Math.round(h * k));
+        } else overflow = true;
+      }
       const offset = placed.length * 20;
       const img = createImage(meta, {
         x: Math.round((doc.width - w) / 2) + offset,

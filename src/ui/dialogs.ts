@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react';
+import type { PlacementAnswer, PlacementQuestion } from '../store/actions';
 
 export type DialogState =
   | { kind: 'new' }
@@ -9,6 +10,7 @@ export type DialogState =
   | { kind: 'grow-selection'; contract: boolean }
   | { kind: 'export' }
   | { kind: 'grid' }
+  | { kind: 'image-placement'; question: PlacementQuestion; answer: (a: PlacementAnswer | null) => void }
   | { kind: 'help'; section?: string }
   | null;
 
@@ -32,4 +34,18 @@ export function useDialog(): DialogState {
     },
     () => current,
   );
+}
+
+/** Ask how to place an image larger than the canvas (resolves null when cancelled). */
+export function askImagePlacement(question: PlacementQuestion): Promise<PlacementAnswer | null> {
+  return new Promise((resolve) => {
+    openDialog({
+      kind: 'image-placement',
+      question,
+      answer: (a) => {
+        closeDialog();
+        resolve(a);
+      },
+    });
+  });
 }
