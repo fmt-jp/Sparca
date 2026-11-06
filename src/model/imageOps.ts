@@ -121,8 +121,10 @@ export function resizeImagePixels(doc: SparcaDocument, id: Id, width: number, he
   const w = Math.max(1, Math.round(width));
   const h = Math.max(1, Math.round(height));
   const resize = w === base.width && h === base.height ? null : { width: w, height: h, method };
+  // About the same center, on whole pixels: a half-pixel position would blur every pixel
+  // when composited (2026-11-06, user report).
   const c = boxCenter(o.box);
-  o.box = { ...o.box, x: c.x - w / 2, y: c.y - h / 2, width: w, height: h };
+  o.box = { ...o.box, x: Math.round(c.x - w / 2), y: Math.round(c.y - h / 2), width: w, height: h };
   o.pipeline = { ...o.pipeline, resize };
 }
 

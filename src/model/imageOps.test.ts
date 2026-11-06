@@ -86,6 +86,18 @@ describe('image pixel resize', () => {
     const back = produce(out, (d) => resizeImagePixels(d, img, 400, 200, 'bicubic', 400, 200));
     expect((findObject(back, img)!.object as ImageObject).pipeline.resize).toBeNull();
   });
+
+  it('keeps the resized image on whole pixels', () => {
+    const { doc, img } = setup();
+    const out = produce(doc, (d) => resizeImagePixels(d, img, 267, 133, 'bicubic', 400, 200));
+    const b = (findObject(out, img)!.object as ImageObject).box;
+    expect(Number.isInteger(b.x) && Number.isInteger(b.y)).toBe(true);
+    expect([b.width, b.height]).toEqual([267, 133]);
+    // The center moves by at most half a pixel.
+    const before = (findObject(doc, img)!.object as ImageObject).box;
+    expect(Math.abs(b.x + b.width / 2 - (before.x + before.width / 2))).toBeLessThanOrEqual(0.5);
+    expect(Math.abs(b.y + b.height / 2 - (before.y + before.height / 2))).toBeLessThanOrEqual(0.5);
+  });
 });
 
 describe('selection masks', () => {
