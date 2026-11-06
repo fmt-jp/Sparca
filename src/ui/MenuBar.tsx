@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
   alignSelection,
   arrangeSelection,
@@ -34,7 +34,7 @@ export interface MenuItem {
   separator?: boolean;
   /** Shows a check mark (toggle items). */
   checked?: boolean;
-  /** Submenu (context menu only). */
+  /** Submenu (one level; opens on hover or click). */
   children?: MenuItem[];
 }
 
@@ -140,11 +140,11 @@ export function MenuBar({ onNew }: { onNew: () => void }) {
         { label: 'グループ解除', shortcut: `${mod}Shift+G`, action: () => ungroupSelection(editor), disabled: !hasSel },
         { separator: true, label: '' },
         { label: 'パスに変換', action: () => convertSelectionToPaths(editor), disabled: !canConvertSelectionToPaths(editor) },
-        ...COMBINE_OPS.map((op) => ({
-          label: `パスの結合：${COMBINE_LABELS[op]}`,
-          action: () => void runCombine(op),
+        {
+          label: 'パスの結合',
           disabled: !canCombineSelection(editor),
-        })),
+          children: COMBINE_OPS.map((op) => ({ label: COMBINE_LABELS[op], action: () => void runCombine(op) })),
+        },
         { separator: true, label: '' },
         { label: 'テキストをパスに添付', shortcut: `${mod}Shift+Y`, action: () => attachTextToPath(editor), disabled: !canAttachTextToPath(editor) },
         { label: 'テキストをパスから外す', action: () => detachTextFromPath(editor), disabled: !canDetachTextFromPath(editor) },
@@ -155,19 +155,26 @@ export function MenuBar({ onNew }: { onNew: () => void }) {
         { label: 'マスクを追加（黒：全体を隠す）', action: () => addMask(editor, 'black'), disabled: !canAddMask(editor) },
         { label: 'マスクを削除', action: () => removeMask(editor), disabled: !canRemoveMask(editor) },
         { separator: true, label: '' },
-        ...ALIGN.map((a) => ({
-          label: `整列：${a.label}`,
-          shortcut: alignShortcut(a.digit),
-          action: () => alignSelection(editor, a.op, alignToCanvas),
-          disabled: !hasSel,
-        })),
-        ...DISTRIBUTE.map((a) => ({
-          label: `整列：${a.label}`,
-          shortcut: alignShortcut(a.digit),
-          action: () => alignSelection(editor, a.op, alignToCanvas),
-          disabled: selection.length < (alignToCanvas ? 2 : 3),
-        })),
-        { label: '整列：キャンバスに対して', checked: alignToCanvas, action: () => editor.set({ alignToCanvas: !alignToCanvas }) },
+        {
+          label: '整列',
+          children: [
+            ...ALIGN.map((a) => ({
+              label: a.label,
+              shortcut: alignShortcut(a.digit),
+              action: () => alignSelection(editor, a.op, alignToCanvas),
+              disabled: !hasSel,
+            })),
+            { separator: true, label: '' },
+            ...DISTRIBUTE.map((a) => ({
+              label: a.label,
+              shortcut: alignShortcut(a.digit),
+              action: () => alignSelection(editor, a.op, alignToCanvas),
+              disabled: selection.length < (alignToCanvas ? 2 : 3),
+            })),
+            { separator: true, label: '' },
+            { label: 'キャンバスに対して整列', checked: alignToCanvas, action: () => editor.set({ alignToCanvas: !alignToCanvas }) },
+          ],
+        },
         { separator: true, label: '' },
         { label: 'キャンバスサイズ…', action: () => openDialog({ kind: 'canvas-size' }) },
         { label: 'キャンバスを内容に合わせる', action: () => fitCanvasToContent(editor) },
@@ -242,10 +249,12 @@ export function MenuBar({ onNew }: { onNew: () => void }) {
             {m.label}
           </button>
           {open === m.id && (
-            <div className="menu-list" role="menu">
+            <div className="menu-list" role="menu" aria-label={m.label}>
               {m.items.map((it, i) =>
                 it.separator ? (
                   <hr key={i} />
+                ) : it.children ? (
+                  <MenuSubmenu key={i} item={it} onDone={() => setOpen(null)} />
                 ) : (
                   <button
                     key={i}
@@ -308,5 +317,61 @@ export function MenuBar({ onNew }: { onNew: () => void }) {
         {dirty && <span className="dirty-mark"> ●未保存</span>}
       </span>
     </header>
+  );
+}
+
+/** A menu bar item with a submenu: opens to the right on hover or click (one level). */
+function MenuSubmenu({ item, onDone }: { item: MenuItem; onDone: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [flip, setFlip] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    if (!open || !ref.current) return;
+    const r = ref.current.getBoundingClientRect();
+    setFlip(r.right + r.width > window.innerWidth - 4);
+  }, [open]);
+  return (
+    <div ref={ref} className={`context-submenu${flip ? ' flip' : ''}`} onPointerEnter={() => setOpen(true)} onPointerLeave={() => setOpen(false)}>
+      <button
+        type="button"
+        role="menuitem"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        className="menu-item"
+        disabled={item.disabled}
+        onClick={() => setOpen(true)}
+      >
+        <span>{item.label}</span>
+        <span aria-hidden="true">▸</span>
+      </button>
+      {open && !item.disabled && (
+        <div className="menu-list menubar-sub" role="menu" aria-label={item.label}>
+          {item.children!.map((it, i) =>
+            it.separator ? (
+              <hr key={i} />
+            ) : (
+              <button
+                key={i}
+                type="button"
+                role={it.checked === undefined ? 'menuitem' : 'menuitemcheckbox'}
+                aria-checked={it.checked}
+                className="menu-item"
+                disabled={it.disabled}
+                onClick={() => {
+                  onDone();
+                  it.action?.();
+                }}
+              >
+                <span>
+                  {it.checked !== undefined && <span className="check">{it.checked ? '✓' : ''}</span>}
+                  {it.label}
+                </span>
+                {it.shortcut && <kbd>{it.shortcut}</kbd>}
+              </button>
+            ),
+          )}
+        </div>
+      )}
+    </div>
   );
 }

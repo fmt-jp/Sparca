@@ -1780,3 +1780,13 @@ kbd {
   padding-left: 18px;
   line-height: 1.6;
 }
+
+/* Submenus of the menu bar's menus. */
+.menu-list.menubar-sub {
+  top: -5px;
+  left: 100%;
+}
+.context-submenu.flip > .menu-list.menubar-sub {
+  left: auto;
+  right: 100%;
+}

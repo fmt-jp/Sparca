@@ -65,7 +65,7 @@ export function objectMenu(): MenuItem[] {
           disabled: selection.length < (alignToCanvas ? 2 : 3),
         })),
         SEP,
-        { label: 'キャンバスに対して', checked: alignToCanvas, action: () => editor.set({ alignToCanvas: !alignToCanvas }) },
+        { label: 'キャンバスに対して整列', checked: alignToCanvas, action: () => editor.set({ alignToCanvas: !alignToCanvas }) },
       ],
     },
   ];

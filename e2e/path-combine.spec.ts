@@ -27,7 +27,8 @@ async function draw(page: Page, tool: string, x0: number, y0: number, x1: number
 async function combine(page: Page, op: string) {
   await page.keyboard.press('Control+a');
   await page.getByRole('button', { name: '変更', exact: true }).click();
-  await page.getByRole('menuitem', { name: `パスの結合：${op}` }).click();
+  await page.getByRole('menuitem', { name: 'パスの結合', exact: true }).hover();
+  await page.getByRole('menuitem', { name: op, exact: true }).click();
   await expect.poll(async () => (await objects(page)).length).toBe(1);
 }
 
@@ -102,7 +103,7 @@ test('the right-click menu has パスの結合; text cannot take part', async ({
   await page.keyboard.press('Escape');
   await page.keyboard.press('Control+a');
   await page.getByRole('button', { name: '変更', exact: true }).click();
-  await expect(page.getByRole('menuitem', { name: 'パスの結合：合体' })).toBeDisabled();
+  await expect(page.getByRole('menuitem', { name: 'パスの結合', exact: true })).toBeDisabled();
 });
 
 test('every outline of a compound path is shown and edited with the subselect tool', async ({ page }) => {

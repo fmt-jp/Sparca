@@ -108,7 +108,8 @@ test('align multiple shapes on their horizontal and vertical centers, or to the 
   b = await boxes(page);
   expect(b[0].y + b[0].height / 2).not.toBeCloseTo(300);
   await page.getByRole('button', { name: '変更' }).click();
-  await page.getByRole('menuitem', { name: '整列：縦中央（上下）' }).click();
+  await page.getByRole('menuitem', { name: '整列', exact: true }).hover();
+  await page.getByRole('menuitem', { name: '縦中央（上下）' }).click();
   b = await boxes(page);
   expect(b[0].y + b[0].height / 2).toBeCloseTo(300);
 });
@@ -154,8 +155,9 @@ test('align shortcuts Ctrl+Alt+1..6 and distribute Ctrl+Alt+7 / 9 (equal gaps)',
 
   // Menus show the shortcuts; distributing two objects needs 「キャンバスに対して」.
   await page.getByRole('button', { name: '変更', exact: true }).click();
-  await expect(page.getByRole('menuitem', { name: /整列：左揃え/ })).toContainText('Ctrl+Alt+1');
-  await expect(page.getByRole('menuitem', { name: /整列：均等配置（高さ）/ })).toContainText('Ctrl+Alt+9');
+  await page.getByRole('menuitem', { name: '整列', exact: true }).hover();
+  await expect(page.getByRole('menuitem', { name: /左揃え/ })).toContainText('Ctrl+Alt+1');
+  await expect(page.getByRole('menuitem', { name: /均等配置（高さ）/ })).toContainText('Ctrl+Alt+9');
   await page.keyboard.press('Escape');
 });
 
@@ -170,8 +172,9 @@ test('distributing two objects across the canvas puts them at its edges', async 
   await page.keyboard.press('Control+Alt+7');
   await expect(page.locator('.notice')).toContainText('3つ以上');
   await page.getByRole('button', { name: '変更', exact: true }).click();
-  await expect(page.getByRole('menuitem', { name: /整列：均等配置（幅）/ })).toBeDisabled();
-  await page.getByRole('menuitemcheckbox', { name: '整列：キャンバスに対して' }).click();
+  await page.getByRole('menuitem', { name: '整列', exact: true }).click(); // a click opens it too
+  await expect(page.getByRole('menuitem', { name: /均等配置（幅）/ })).toBeDisabled();
+  await page.getByRole('menuitemcheckbox', { name: 'キャンバスに対して整列' }).click();
   await page.keyboard.press('Control+Alt+7');
   const b = await boxes(page);
   expect(b.map((q) => q.x).sort((p, q) => p - q)).toEqual([0, 750]); // canvas 800 wide
