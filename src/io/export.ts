@@ -46,7 +46,7 @@ export async function exportImage(doc: SparcaDocument, opts: ExportOptions): Pro
   const { rasterizeDocument, RenderError } = await loadModule(loadRasterize);
   let canvas: HTMLCanvasElement;
   try {
-    canvas = await rasterizeDocument(doc, { background: flattenColor(opts) });
+    canvas = await rasterizeDocument(doc, { background: flattenColor(opts), resampleImages: true });
   } catch (e) {
     throw new ExportError(e instanceof RenderError ? e.message : `描画に失敗しました: ${String(e)}`);
   }

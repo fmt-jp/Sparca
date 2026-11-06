@@ -1,7 +1,7 @@
 // グラデーションマスク: added from the properties panel or the 変更 menu, checked in the exported PNG.
 import { expect, test, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
-import { canvasBox, decodePixels, disableNativePickers, drag, setColor, state } from './helpers';
+import { canvasBox, decodePixels, disableNativePickers, drag, makePng, setColor, state } from './helpers';
 
 test.beforeEach(async ({ page }) => {
   await disableNativePickers(page);
@@ -208,4 +208,28 @@ test('マスクとして貼り付け: a copied ellipse becomes the mask of the s
   const px = await exportPng(page, [[200, 200], [350, 200]]);
   expect(isRed(px[0])).toBe(true);
   expect(isWhite(px[1])).toBe(true);
+});
+
+test('an image used as a mask is exported with its pixels', async ({ page }) => {
+  await redRect(page);
+  const chooser = page.waitForEvent('filechooser');
+  await page.getByRole('button', { name: 'ファイル' }).click();
+  await page.getByRole('menuitem', { name: /画像を配置/ }).click();
+  // White left half, black right half.
+  await (await chooser).setFiles({ name: 'm.png', mimeType: 'image/png', buffer: makePng(100, 100, (x) => (x < 50 ? [255, 255, 255, 255] : [0, 0, 0, 255])) });
+  await expect(page.locator('[data-testid=canvas] image')).toHaveCount(1);
+  await page.evaluate(() => {
+    const ed = (window as unknown as { __sparca: { edit(label: string, fn: (d: any) => void): void } }).__sparca;
+    ed.edit('test', (d) => {
+      const o = d.layers[0].children.find((c: any) => c.type === 'image');
+      o.box = { x: 150, y: 150, width: 100, height: 100, rotation: 0 };
+    });
+  });
+  await page.keyboard.press('Control+a');
+  await page.getByRole('button', { name: '変更', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'グループでマスク' }).click();
+  expect(await state(page, 's => s.doc.layers[0].children[0].mask.children[0].type')).toBe('image');
+  const px = await exportPng(page, [[170, 200], [230, 200]]);
+  expect(isRed(px[0])).toBe(true); // under the white half
+  expect(isRed(px[1])).toBe(false); // under the black half
 });
