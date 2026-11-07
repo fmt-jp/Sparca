@@ -1783,12 +1783,15 @@ kbd {
 
 /* Submenus of the menu bar's menus. */
 .menu-list.menubar-sub {
-  top: -5px;
-  left: 100%;
+  position: fixed;
+  top: 0;
+  left: 0;
+  overflow-y: auto;
 }
-.context-submenu.flip > .menu-list.menubar-sub {
-  left: auto;
-  right: 100%;
+/* Menus of the menu bar fit in the window, scrolling when it is too low. */
+.menubar > .menu > .menu-list {
+  max-height: calc(100vh - 40px);
+  overflow-y: auto;
 }
 
 .prefs-heading {
