@@ -317,15 +317,28 @@ export function MenuBar({ onNew }: { onNew: () => void }) {
 /** A menu bar item with a submenu: opens to the right on hover or click (one level). */
 function MenuSubmenu({ item, onDone }: { item: MenuItem; onDone: () => void }) {
   const [open, setOpen] = useState(false);
-  const [flip, setFlip] = useState(false);
+  // Placed in window coordinates (position: fixed), so a scrolling parent menu does not clip it.
+  const [pos, setPos] = useState<{ left: number; top: number; maxHeight: number } | null>(null);
   const ref = useRef<HTMLDivElement>(null);
+  const sub = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
-    if (!open || !ref.current) return;
+    if (!open || !ref.current || !sub.current) {
+      setPos(null);
+      return;
+    }
     const r = ref.current.getBoundingClientRect();
-    setFlip(r.right + r.width > window.innerWidth - 4);
+    const m = sub.current.getBoundingClientRect();
+    const margin = 4;
+    // To the right of the item, or to its left when there is no room.
+    const left = r.right + m.width > window.innerWidth - margin ? Math.max(margin, r.left - m.width) : r.right;
+    // Lined up with the item, moved up as far as needed to stay in the window; scrolls when taller.
+    const maxHeight = window.innerHeight - margin * 2;
+    const h = Math.min(m.height, maxHeight);
+    const top = Math.max(margin, Math.min(r.top - 5, window.innerHeight - margin - h));
+    setPos({ left, top, maxHeight });
   }, [open]);
   return (
-    <div ref={ref} className={`context-submenu${flip ? ' flip' : ''}`} onPointerEnter={() => setOpen(true)} onPointerLeave={() => setOpen(false)}>
+    <div ref={ref} className="context-submenu" onPointerEnter={() => setOpen(true)} onPointerLeave={() => setOpen(false)}>
       <button
         type="button"
         role="menuitem"
@@ -339,7 +352,13 @@ function MenuSubmenu({ item, onDone }: { item: MenuItem; onDone: () => void }) {
         <span aria-hidden="true">▸</span>
       </button>
       {open && !item.disabled && (
-        <div className="menu-list menubar-sub" role="menu" aria-label={item.label}>
+        <div
+          ref={sub}
+          className="menu-list menubar-sub"
+          role="menu"
+          aria-label={item.label}
+          style={pos ? { left: pos.left, top: pos.top, maxHeight: pos.maxHeight } : { visibility: 'hidden' }}
+        >
           {item.children!.map((it, i) =>
             it.separator ? (
               <hr key={i} />
