@@ -149,7 +149,7 @@ export function MenuBar({ onNew }: { onNew: () => void }) {
         { separator: true, label: '' },
         { label: 'グラデーションマスクを追加', action: () => addGradientMask(editor), disabled: !canAddMask(editor) },
         { label: 'グループでマスク', action: () => groupAsMask(editor), disabled: !canGroupAsMask(editor) },
-        { label: 'マスクを追加…（白／黒）', action: () => openDialog({ kind: 'add-mask' }), disabled: !canAddMask(editor) },
+        { label: 'マスクを追加…（白／黒／グラデーション）', action: () => openDialog({ kind: 'add-mask' }), disabled: !canAddMask(editor) },
         { label: 'マスクを削除', action: () => removeMask(editor), disabled: !canRemoveMask(editor) },
         { separator: true, label: '' },
         {

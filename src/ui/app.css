@@ -1806,3 +1806,7 @@ kbd {
 .prefs-radios {
   flex-wrap: wrap;
 }
+.mask-edit-frame .mask-empty-hint rect {
+  fill: rgba(30, 32, 36, 0.88);
+  stroke: #e8572a;
+}

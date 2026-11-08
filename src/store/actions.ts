@@ -20,6 +20,7 @@ import { isAbort, pickFiles, pickSaveFile, saveBlob } from '../io/files';
 import { EDITABLE_PNG_EXTENSION, EditablePngError, embedProject, extractProject, isEditablePngName, isPng } from '../io/editablePng';
 import { exportImage, ExportError } from '../io/export';
 import { newMask, settleMask } from '../model/mask';
+import { enterMaskEditWith } from './maskActions';
 import { PROJECT_EXTENSION, PROJECT_MIME, ProjectError, readProject, writeProject } from '../io/project';
 import { assets, ImageLoadError, importImageFile, validateDimensions } from './assets';
 import { UNTITLED, type EditorStore } from './editor';
@@ -385,15 +386,20 @@ export function pasteAsMask(ed: EditorStore): boolean {
   const target = loc.object;
   const objs = clipboard;
   const metas = clipboardAssets;
+  let added: string[] = [];
   ed.edit('マスクとして貼り付け', (d) => {
     for (const [id, meta] of Object.entries(metas)) if (!d.assets[id]) d.assets[id] = meta;
     const t = findObject(d, target.id);
     if (!t) return;
     const mask = settleMask(t.object) ?? newMask(t.object, 'black');
     if (!mask) return;
-    t.object.mask = { ...mask, children: [...mask.children, ...objs.map((o) => cloneWithNewIds(o))] };
+    const copies = objs.map((o) => cloneWithNewIds(o));
+    added = copies.map((o) => o.id);
+    t.object.mask = { ...mask, children: [...mask.children, ...copies] };
   });
-  ed.select([target.id]);
+  // Straight into マスクの編集 with the pasted content selected, as with the other ways of adding a mask.
+  if (added.length) enterMaskEditWith(ed, target.id, added);
+  else ed.select([target.id]);
   return true;
 }
 

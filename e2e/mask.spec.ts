@@ -177,6 +177,11 @@ test('グループでマスク, 反転 and リンク解除: the ellipse masks th
   let px = await exportPng(page, [[200, 200], [350, 200]]);
   expect(isRed(px[0])).toBe(true); // inside the ellipse
   expect(isWhite(px[1])).toBe(true); // outside
+  // Straight into マスクの編集 with the ellipse selected; Esc goes back to the rectangle.
+  await expect(page.getByTestId('mask-edit-frame')).toBeVisible();
+  expect(await state(page, 's => s.selection.length')).toBe(1);
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('mask-edit-frame')).toHaveCount(0);
   // 反転: the other way round.
   await props(page).getByLabel('反転').check();
   px = await exportPng(page, [[200, 200], [350, 200]]);
@@ -245,4 +250,57 @@ test('変更 → マスクを追加… asks for white or black', async ({ page }
   await page.getByRole('menuitem', { name: /マスクを追加…/ }).click();
   await dlg.getByRole('button', { name: /黒/ }).click();
   expect(await state(page, 's => s.doc.layers[0].children[0].mask.background')).toBe('black');
+});
+
+test('an empty mask shows a hint; the gradient tool there makes a gradient mask and selects it', async ({ page }) => {
+  const c = await redRect(page);
+  await page.getByRole('button', { name: '変更', exact: true }).click();
+  await page.getByRole('menuitem', { name: /マスクを追加…/ }).click();
+  await page.getByRole('dialog', { name: 'マスクを追加' }).getByRole('button', { name: /白/ }).click();
+  await expect(page.getByTestId('mask-edit-frame')).toBeVisible();
+  await expect(page.getByTestId('mask-empty-hint')).toBeVisible();
+  expect(await state(page, 's => s.selection.length')).toBe(0);
+  // Gradient tool, nothing selected: the drag makes the mask's gradient (left shows, right hidden).
+  await page.keyboard.press('g');
+  await drag(page, { x: c.x + 150, y: c.y + 200 }, { x: c.x + 350, y: c.y + 200 });
+  const m = (await owner(page)).mask!;
+  expect(m.children).toHaveLength(1);
+  expect((m.children[0].fill as { kind: string }).kind).toBe('linear');
+  await expect(page.getByTestId('mask-empty-hint')).toHaveCount(0);
+  await expect(page.getByTestId('gradient-handles')).toBeVisible(); // the gradient shape is selected
+  expect(await state(page, 's => s.maskEdit')).toBe((await owner(page)).id); // still in マスクの編集
+  await page.keyboard.press('Escape');
+  const px = await exportPng(page, [[120, 200], [380, 200]]);
+  expect(isRed(px[0])).toBe(true);
+  expect(isWhite(px[1])).toBe(true);
+});
+
+test('マスクを追加… can make a gradient mask', async ({ page }) => {
+  await redRect(page);
+  await page.getByRole('button', { name: '変更', exact: true }).click();
+  await page.getByRole('menuitem', { name: /マスクを追加…/ }).click();
+  await page.getByRole('dialog', { name: 'マスクを追加' }).getByRole('button', { name: 'グラデーション' }).click();
+  const m = (await owner(page)).mask!;
+  expect(m.children).toHaveLength(1);
+  await expect(page.getByTestId('mask-edit-frame')).toBeVisible();
+  await expect(page.getByTestId('gradient-handles')).toBeVisible();
+  await expect(page.getByTestId('mask-empty-hint')).toHaveCount(0);
+});
+
+test('マスクとして貼り付け goes into マスクの編集 with the pasted shape selected', async ({ page }) => {
+  const c = await redRect(page);
+  await page.keyboard.press('r');
+  await page.keyboard.press('r');
+  await page.keyboard.press('r'); // 楕円
+  await drag(page, { x: c.x + 150, y: c.y + 150 }, { x: c.x + 250, y: c.y + 250 });
+  await page.keyboard.press('Control+c');
+  await page.keyboard.press('Delete');
+  await page.keyboard.press('v');
+  await page.mouse.click(c.x + 350, c.y + 280);
+  await page.getByRole('button', { name: '編集', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'マスクとして貼り付け' }).click();
+  await expect(page.getByTestId('mask-edit-frame')).toBeVisible();
+  const m = (await owner(page)).mask!;
+  expect(await state(page, 's => s.selection')).toEqual([await state(page, 's => s.doc.layers[0].children[0].mask.children[0].id')]);
+  expect(m.children[0].type).toBe('shape');
 });

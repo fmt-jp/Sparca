@@ -23,7 +23,7 @@ import { DocumentSvg } from '../render/DocumentSvg';
 import { imageCache } from '../render/imageCache';
 import { cssFontFamily } from '../render/fonts';
 import { fitTextBox, measureText } from '../render/text';
-import { docToNormalized, normalizedToDoc, objectGradient, representativeColor } from '../model/gradient';
+import { docToNormalized, isGradient, normalizedToDoc, objectGradient, representativeColor } from '../model/gradient';
 import { placeImageFiles, writableLayer } from '../store/actions';
 import type { PixelSelection, ToolId } from '../store/editor';
 import { pickColorAt } from '../store/colorActions';
@@ -473,6 +473,10 @@ export function CanvasView() {
         editor.select([hit]);
         id = hit;
       }
+      // マスクの編集 with nothing chosen (e.g. an empty mask): the drag makes or moves the mask's
+      // gradient, as the tool does from outside with マスク as its target.
+      const editing = editor.getState().maskEdit;
+      if (!id && editing) id = editing;
       const loc = id ? findObject(editor.getState().doc, id) : null;
       if (!loc) {
         editor.notify('error', 'グラデーションを付けるオブジェクトを選択してから、その上をドラッグしてください。');
@@ -482,7 +486,7 @@ export function CanvasView() {
         editor.notify('error', 'ロック中のオブジェクトは変更できません。');
         return;
       }
-      const slot = gradientSlot(loc.object, editor.getState().gradientToolTarget);
+      const slot = loc.object.id === editing ? 'mask' : gradientSlot(loc.object, editor.getState().gradientToolTarget);
       editor.set({ gradientTarget: slot === 'mask' ? 'mask' : slot === 'stroke' ? 'stroke' : 'fill' });
       editor.beginGesture();
       gesture.current = { kind: 'gradient-drag', id: loc.object.id, slot, start: p, moved: false };
@@ -848,8 +852,16 @@ export function CanvasView() {
         editor.endGesture('グラデーションの調整');
         break;
       case 'gradient-drag':
-        if (g.moved) editor.endGesture(g.slot === 'mask' ? 'マスクのグラデーションの指定' : 'グラデーションの指定');
-        else editor.cancelGesture();
+        if (g.moved) {
+          editor.endGesture(g.slot === 'mask' ? 'マスクのグラデーションの指定' : 'グラデーションの指定');
+          // Inside マスクの編集, the gradient shape is selected so its handles show.
+          if (g.slot === 'mask' && editor.getState().maskEdit === g.id) {
+            const shape = findObject(editor.getState().doc, g.id)?.object.mask?.children.find(
+              (c) => (c.type === 'shape' || c.type === 'path') && isGradient(c.fill),
+            );
+            if (shape) editor.select([shape.id]);
+          }
+        } else editor.cancelGesture();
         break;
       case 'resize':
         editor.endGesture('拡大縮小');
@@ -1287,7 +1299,7 @@ export function CanvasView() {
         >
           <GridOverlay width={doc.width} height={doc.height} zoom={zoom} />
           {guides && <SmartGuides guides={guides} width={doc.width} height={doc.height} zoom={zoom} />}
-          {editingMask && <MaskEditFrame o={editingMask} zoom={zoom} />}
+          {editingMask && <MaskEditFrame o={editingMask} zoom={zoom} empty={!editingMask.mask?.children.length} />}
           <SelectionOverlay locs={selectedObjects} zoom={zoom} showHandles={tool === 'select' && !editingText} />
           {(tool === 'select' || tool === 'gradient') && !editingText && selectedObjects.length === 1 && !isEffectivelyLocked(selectedObjects[0]) && (
             <GradientHandles o={selectedObjects[0].object} zoom={zoom} />
@@ -1614,10 +1626,15 @@ function SelectionOverlay({
 }
 
 /** Around the object whose mask is being edited: a dashed frame and a 「マスクを編集中」 tag. */
-function MaskEditFrame({ o, zoom }: { o: SceneObject; zoom: number }) {
+/** What to do in an empty mask (shown under the frame's label). */
+const EMPTY_MASK_HINT = ['マスクが空です。図形やテキストを描くと、白い所が表示され、黒い所が隠れます。', 'グラデーションツール（G）でドラッグすると、グラデーションのマスクになります。'];
+
+function MaskEditFrame({ o, zoom, empty }: { o: SceneObject; zoom: number; empty: boolean }) {
   const b = objectBounds(o);
   if (!b) return null;
   const k = 1 / zoom;
+  // Text width estimate: 12 px per (full-width) character.
+  const hintW = Math.max(...EMPTY_MASK_HINT.map((t) => t.length)) * 12 + 16;
   return (
     <g className="mask-edit-frame" data-testid="mask-edit-frame" pointerEvents="none">
       <rect x={b.x} y={b.y} width={b.width} height={b.height} fill="none" strokeWidth={2 * k} strokeDasharray={`${8 * k} ${5 * k}`} />
@@ -1627,6 +1644,16 @@ function MaskEditFrame({ o, zoom }: { o: SceneObject; zoom: number }) {
           マスクを編集中
         </text>
       </g>
+      {empty && (
+        <g className="mask-empty-hint" data-testid="mask-empty-hint" transform={`translate(${b.x + 8 * k} ${b.y + 8 * k}) scale(${k})`}>
+          <rect width={hintW} height={EMPTY_MASK_HINT.length * 18 + 8} rx={4} />
+          {EMPTY_MASK_HINT.map((t, i) => (
+            <text key={i} x={8} y={17 + i * 18}>
+              {t}
+            </text>
+          ))}
+        </g>
+      )}
     </g>
   );
 }

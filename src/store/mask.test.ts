@@ -163,6 +163,10 @@ describe('マスク 第 2 段階', () => {
     expect((m.children[0] as ShapeObject).box).toMatchObject({ x: 20, y: 20, width: 40, height: 40 });
     expect(m.children[0].id).not.toBe('star'); // a copy
     expect(ed.getState().doc.layers[0].children).toHaveLength(2); // the original stays
+    // Straight into マスクの編集 with the pasted copy selected.
+    expect(ed.getState().maskEdit).toBe('r');
+    expect(ed.getState().selection).toEqual([m.children[0].id]);
+    ed.select(['r']); // back to the object (leaves マスクの編集)
     pasteAsMask(ed);
     m = first(ed).mask!;
     expect(m.children).toHaveLength(2);
@@ -177,7 +181,11 @@ describe('マスク 第 2 段階', () => {
     let kids = ed.getState().doc.layers[0].children;
     expect(kids.map((k) => k.id)).toEqual(['a', 'b']);
     expect(kids[0].mask!.children.map((c) => c.id)).toEqual(['top']);
-    expect(ed.getState().selection).toEqual(['a']);
+    // Straight into マスクの編集 of 'a' with the mask content selected.
+    expect(ed.getState().maskEdit).toBe('a');
+    expect(ed.getState().selection).toEqual(['top']);
+    ed.select([]);
+    ed.set({ maskEdit: null });
     ed.undo();
     ed.select(['a', 'b', 'top']);
     groupAsMask(ed);
