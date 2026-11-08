@@ -155,6 +155,7 @@ export function groupAsMask(ed: EditorStore): boolean {
     return false;
   }
   let targetId = input.rest[0];
+  let done = false;
   ed.edit('グループでマスク', (d) => {
     if (input.rest.length > 1) targetId = groupObjects(d, input.rest) ?? targetId;
     const top = findObject(d, input.top);
@@ -165,7 +166,23 @@ export function groupAsMask(ed: EditorStore): boolean {
     const mask = settleMask(target.object) ?? newMask(target.object, 'black');
     if (!mask) return;
     target.object.mask = { ...mask, children: [...mask.children, maskObj] };
+    done = true;
   });
-  ed.select([targetId]);
+  // As with the other ways of adding a mask: straight into マスクの編集, the new content selected.
+  if (done) enterMaskEditWith(ed, targetId, [input.top]);
+  else ed.select([targetId]);
   return true;
+}
+
+/**
+ * Enter マスクの編集 of object `id` with `ids` (content just put into its mask) selected, so
+ * its color, gradient and shape can be changed at once (2026-11-08, user's choice: every way
+ * of adding a mask ends here).
+ */
+export function enterMaskEditWith(ed: EditorStore, id: Id, ids: Id[]): void {
+  enterMaskEdit(ed, id);
+  if (ed.getState().maskEdit !== id) return;
+  const doc = ed.getState().doc;
+  const present = ids.filter((c) => findObject(doc, c)?.maskOwner?.id === id);
+  if (present.length) ed.select(present);
 }
