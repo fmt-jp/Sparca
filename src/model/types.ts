@@ -404,7 +404,28 @@ export interface LocalErase {
   mask: MaskShape;
 }
 
-export type LocalEdit = LocalBlur | LocalMosaic | LocalErase;
+/**
+ * A brush / pencil / eraser stroke, kept as an edit (decided with the user 2026-11-09: 筆跡を
+ * 記録、非破壊). The original pixels stay; strokes are drawn over them in order.
+ */
+export interface LocalStroke {
+  kind: 'stroke';
+  tool: StrokeTool;
+  /** The path of the stroke, normalized to the processed image (0..1 of its width / height). */
+  points: Point[];
+  /** Diameter in px of the processed image. */
+  size: number;
+  /** Edge: 0 soft … 1 hard. The pencil is always hard, without anti-aliasing. */
+  hardness: number;
+  /** Paint color (brush and pencil). */
+  color: string;
+  /** 0..1: how strongly the stroke paints (or erases). */
+  opacity: number;
+}
+
+export type StrokeTool = 'brush' | 'pencil' | 'eraser';
+
+export type LocalEdit = LocalBlur | LocalMosaic | LocalErase | LocalStroke;
 
 export interface ImagePipeline {
   /** Crop rectangle in source-image pixels. */

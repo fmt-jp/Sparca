@@ -21,6 +21,7 @@ function sampleDoc(): SparcaDocument {
     img.pipeline.localEdits = [
       { kind: 'blur', radius: 4, mask: { kind: 'rect', x: 0, y: 0, width: 0.5, height: 0.5 } },
       { kind: 'mosaic', size: 8, mask: { kind: 'ellipse', x: 0.2, y: 0.2, width: 0.5, height: 0.5 } },
+      { kind: 'stroke', tool: 'brush', points: [{ x: 0.1, y: 0.1 }, { x: 0.9, y: 0.5 }], size: 6, hardness: 0.5, color: '#ff0000', opacity: 0.8 },
     ];
     addObject(d, d.layers[0].id, img);
     const star = createShape({ kind: 'star', points: 7, innerRatio: 0.3 }, { x: 5, y: 5, width: 50, height: 50, rotation: 0 });
@@ -198,7 +199,14 @@ describe('project format', () => {
   });
 
   it('rejects image edits of unknown kinds or with a broken mosaic size', async () => {
-    for (const edit of [{ kind: 'swirl', mask: { kind: 'rect', x: 0, y: 0, width: 1, height: 1 } }, { kind: 'mosaic', size: 0, mask: { kind: 'rect', x: 0, y: 0, width: 1, height: 1 } }]) {
+    for (const edit of [
+      { kind: 'swirl', mask: { kind: 'rect', x: 0, y: 0, width: 1, height: 1 } },
+      { kind: 'mosaic', size: 0, mask: { kind: 'rect', x: 0, y: 0, width: 1, height: 1 } },
+      { kind: 'stroke', tool: 'spray', points: [{ x: 0, y: 0 }], size: 4, hardness: 1, color: '#000000', opacity: 1 },
+      { kind: 'stroke', tool: 'brush', points: [], size: 4, hardness: 1, color: '#000000', opacity: 1 },
+      { kind: 'stroke', tool: 'brush', points: [{ x: 0, y: 0 }], size: 4, hardness: 1, color: 'red', opacity: 1 },
+      { kind: 'stroke', tool: 'eraser', points: [{ x: 0, y: 0 }], size: 4, hardness: 1, color: '#000000', opacity: 2 },
+    ]) {
       const doc = sampleDoc();
       const raw = JSON.parse(JSON.stringify(doc));
       raw.layers[0].children[0].pipeline.localEdits = [edit];

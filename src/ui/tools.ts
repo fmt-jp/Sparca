@@ -37,6 +37,15 @@ export const TOOL_GROUPS: ToolGroup[] = [
       { id: 'polygon-lasso', label: '多角形選択ツール（クリックで頂点、始点クリック／ダブルクリック／Enter で閉じる）', key: 'L' },
     ],
   },
+  {
+    id: 'paint',
+    label: 'ブラシ',
+    tools: [
+      { id: 'brush', label: 'ブラシツール（選択中の画像に描く。画像を選んでいないときは新しい透明な画像に描く）', key: 'B' },
+      { id: 'pencil', label: '鉛筆ツール（くっきりした線）', key: 'B' },
+      { id: 'eraser', label: '消しゴムツール（選択中の画像を消す）', key: 'E' },
+    ],
+  },
   { id: 'line', label: 'ライン', tools: [{ id: 'line', label: 'ラインツール', key: 'N' }] },
   { id: 'pen', label: 'ペン', tools: [{ id: 'pen', label: 'ペンツール（クリックで角、ドラッグで曲線、始点クリックで閉じる、Enter で終了）', key: 'P' }] },
   {

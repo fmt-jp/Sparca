@@ -2,7 +2,7 @@ import { useSyncExternalStore } from 'react';
 import { imageCache } from '../render/imageCache';
 import { editLineAsPath } from '../store/pathActions';
 import { sanitizeToolDefaults } from '../model/toolDefaults';
-import { EditorStore, FEATHER_LIMITS, GRID_SIZE_LIMITS, type EditorState, type GridSettings, type SelectionEdge } from '../store/editor';
+import { BRUSH_SIZE, DEFAULT_BRUSHES, EditorStore, FEATHER_LIMITS, GRID_SIZE_LIMITS, type BrushSettings, type BrushSettingsByTool, type EditorState, type GridSettings, type SelectionEdge } from '../store/editor';
 
 export const editor = new EditorStore();
 
@@ -118,6 +118,43 @@ editor.subscribe(() => {
     // Not remembered; harmless.
   }
 });
+
+// Brush / pencil / eraser settings: per browser as well.
+const BRUSHES_KEY = 'sparca.brushes';
+try {
+  const saved = JSON.parse(localStorage.getItem(BRUSHES_KEY) ?? 'null') as unknown;
+  if (saved && typeof saved === 'object') editor.set({ brushes: sanitizeBrushes(saved as Record<string, unknown>) });
+} catch {
+  // Storage unavailable or corrupt: defaults apply.
+}
+let lastBrushes = editor.getState().brushes;
+editor.subscribe(() => {
+  const b = editor.getState().brushes;
+  if (b === lastBrushes) return;
+  lastBrushes = b;
+  try {
+    localStorage.setItem(BRUSHES_KEY, JSON.stringify(b));
+  } catch {
+    // Not remembered; harmless.
+  }
+});
+
+function sanitizeBrushes(v: Record<string, unknown>): BrushSettingsByTool {
+  const out = { ...DEFAULT_BRUSHES };
+  for (const k of Object.keys(DEFAULT_BRUSHES) as (keyof BrushSettingsByTool)[]) {
+    const s = v[k] as Partial<BrushSettings> | undefined;
+    if (!s || typeof s !== 'object') continue;
+    const d = DEFAULT_BRUSHES[k];
+    const n = (x: unknown, lo: number, hi: number, def: number) => (typeof x === 'number' && x >= lo && x <= hi ? x : def);
+    out[k] = {
+      size: n(s.size, BRUSH_SIZE.min, BRUSH_SIZE.max, d.size),
+      hardness: n(s.hardness, 0, 1, d.hardness),
+      opacity: n(s.opacity, 0, 1, d.opacity),
+      color: typeof s.color === 'string' && /^#[0-9a-f]{6}$/i.test(s.color) ? s.color : d.color,
+    };
+  }
+  return out;
+}
 
 // Switching to the subselect tool with an old line shape selected makes it an editable path.
 let lastTool = editor.getState().tool;

@@ -57,6 +57,14 @@ const paths: Record<string, ReactElement> = {
   polygon: <path {...S} d="M10 2.5 L17 7.5 L14.5 16.5 H5.5 L3 7.5 Z" />,
   star: <path {...S} d="M10 2.5 L12.2 7.5 L17.5 7.9 L13.4 11.3 L14.7 16.6 L10 13.7 L5.3 16.6 L6.6 11.3 L2.5 7.9 L7.8 7.5 Z" />,
   text: <path {...S} d="M4 5 V3.5 H16 V5 M10 3.5 V16.5 M7.5 16.5 H12.5" />,
+  brush: (
+    <>
+      <path {...S} d="M16.5 3.5 L10 10" />
+      <path {...S} fill="currentColor" d="M10 10 c-1.8-1.2-4.2 0-4.4 2.4 c-0.1 1.6-1 2.6-2.6 3 c2.6 1.6 7.4 1.2 8.2-1.8 c0.4-1.4 0-2.8-1.2-3.6 Z" />
+    </>
+  ),
+  pencil: <path {...S} d="M4 16 L5 12 L13.5 3.5 L16.5 6.5 L8 15 Z M12 5 L15 8 M5 12 L8 15" />,
+  eraser: <path {...S} d="M3.5 12.5 L10 6 L16 12 L11 17 H8 Z M7 9 L13 15 M11 17 H17" />,
 };
 
 export function ToolIcon({ name }: { name: string }): ReactElement {

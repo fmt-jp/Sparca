@@ -5,7 +5,7 @@ import { createDocument } from '../model/factory';
 import type { FileSystemFileHandleLike } from '../io/files';
 import { newId } from '../model/factory';
 import { DEFAULT_TOOL_DEFAULTS, type ToolCategory, type ToolDefaults } from '../model/toolDefaults';
-import type { Id, MaskShape, Point, SparcaDocument } from '../model/types';
+import type { Id, MaskShape, Point, SparcaDocument, StrokeTool } from '../model/types';
 import { findObject } from '../model/tree';
 
 export type ToolId =
@@ -28,7 +28,10 @@ export type ToolId =
   | 'ellipse'
   | 'polygon'
   | 'star'
-  | 'text';
+  | 'text'
+  | 'brush'
+  | 'pencil'
+  | 'eraser';
 
 /** Pixel (area) selection, kept in document coordinates (edge lengths in document px). Distinct from object selection. */
 export type PixelSelection = MaskShape;
@@ -168,12 +171,35 @@ export interface EditorState {
   selectionEdge: SelectionEdge;
   /** Settings for new objects, per kind of drawing tool. */
   toolDefaults: ToolDefaults;
+  /** Settings of the brush, pencil and eraser (a per-browser preference). */
+  brushes: BrushSettingsByTool;
   notices: Notice[];
   /** Non-null while a long-running task is in progress. */
   busy: string | null;
 }
 
 export type ImagePlacement = 'ask' | 'original' | 'fit';
+
+/** Brush / pencil / eraser settings. Size is in document px (converted to image px when drawing). */
+export interface BrushSettings {
+  size: number;
+  /** 0 soft … 1 hard (not used by the pencil). */
+  hardness: number;
+  /** Not used by the eraser. */
+  color: string;
+  /** 0..1 */
+  opacity: number;
+}
+
+export type BrushSettingsByTool = Record<StrokeTool, BrushSettings>;
+
+export const BRUSH_SIZE = { min: 1, max: 500 };
+
+export const DEFAULT_BRUSHES: BrushSettingsByTool = {
+  brush: { size: 12, hardness: 0.6, color: '#000000', opacity: 1 },
+  pencil: { size: 1, hardness: 1, color: '#000000', opacity: 1 },
+  eraser: { size: 24, hardness: 0.6, color: '#000000', opacity: 1 },
+};
 
 type Listener = () => void;
 
@@ -204,6 +230,7 @@ export class EditorStore {
       imagePlacement: 'ask',
       selectionEdge: DEFAULT_SELECTION_EDGE,
       toolDefaults: DEFAULT_TOOL_DEFAULTS,
+      brushes: DEFAULT_BRUSHES,
       alignToCanvas: false,
       pickedColor: null,
       notices: [],

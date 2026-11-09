@@ -2,13 +2,14 @@
 import { transformObjects, updateObject } from '../model/commands';
 import { boxCenter, unionBounds } from '../model/geometry';
 import { findObject, isEffectivelyLocked } from '../model/tree';
-import type { ColorAdjust, LocalEdit, SceneObject, ShapeObject, TextObject, ImageObject, PathObject, Id, Box, Paint, Stroke, StrokeCap, StrokeJoin, StrokeStyle, TextPathOrientation } from '../model/types';
+import type { ColorAdjust, LocalEdit, SceneObject, ShapeObject, TextObject, ImageObject, PathObject, Id, Box, Paint, Stroke, StrokeCap, StrokeJoin, StrokeStyle, TextPathOrientation, StrokeTool } from '../model/types';
 import { detachTextFromPath, setTextPath } from '../store/textPathActions';
 import { pipelineOutputSize } from '../engine/pipeline';
 import { METHOD_LABELS } from '../engine/resample';
 import { autoColor, cancelCrop, commitCrop, fitCanvasToContent, pixelTargetImage, resetAdjust, setAdjust, setCropTarget } from '../store/imageActions';
 import { openDialog } from './dialogs';
-import { FEATHER_LIMITS, type SelectionEdge } from '../store/editor';
+import { BRUSH_SIZE, FEATHER_LIMITS, type BrushSettings, type SelectionEdge } from '../store/editor';
+import { STROKE_LABELS, STROKE_TOOLS, strokeTarget } from '../store/paintActions';
 import { moveAnchors } from '../model/pathEdit';
 import { convertSelectedNodes, deleteSelectedNodes, flatPath, selectedNodes, selectedOutline, setPathClosed, setPathNodes } from '../store/pathActions';
 import { fitTextBox } from '../render/text';
@@ -99,6 +100,7 @@ export function PropertiesPanel() {
       {tool !== 'crop' && <PixelSelectionSection />}
       {tool === 'eyedropper' && <EyedropperSection />}
       {tool === 'gradient' && <GradientToolSection />}
+      {STROKE_TOOLS.has(tool) && <StrokeToolSection tool={tool as StrokeTool} />}
       {category && <ToolDefaultsSection category={category} />}
       {category && locs.length > 0 ? (
         <div className="selected-object-props" role="group" aria-label="選択中のオブジェクト">
@@ -132,6 +134,9 @@ const TOOL_HINT: Partial<Record<string, string>> = {
     'パスをクリックしてアンカーを表示。アンカーをドラッグで移動（Shift で追加選択、空き部分のドラッグで範囲選択）、ハンドルのドラッグで曲線を調整（Alt で左右を独立）。アンカーをダブルクリックで角／曲線の切り替え、輪郭をダブルクリックでアンカー追加、Delete で削除。',
   pen: 'クリックで角のアンカー、ドラッグで曲線のアンカー（Shift で 45° 単位）。始点クリックで閉じたパス、Enter・Esc・ダブルクリックで開いたパスとして終了。',
   eyedropper: 'クリックした位置の色を取得します。',
+  brush: 'ドラッグで描きます（クリックで点）。描く先は選択中の画像、なければ新しい透明な画像です。',
+  pencil: 'ドラッグでくっきりした線を描きます（クリックで点）。描く先は選択中の画像、なければ新しい透明な画像です。',
+  eraser: 'ドラッグで選択中の画像を消します（透明になります）。',
   text: 'クリックでテキストを追加。既存テキストをクリックで編集。Esc または Ctrl+Enter で確定。',
   hand: 'ドラッグで表示位置を移動。',
   zoom: 'クリックで拡大、Alt+クリックで縮小。Ctrl+ホイールでも拡大縮小できます。',
@@ -670,6 +675,46 @@ function PathNodeSection({ o }: { o: PathObject }) {
 }
 
 /** グラデーションツール: what a drag sets. */
+function StrokeToolSection({ tool }: { tool: StrokeTool }) {
+  const s = useEditor((st) => st.brushes[tool]);
+  const target = useEditor(() => strokeTarget(editor));
+  const set = (patch: Partial<BrushSettings>) => editor.set({ brushes: { ...editor.getState().brushes, [tool]: { ...s, ...patch } } });
+  const where = target
+    ? `選択中の画像「${target.name}」に${tool === 'eraser' ? 'かけます' : '描きます'}。`
+    : tool === 'eraser'
+      ? '消す画像を選択ツールで選んでください。'
+      : '画像を選んでいないので、キャンバスと同じ大きさの新しい透明な画像に描きます（描いたあとはその画像が選ばれ、続けて描けます）。';
+  return (
+    <div className="prop-section" data-testid="stroke-tool-panel">
+      <span className="section-title">{STROKE_LABELS[tool]}</span>
+      <Field label="サイズ">
+        <PopupSliderInput label={`${STROKE_LABELS[tool]}のサイズ`} value={s.size} min={BRUSH_SIZE.min} max={BRUSH_SIZE.max} suffix="px" onChange={(v) => set({ size: Math.round(v) })} />
+      </Field>
+      {tool !== 'pencil' && (
+        <Field label="硬さ">
+          <PopupSliderInput label={`${STROKE_LABELS[tool]}の硬さ`} value={Math.round(s.hardness * 100)} min={0} max={100} suffix="%" onChange={(v) => set({ hardness: v / 100 })} />
+        </Field>
+      )}
+      {tool !== 'eraser' && (
+        <Field label="色">
+          <ColorInput label={`${STROKE_LABELS[tool]}の色`} value={s.color} onChange={(c) => set({ color: c ?? '#000000' })} />
+        </Field>
+      )}
+      <Field label={tool === 'eraser' ? '強さ' : '不透明度'}>
+        <PopupSliderInput
+          label={`${STROKE_LABELS[tool]}の${tool === 'eraser' ? '強さ' : '不透明度'}`}
+          value={Math.round(s.opacity * 100)}
+          min={1}
+          max={100}
+          suffix="%"
+          onChange={(v) => set({ opacity: v / 100 })}
+        />
+      </Field>
+      <span className="hint">{where}描いた線は画像の編集情報として残り（元の画素はそのまま）、取り消しや「部分加工」の「最後の1件を削除」で戻せます。</span>
+    </div>
+  );
+}
+
 function GradientToolSection() {
   const target = useEditor((s) => s.gradientToolTarget);
   const options = [
@@ -809,7 +854,7 @@ function CropSection() {
   );
 }
 
-const LOCAL_EDIT_NAMES: Record<LocalEdit['kind'], string> = { blur: '部分ぼかし', mosaic: '部分モザイク', erase: '部分消去' };
+const LOCAL_EDIT_NAMES: Record<LocalEdit['kind'], string> = { blur: '部分ぼかし', mosaic: '部分モザイク', erase: '部分消去', stroke: 'ブラシの筆跡' };
 
 /** e.g. 「部分加工 3 件（ぼかし 2・モザイク 1）」 */
 function localEditsSummary(edits: LocalEdit[]): string {
@@ -818,6 +863,7 @@ function localEditsSummary(edits: LocalEdit[]): string {
     count('blur') && `ぼかし ${count('blur')}`,
     count('mosaic') && `モザイク ${count('mosaic')}`,
     count('erase') && `消去 ${count('erase')}`,
+    count('stroke') && `筆跡 ${count('stroke')}`,
   ]
     .filter(Boolean)
     .join('・');
