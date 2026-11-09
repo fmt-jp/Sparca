@@ -239,6 +239,10 @@ function checkLocalEdits(v: unknown, where: string) {
   if (!Array.isArray(v)) throw new Invalid(`${where} が配列ではありません`);
   v.forEach((e, i) => {
     const w = `${where}[${i}]`;
+    if (isObj(e) && e.kind === 'stroke') {
+      checkStroke(e, w);
+      return;
+    }
     if (!isObj(e) || !isObj(e.mask)) throw new Invalid(`${w} が正しくありません`);
     checkMaskEdge(e.mask, `${w}.mask`);
     if (e.kind === 'blur') num(e, 'radius', w);
@@ -248,6 +252,23 @@ function checkLocalEdits(v: unknown, where: string) {
       if (num(e, 'size', w) < 1) throw new Invalid(`${w}.size が小さすぎます`);
     } else throw new Invalid(`${w} の種類が正しくありません`);
   });
+}
+
+/** A brush / pencil / eraser stroke (LocalStroke). */
+function checkStroke(e: Obj, w: string) {
+  if (!['brush', 'pencil', 'eraser'].includes(e.tool as string)) throw new Invalid(`${w}.tool が正しくありません`);
+  const pts = arr(e, 'points', w);
+  if (!pts.length) throw new Invalid(`${w}.points が空です`);
+  pts.forEach((p, j) => {
+    if (!isObj(p) || typeof p.x !== 'number' || typeof p.y !== 'number' || !Number.isFinite(p.x) || !Number.isFinite(p.y)) {
+      throw new Invalid(`${w}.points[${j}] が正しくありません`);
+    }
+  });
+  if (num(e, 'size', w) <= 0) throw new Invalid(`${w}.size が正しくありません`);
+  const hard = num(e, 'hardness', w);
+  const op = num(e, 'opacity', w);
+  if (hard < 0 || hard > 1 || op < 0 || op > 1) throw new Invalid(`${w} の硬さ・不透明度が範囲外です`);
+  if (typeof e.color !== 'string' || !/^#[0-9a-f]{6}$/i.test(e.color)) throw new Invalid(`${w}.color が正しくありません`);
 }
 
 /** Optional edge fields of a mask: grow / feather in px, antialias flag. */

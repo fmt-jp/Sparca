@@ -6,6 +6,7 @@ import { applyAdjust, isIdentityAdjust } from './color';
 import { rasterizeMask } from './mask';
 import { cropRaster, type Raster } from './raster';
 import { resample } from './resample';
+import { applyStroke } from './stroke';
 
 /** Output pixel size of a pipeline applied to a source of the given size. */
 export function pipelineOutputSize(p: ImagePipeline, srcW: number, srcH: number): { width: number; height: number } {
@@ -39,6 +40,11 @@ export function runPipeline(src: Raster, p: ImagePipeline, scale = 1, onProgress
     tick();
   }
   for (const edit of p.localEdits) {
+    if (edit.kind === 'stroke') {
+      img = applyStroke(img, edit, scale);
+      tick();
+      continue;
+    }
     const mask = rasterizeMask(edit.mask, img.width, img.height, scale);
     if (edit.kind === 'erase') img = eraseWithMask(img, mask);
     else {

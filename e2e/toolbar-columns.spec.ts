@@ -17,7 +17,7 @@ async function allToolsInWindow(page: Page) {
 
 test('hand and zoom are one group; H and Z still pick each', async ({ page }) => {
   await page.goto('/');
-  await expect(page.locator('.toolbar .tool-button')).toHaveCount(10);
+  await expect(page.locator('.toolbar .tool-button')).toHaveCount(11); // with the brush group
   await page.keyboard.press('z');
   await expect(page.locator('.toolbar [data-tool="zoom"]')).toHaveAttribute('aria-pressed', 'true');
   await page.keyboard.press('h');

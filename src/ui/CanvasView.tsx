@@ -17,7 +17,8 @@ import {
   type Handle,
 } from '../model/handles';
 import { findObject, isEffectivelyLocked } from '../model/tree';
-import type { Box, Id, Paint, PathNode, PathObject, Point, SceneObject, ShapeGeometry, ShapeObject, SparcaDocument, TextObject } from '../model/types';
+import type { Box, Id, Paint, PathNode, PathObject, Point, SceneObject, ShapeGeometry, ShapeObject, SparcaDocument, StrokeTool, TextObject } from '../model/types';
+import { commitStroke, STROKE_TOOLS } from '../store/paintActions';
 import type { PaintCategory } from '../model/toolDefaults';
 import { DocumentSvg } from '../render/DocumentSvg';
 import { imageCache } from '../render/imageCache';
@@ -25,7 +26,7 @@ import { cssFontFamily } from '../render/fonts';
 import { fitTextBox, measureText } from '../render/text';
 import { docToNormalized, isGradient, normalizedToDoc, objectGradient, representativeColor } from '../model/gradient';
 import { placeImageFiles, writableLayer } from '../store/actions';
-import type { PixelSelection, ToolId } from '../store/editor';
+import type { BrushSettings, PixelSelection, ToolId } from '../store/editor';
 import { pickColorAt } from '../store/colorActions';
 import { isSmooth, locateNode, moveAnchors, moveHandle, nearestOnFlat, type DocNode } from '../model/pathEdit';
 import { exitMaskEdit, maskOwner } from '../store/maskActions';
@@ -99,7 +100,16 @@ type Gesture =
   | { kind: 'pen-handle'; index: number }
   | { kind: 'node-move'; pathId: Id; start: Point; orig: DocNode[]; indices: number[]; moved: boolean }
   | { kind: 'handle-move'; pathId: Id; orig: DocNode[]; index: number; which: 'in' | 'out' }
-  | { kind: 'node-marquee'; start: Point; base: number[] };
+  | { kind: 'node-marquee'; start: Point; base: number[] }
+  /** Brush / pencil / eraser: the path drawn so far (document coordinates). */
+  | { kind: 'stroke'; preview: StrokePreview };
+
+/** A stroke shown on screen while it is drawn and until the image shows it. */
+interface StrokePreview {
+  tool: StrokeTool;
+  points: Point[];
+  settings: BrushSettings;
+}
 
 export function CanvasView() {
   const doc = useEditor((s) => s.doc);
@@ -121,6 +131,15 @@ export function CanvasView() {
   const stageRef = useRef<HTMLDivElement>(null);
   const gesture = useRef<Gesture | null>(null);
   const [marquee, setMarquee] = useState<Rect | null>(null);
+  /** Strokes on screen: the one being drawn, then those waiting for the image to show them. */
+  const [strokes, setStrokes] = useState<StrokePreview[]>([]);
+  const pendingStrokes = useRef(0);
+  const brushes = useEditor((s) => s.brushes);
+  // Committed strokes leave the screen once the image has been processed with them.
+  const clearShownStrokes = useCallback(() => {
+    if (pendingStrokes.current === 0 && imageCache.idle && gesture.current?.kind !== 'stroke') setStrokes((list) => (list.length ? [] : list));
+  }, []);
+  useEffect(() => imageCache.subscribe(clearShownStrokes), [clearShownStrokes]);
   /** Smart guides shown while dragging: the moved objects' center is on the canvas's center line. */
   const [guides, setGuides] = useState<{ v: boolean; h: boolean } | null>(null);
   const [spaceDown, setSpaceDown] = useState(false);
@@ -498,6 +517,14 @@ export function CanvasView() {
       return;
     }
 
+    if (STROKE_TOOLS.has(effectiveTool)) {
+      const tool = effectiveTool as StrokeTool;
+      const preview: StrokePreview = { tool, points: [p], settings: editor.getState().brushes[tool] };
+      gesture.current = { kind: 'stroke', preview };
+      setStrokes((list) => [...list, preview]);
+      return;
+    }
+
     if (effectiveTool === 'pen') {
       if (!penNodes) {
         if (!writableLayer(editor, editor.getState().activeLayerId)) return;
@@ -757,6 +784,17 @@ export function CanvasView() {
         editor.setPixelSelection(r.width > 0 && r.height > 0 ? { kind: g.shape, ...r } : null);
         break;
       }
+      case 'stroke': {
+        const pts = g.preview.points;
+        const last = pts[pts.length - 1];
+        // Keep points about a screen pixel apart.
+        if (Math.hypot(p.x - last.x, p.y - last.y) * zoom < 1) break;
+        const next = { ...g.preview, points: [...pts, p] };
+        const prev = g.preview;
+        g.preview = next;
+        setStrokes((list) => list.map((s) => (s === prev ? next : s)));
+        break;
+      }
       case 'lasso': {
         const last = g.points[g.points.length - 1];
         if (Math.hypot(last.x - p.x, last.y - p.y) * zoom >= 2) g.points.push(p);
@@ -851,6 +889,18 @@ export function CanvasView() {
       case 'gradient':
         editor.endGesture('グラデーションの調整');
         break;
+      case 'stroke': {
+        const preview = g.preview;
+        pendingStrokes.current++;
+        commitStroke(editor, preview.tool, preview.points)
+          .catch((err) => editor.notify('error', `描画に失敗しました: ${err instanceof Error ? err.message : String(err)}`))
+          .finally(() => {
+            pendingStrokes.current--;
+            // The image starts processing on its next render; look again after that.
+            window.setTimeout(clearShownStrokes, 100);
+          });
+        break;
+      }
       case 'gradient-drag':
         if (g.moved) {
           editor.endGesture(g.slot === 'mask' ? 'マスクのグラデーションの指定' : 'グラデーションの指定');
@@ -1263,6 +1313,7 @@ export function CanvasView() {
         onPointerUp={onPointerUp}
         onPointerCancel={() => {
           if (gesture.current && gesture.current.kind !== 'pan' && gesture.current.kind !== 'marquee') editor.cancelGesture();
+          if (gesture.current?.kind === 'stroke') setStrokes([]);
           gesture.current = null;
           setMarquee(null);
           setGuides(null);
@@ -1305,6 +1356,10 @@ export function CanvasView() {
             <GradientHandles o={selectedObjects[0].object} zoom={zoom} />
           )}
           {pixelSelection && <PixelSelectionOutline sel={pixelSelection} zoom={zoom} />}
+          {strokes.map((s, i) => (
+            <StrokePreviewPath key={i} s={s} />
+          ))}
+          {STROKE_TOOLS.has(tool) && cursorPos && <BrushCursor at={cursorPos} size={brushes[tool as StrokeTool].size} zoom={zoom} />}
           {polyPoints && (
             <polyline points={polyPoints.map((q) => `${q.x},${q.y}`).join(' ')} className="ants-a" strokeWidth={1 / zoom} />
           )}
@@ -1409,6 +1464,46 @@ function SmartGuides({ guides, width, height, zoom }: { guides: { v: boolean; h:
     <g className="smart-guides" pointerEvents="none">
       {guides.v && <line data-testid="smart-guide-v" className="smart-guide" x1={width / 2} y1={0} x2={width / 2} y2={height} strokeWidth={1 / zoom} />}
       {guides.h && <line data-testid="smart-guide-h" className="smart-guide" x1={0} y1={height / 2} x2={width} y2={height / 2} strokeWidth={1 / zoom} />}
+    </g>
+  );
+}
+
+/** A stroke as it is being drawn (SVG): round ends, the softness as a blur; the eraser in white. */
+function StrokePreviewPath({ s }: { s: StrokePreview }) {
+  const { size, hardness, color, opacity } = s.settings;
+  const id = useRef(`stroke-soft-${Math.random().toString(36).slice(2)}`).current;
+  const soft = s.tool !== 'pencil' && hardness < 1 ? (size * (1 - hardness)) / 4 : 0;
+  const d = s.points.map((p, i) => `${i ? 'L' : 'M'}${p.x} ${p.y}`).join('') + (s.points.length === 1 ? 'l0 0.01' : '');
+  return (
+    <g className="stroke-preview" data-testid="stroke-preview" pointerEvents="none">
+      {soft > 0 && (
+        <defs>
+          <filter id={id} x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur stdDeviation={soft} />
+          </filter>
+        </defs>
+      )}
+      <path
+        d={d}
+        fill="none"
+        stroke={s.tool === 'eraser' ? '#ffffff' : color}
+        strokeOpacity={s.tool === 'eraser' ? 0.85 * opacity : opacity}
+        strokeWidth={s.tool === 'pencil' ? Math.max(1, size) : size}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        filter={soft > 0 ? `url(#${id})` : undefined}
+      />
+    </g>
+  );
+}
+
+/** The brush's size around the pointer. */
+function BrushCursor({ at, size, zoom }: { at: Point; size: number; zoom: number }) {
+  const k = 1 / zoom;
+  return (
+    <g className="brush-cursor" data-testid="brush-cursor" pointerEvents="none">
+      <circle cx={at.x} cy={at.y} r={Math.max(size / 2, 2 * k)} fill="none" strokeWidth={3 * k} stroke="rgba(0,0,0,0.5)" />
+      <circle cx={at.x} cy={at.y} r={Math.max(size / 2, 2 * k)} fill="none" strokeWidth={1 * k} stroke="#fff" />
     </g>
   );
 }
