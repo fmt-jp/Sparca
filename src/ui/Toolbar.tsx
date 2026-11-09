@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { ToolId } from '../store/editor';
 import { ToolIcon } from './icons';
 import { TOOL_GROUPS, type ToolGroup } from './tools';
@@ -12,6 +12,7 @@ const lastInGroup = new Map<string, ToolId>();
 export function Toolbar() {
   const tool = useEditor((s) => s.tool);
   const [openGroup, setOpenGroup] = useState<string | null>(null);
+  const ref = useRef<HTMLElement>(null);
 
   useEffect(() => {
     if (!openGroup) return;
@@ -20,8 +21,10 @@ export function Toolbar() {
     return () => window.removeEventListener('pointerdown', close);
   }, [openGroup]);
 
+  const twoCol = useTwoColumns(ref);
+
   return (
-    <nav className="toolbar" aria-label="ツール">
+    <nav ref={ref} className={`toolbar${twoCol ? ' two-col' : ''}`} aria-label="ツール" data-columns={twoCol ? 2 : 1}>
       {TOOL_GROUPS.map((g) => (
         <GroupButton
           key={g.id}
@@ -115,4 +118,36 @@ function GroupButton({
       )}
     </div>
   );
+}
+
+/**
+ * Two columns when one column of tools does not fit the window's height (decided with the user
+ * 2026-11-09). Switches back once the height one column needed is available again.
+ */
+function useTwoColumns(ref: React.RefObject<HTMLElement | null>): boolean {
+  const [two, setTwo] = useState(false);
+  const need = useRef(0);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const check = () => {
+      if (!el.classList.contains('two-col')) {
+        need.current = el.scrollHeight;
+        setTwo(el.scrollHeight > el.clientHeight + 1);
+      } else setTwo(el.clientHeight < need.current);
+    };
+    check();
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(check) : null;
+    ro?.observe(el);
+    window.addEventListener('resize', check);
+    return () => {
+      ro?.disconnect();
+      window.removeEventListener('resize', check);
+    };
+  }, [ref]);
+  // The layout's tools column (App grid, splitter, panel toggle) follows the toolbar's width.
+  useEffect(() => {
+    document.documentElement.style.setProperty('--tools-w', two ? '84px' : '48px');
+  }, [two]);
+  return two;
 }
