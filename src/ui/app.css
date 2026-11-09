@@ -81,7 +81,7 @@ kbd {
   position: relative;
   display: grid;
   height: 100vh;
-  grid-template-columns: 48px minmax(0, 1fr) 260px;
+  grid-template-columns: var(--tools-w, 48px) minmax(0, 1fr) 260px;
   grid-template-rows: 38px minmax(0, 1fr) auto;
   grid-template-areas:
     'menu menu menu'
@@ -182,6 +182,8 @@ kbd {
 /* ---- Toolbar ---- */
 .toolbar {
   grid-area: tools;
+  width: 48px;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -816,7 +818,7 @@ kbd {
   cursor: col-resize;
 }
 .splitter-h {
-  left: 48px;
+  left: var(--tools-w, 48px);
   height: 6px;
   cursor: row-resize;
 }
@@ -1809,4 +1811,19 @@ kbd {
 .mask-edit-frame .mask-empty-hint rect {
   fill: rgba(30, 32, 36, 0.88);
   stroke: #e8572a;
+}
+
+/* Too low a window for one column of tools: two (Toolbar useTwoColumns). */
+.toolbar.two-col {
+  width: 84px;
+  display: grid;
+  grid-template-columns: 36px 36px;
+  grid-auto-rows: 36px;
+  justify-content: center;
+  align-content: start;
+  column-gap: 4px;
+}
+/* Flyouts of the left column open past the right column. */
+.toolbar.two-col .tool-group:nth-child(odd) .tool-flyout {
+  left: 80px;
 }

@@ -87,7 +87,7 @@ export function App() {
   return (
     <div
       className="app"
-      style={{ gridTemplateColumns: `48px minmax(0, 1fr) ${layersW}px`, gridTemplateRows: `38px minmax(0, 1fr) ${propsH}px` }}
+      style={{ gridTemplateColumns: `var(--tools-w, 48px) minmax(0, 1fr) ${layersW}px`, gridTemplateRows: `38px minmax(0, 1fr) ${propsH}px` }}
     >
       <MenuBar onNew={() => openDialog({ kind: 'new' })} />
       <Toolbar />
@@ -109,7 +109,7 @@ export function App() {
       <button
         type="button"
         className={`panel-toggle panel-toggle-h${sizes.propsHidden ? ' hidden' : ''}`}
-        style={{ bottom: propsH, left: `calc(48px + (100% - 48px - ${layersW}px) / 2)` }}
+        style={{ bottom: propsH, left: `calc(var(--tools-w, 48px) + (100% - var(--tools-w, 48px) - ${layersW}px) / 2)` }}
         aria-label={sizes.propsHidden ? 'プロパティパネルを表示' : 'プロパティパネルを隠す'}
         aria-expanded={!sizes.propsHidden}
         title={`${sizes.propsHidden ? 'プロパティパネルを表示' : 'プロパティパネルを隠す'}（F4 で両方のパネル）`}
