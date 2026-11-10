@@ -19,6 +19,7 @@ import {
 import { findObject, isEffectivelyLocked } from '../model/tree';
 import type { Box, Id, Paint, PathNode, PathObject, Point, SceneObject, ShapeGeometry, ShapeObject, SparcaDocument, StrokeTool, TextObject } from '../model/types';
 import { commitStroke, STROKE_TOOLS } from '../store/paintActions';
+import { snapToGuides, type GuideLine } from '../model/smartGuides';
 import type { PaintCategory } from '../model/toolDefaults';
 import { DocumentSvg } from '../render/DocumentSvg';
 import { imageCache } from '../render/imageCache';
@@ -149,7 +150,7 @@ export function CanvasView() {
   }, []);
   useEffect(() => imageCache.subscribe(clearShownStrokes), [clearShownStrokes]);
   /** Smart guides shown while dragging: the moved objects' center is on the canvas's center line. */
-  const [guides, setGuides] = useState<{ v: boolean; h: boolean } | null>(null);
+  const [guides, setGuides] = useState<GuideLine[] | null>(null);
   const [spaceDown, setSpaceDown] = useState(false);
   const [editingText, setEditingText] = useState<{ id: Id; isNew: boolean } | null>(null);
   const [cursorPos, setCursorPos] = useState<Point | null>(null);
@@ -1096,27 +1097,23 @@ export function CanvasView() {
       dx = snapped.x - b.x;
       dy = snapped.y - b.y;
     }
-    // Smart guides: the center of the moved objects snaps to the canvas's center lines
-    // within a few screen px, and a guide line shows while it is there.
-    let v = false;
-    let h = false;
+    // Smart guides: the moved objects' edges and centers snap to those of the other objects
+    // and of the canvas within a few screen px, and guide lines show the alignments.
+    let lines: GuideLine[] = [];
     const st = editor.getState();
     if (b && st.smartGuides) {
-      const tol = SMART_GUIDE_PX / zoom;
-      const ox = st.doc.width / 2 - (b.x + dx + b.width / 2);
-      const oy = st.doc.height / 2 - (b.y + dy + b.height / 2);
-      const freeX = !(shift && dx === 0);
-      const freeY = !(shift && dy === 0);
-      if (Math.abs(ox) <= tol && (freeX || Math.abs(ox) < 1e-6)) {
-        if (freeX) dx += ox;
-        v = true;
-      }
-      if (Math.abs(oy) <= tol && (freeY || Math.abs(oy) < 1e-6)) {
-        if (freeY) dy += oy;
-        h = true;
-      }
+      const r = snapToGuides(
+        { x: b.x + dx, y: b.y + dy, width: b.width, height: b.height },
+        guideTargets(st.doc, moving),
+        st.doc,
+        SMART_GUIDE_PX / zoom,
+        { x: !(shift && dx === 0), y: !(shift && dy === 0) },
+      );
+      dx += r.dx;
+      dy += r.dy;
+      lines = r.lines;
     }
-    setGuides(v || h ? { v, h } : null);
+    setGuides(lines.length ? lines : null);
     applyTransformed(moving, (o) => transformObject(o, { pivot: { x: 0, y: 0 }, sx: 1, sy: 1, rotation: 0, dx, dy }));
   }
 
@@ -1367,7 +1364,7 @@ export function CanvasView() {
           overflow="visible"
         >
           <GridOverlay width={doc.width} height={doc.height} zoom={zoom} />
-          {guides && <SmartGuides guides={guides} width={doc.width} height={doc.height} zoom={zoom} />}
+          {guides && <SmartGuides guides={guides} zoom={zoom} />}
           {editingMask && <MaskEditFrame o={editingMask} zoom={zoom} empty={!editingMask.mask?.children.length} />}
           <SelectionOverlay locs={selectedObjects} zoom={zoom} showHandles={tool === 'select' && !editingText} />
           {(tool === 'select' || tool === 'gradient') && !editingText && selectedObjects.length === 1 && !isEffectivelyLocked(selectedObjects[0]) && (
@@ -1477,13 +1474,35 @@ function PathNodeOverlay({ zoom }: { zoom: number }) {
 const SMART_GUIDE_PX = 6;
 
 /** Lines through the canvas's center, shown while a dragged object's center sits on them. */
-function SmartGuides({ guides, width, height, zoom }: { guides: { v: boolean; h: boolean }; width: number; height: number; zoom: number }) {
+function SmartGuides({ guides, zoom }: { guides: GuideLine[]; zoom: number }) {
   return (
     <g className="smart-guides" pointerEvents="none">
-      {guides.v && <line data-testid="smart-guide-v" className="smart-guide" x1={width / 2} y1={0} x2={width / 2} y2={height} strokeWidth={1 / zoom} />}
-      {guides.h && <line data-testid="smart-guide-h" className="smart-guide" x1={0} y1={height / 2} x2={width} y2={height / 2} strokeWidth={1 / zoom} />}
+      {guides.map((l, i) =>
+        l.axis === 'v' ? (
+          <line key={i} data-testid="smart-guide-v" data-at={l.at} className="smart-guide" x1={l.at} y1={l.from} x2={l.at} y2={l.to} strokeWidth={1 / zoom} />
+        ) : (
+          <line key={i} data-testid="smart-guide-h" data-at={l.at} className="smart-guide" x1={l.from} y1={l.at} x2={l.to} y2={l.at} strokeWidth={1 / zoom} />
+        ),
+      )}
     </g>
   );
+}
+
+/** What dragged objects line up with: the bounds of every visible object that is not moving. */
+function guideTargets(doc: SparcaDocument, moving: Map<Id, SceneObject>): Rect[] {
+  const out: Rect[] = [];
+  const walk = (list: SceneObject[]) => {
+    for (const o of list) {
+      if (!o.visible || moving.has(o.id)) continue;
+      if (o.type === 'group') walk(o.children);
+      else {
+        const r = objectBounds(o);
+        if (r) out.push(r);
+      }
+    }
+  };
+  for (const l of doc.layers) if (l.visible) walk(l.children);
+  return out;
 }
 
 /** A stroke as it is being drawn (SVG): round ends, the softness as a blur; the eraser in white. */

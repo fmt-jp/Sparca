@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from 'react';
 import type { PlacementAnswer, PlacementQuestion } from '../store/actions';
+import type { AutosaveRecord } from '../store/autosave';
 
 export type DialogState =
   | { kind: 'new' }
@@ -10,6 +11,7 @@ export type DialogState =
   | { kind: 'grow-selection'; contract: boolean }
   | { kind: 'export' }
   | { kind: 'preferences' }
+  | { kind: 'restore'; records: AutosaveRecord[] }
   | { kind: 'add-mask' }
   | { kind: 'image-placement'; question: PlacementQuestion; answer: (a: PlacementAnswer | null) => void }
   | { kind: 'help'; section?: string }
