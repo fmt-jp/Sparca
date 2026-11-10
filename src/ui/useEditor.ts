@@ -31,6 +31,7 @@ const RULERS_KEY = 'sparca.rulers';
 const RULER_ORIGIN_KEY = 'sparca.rulerOrigin';
 const SMART_GUIDES_KEY = 'sparca.smartGuides';
 const IMAGE_PLACEMENT_KEY = 'sparca.imagePlacement';
+const RESTORE_MODE_KEY = 'sparca.restoreMode';
 try {
   const saved = JSON.parse(localStorage.getItem(RULERS_KEY) ?? 'null') as unknown;
   if (typeof saved === 'boolean') editor.set({ rulers: saved });
@@ -40,6 +41,8 @@ try {
   if (typeof guides === 'boolean') editor.set({ smartGuides: guides });
   const placement = localStorage.getItem(IMAGE_PLACEMENT_KEY);
   if (placement === 'ask' || placement === 'original' || placement === 'fit') editor.set({ imagePlacement: placement });
+  const restore = localStorage.getItem(RESTORE_MODE_KEY);
+  if (restore === 'ask' || restore === 'auto') editor.set({ restoreMode: restore });
 } catch {
   // Storage unavailable or corrupt: shown, counting from the corner, by default.
 }
@@ -47,9 +50,11 @@ let lastRulers = editor.getState().rulers;
 let lastOrigin = editor.getState().rulerOrigin;
 let lastGuides = editor.getState().smartGuides;
 let lastPlacement = editor.getState().imagePlacement;
+let lastRestore = editor.getState().restoreMode;
 editor.subscribe(() => {
-  const { rulers, rulerOrigin, smartGuides, imagePlacement } = editor.getState();
-  if (rulers === lastRulers && rulerOrigin === lastOrigin && smartGuides === lastGuides && imagePlacement === lastPlacement) return;
+  const { rulers, rulerOrigin, smartGuides, imagePlacement, restoreMode } = editor.getState();
+  if (rulers === lastRulers && rulerOrigin === lastOrigin && smartGuides === lastGuides && imagePlacement === lastPlacement && restoreMode === lastRestore) return;
+  lastRestore = restoreMode;
   lastRulers = rulers;
   lastOrigin = rulerOrigin;
   lastGuides = smartGuides;
@@ -59,6 +64,7 @@ editor.subscribe(() => {
     localStorage.setItem(RULER_ORIGIN_KEY, rulerOrigin);
     localStorage.setItem(SMART_GUIDES_KEY, JSON.stringify(smartGuides));
     localStorage.setItem(IMAGE_PLACEMENT_KEY, imagePlacement);
+    localStorage.setItem(RESTORE_MODE_KEY, restoreMode);
   } catch {
     // Not remembered; harmless.
   }

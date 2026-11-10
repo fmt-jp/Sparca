@@ -20,6 +20,8 @@ import { CanvasView } from './CanvasView';
 import { BlurSelectionDialog } from './BlurSelectionDialog';
 import { askImagePlacement, closeDialog, openDialog, useDialog } from './dialogs';
 import { ImagePlacementDialog } from './ImagePlacementDialog';
+import { RestoreDialog } from './RestoreDialog';
+import { leftoverWork, restoreWork, startAutosave } from '../store/autosave';
 import { setPlacementPrompt } from '../store/actions';
 import { ExportDialog } from './ExportDialog';
 import { PreferencesDialog } from './PreferencesDialog';
@@ -64,6 +66,27 @@ export function App() {
   }, []);
 
   useEffect(() => installClipboardHandlers(), []);
+
+  // 自動保存: keep unsaved tabs in the browser; at start, offer (or restore) work left by a window that is gone.
+  useEffect(() => {
+    if (typeof indexedDB === 'undefined') return;
+    const auto = startAutosave(editor);
+    (globalThis as unknown as { __sparcaAutosave: typeof auto }).__sparcaAutosave = auto;
+    let cancelled = false;
+    void leftoverWork()
+      .then(async (records) => {
+        if (cancelled || !records.length) return;
+        if (editor.getState().restoreMode === 'auto') {
+          const n = await restoreWork(editor, records);
+          if (n) editor.notify('info', `前回保存していなかった作業を ${n} 件復元しました。保存するまでは未保存です。`);
+        } else openDialog({ kind: 'restore', records });
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+      auto.stop();
+    };
+  }, []);
 
   // Placing an image larger than the canvas asks how (unless a choice is remembered).
   useEffect(() => {
@@ -152,6 +175,7 @@ export function App() {
       {dialog?.kind === 'grow-selection' && <GrowSelectionDialog contract={dialog.contract} onClose={closeDialog} />}
       {dialog?.kind === 'export' && <ExportDialog onClose={closeDialog} />}
       {dialog?.kind === 'preferences' && <PreferencesDialog onClose={closeDialog} />}
+      {dialog?.kind === 'restore' && <RestoreDialog records={dialog.records} onClose={closeDialog} />}
       {dialog?.kind === 'add-mask' && <AddMaskDialog onClose={closeDialog} />}
       {dialog?.kind === 'image-placement' && <ImagePlacementDialog question={dialog.question} answer={dialog.answer} />}
       <div className="notices" role="status" aria-live="polite">

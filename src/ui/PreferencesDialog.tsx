@@ -24,6 +24,7 @@ export function PreferencesDialog({ onClose }: { onClose: () => void }) {
   const rulerOrigin = useEditor((s) => s.rulerOrigin);
   const smartGuides = useEditor((s) => s.smartGuides);
   const imagePlacement = useEditor((s) => s.imagePlacement);
+  const restoreMode = useEditor((s) => s.restoreMode);
   return (
     <Dialog
       title="環境設定"
@@ -47,7 +48,7 @@ export function PreferencesDialog({ onClose }: { onClose: () => void }) {
         />
       </Field>
       <Toggle checked={smartGuides} onChange={(v) => editor.set({ smartGuides: v })}>
-        スマートガイド（ドラッグ中、中心をキャンバスの中央に合わせる）
+        スマートガイド（ドラッグ中、ほかのオブジェクトやキャンバスの端・中央に合わせる）
       </Toggle>
 
       <h3 className="prefs-heading">グリッド</h3>
@@ -84,6 +85,19 @@ export function PreferencesDialog({ onClose }: { onClose: () => void }) {
           onChange={(v) => editor.set({ imagePlacement: v })}
         />
       </Field>
+      <h3 className="prefs-heading">自動保存</h3>
+      <Field label="前回の作業が残っていたら">
+        <Radios<'ask' | 'auto'>
+          label="前回の作業が残っていたら"
+          value={restoreMode}
+          options={[
+            ['ask', '確認してから復元'],
+            ['auto', '自動で復元'],
+          ]}
+          onChange={(v) => editor.set({ restoreMode: v })}
+        />
+      </Field>
+      <div className="hint">保存していない変更は、30 秒ほどでこのブラウザの中に自動保存されます（PC のファイルは増えません）。ブラウザが落ちたりタブを閉じたりしても、次に開いたときに復元できます。</div>
       <div className="hint">ルーラー・ガイド・グリッドは画面表示用で、書き出し画像やプロジェクトファイルには含まれません。設定はこのブラウザに保存されます。</div>
     </Dialog>
   );

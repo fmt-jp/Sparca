@@ -80,3 +80,47 @@ test('smart guides can be turned off in 環境設定 (remembered)', async ({ pag
   const b1 = await box(page);
   expect(Math.abs(b1.x + b1.width / 2 - w / 2)).toBeGreaterThan(2);
 });
+
+test('a dragged object snaps its edges and center to another object, with guide lines', async ({ page }) => {
+  const c = await canvasBox(page);
+  const z = 0.5;
+  const at = (x: number, y: number) => ({ x: c.x + x * z, y: c.y + y * z });
+  // A: (100,100)–(200,180). B: (300,300)–(360,340).
+  await page.keyboard.press('r');
+  let a = at(100, 100);
+  let b = at(200, 180);
+  await page.mouse.move(a.x, a.y);
+  await page.mouse.down();
+  await page.mouse.move(b.x, b.y, { steps: 4 });
+  await page.mouse.up();
+  await page.keyboard.press('r');
+  a = at(300, 300);
+  b = at(360, 340);
+  await page.mouse.move(a.x, a.y);
+  await page.mouse.down();
+  await page.mouse.move(b.x, b.y, { steps: 4 });
+  await page.mouse.up();
+  const boxes = () => state<{ x: number; y: number; width: number; height: number }[]>(page, 's => s.doc.layers[0].children.map(o => o.box)');
+  const [, b0] = await boxes();
+  // Drag B so its left edge comes 4 px (2 screen px) right of A's left edge, well below A.
+  const start = at(330, 320);
+  await page.mouse.move(start.x, start.y);
+  await page.mouse.down();
+  const to = at(330 + (100 + 4 - b0.x), 320 + 100);
+  await page.mouse.move(to.x, to.y, { steps: 8 });
+  await expect(page.locator('[data-testid="smart-guide-v"][data-at="100"]')).toHaveCount(1);
+  await page.mouse.up();
+  await expect(page.getByTestId('smart-guide-v')).toHaveCount(0);
+  const [, b1] = await boxes();
+  expect(b1.x).toBeCloseTo(100, 5); // left edges lined up
+  // Now its center onto A's center (x 150), 3 px off.
+  const s2 = at(b1.x + 30, b1.y + 20);
+  await page.mouse.move(s2.x, s2.y);
+  await page.mouse.down();
+  const t2 = at(b1.x + 30 + (150 - (b1.x + 30)) + 3, b1.y + 20 + 40);
+  await page.mouse.move(t2.x, t2.y, { steps: 8 });
+  await expect(page.locator('[data-testid="smart-guide-v"][data-at="150"]')).toHaveCount(1);
+  await page.mouse.up();
+  const [, b2] = await boxes();
+  expect(b2.x + b2.width / 2).toBeCloseTo(150, 5);
+});

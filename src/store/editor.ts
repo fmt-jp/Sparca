@@ -163,6 +163,8 @@ export interface EditorState {
    * scale it down to fit the canvas (a per-browser preference).
    */
   imagePlacement: ImagePlacement;
+  /** Work left in the browser by 自動保存 when HANABI starts: ask before restoring, or restore it at once. */
+  restoreMode: 'ask' | 'auto';
   /** Snap dragged objects' centers to the canvas's center lines and show a guide there. */
   smartGuides: boolean;
   /** Align multiple objects to the canvas instead of to each other. */
@@ -228,6 +230,7 @@ export class EditorStore {
       rulerOrigin: 'corner',
       smartGuides: true,
       imagePlacement: 'ask',
+      restoreMode: 'ask',
       selectionEdge: DEFAULT_SELECTION_EDGE,
       toolDefaults: DEFAULT_TOOL_DEFAULTS,
       brushes: DEFAULT_BRUSHES,
@@ -335,6 +338,22 @@ export class EditorStore {
     this.switchTab(neighbor);
     this.inactive.delete(id);
     this.set({ tabs: this.computeTabs(this.state, order.filter((t) => t !== id)) });
+  }
+
+  /** The document of a tab (active or not), or null when there is no such tab. */
+  tabDocument(id: string): { doc: SparcaDocument; fileName: string; dirty: boolean } | null {
+    const s = id === this.state.activeTabId ? this.state : this.inactive.get(id);
+    if (!s || !this.state.tabs.some((t) => t.id === id)) return null;
+    return { doc: s.doc, fileName: s.fileName, dirty: s.doc !== s.savedDoc };
+  }
+
+  /**
+   * Open work restored from 自動保存 in a new tab: unsaved (it was never written to this
+   * name's file in this state) and with no file to overwrite, so 保存 asks where.
+   */
+  openRestored(doc: SparcaDocument, fileName: string): void {
+    this.openDocument(doc, fileName, null);
+    this.set({ savedDoc: createDocument() });
   }
 
   /** Whether a tab has unsaved changes. */
