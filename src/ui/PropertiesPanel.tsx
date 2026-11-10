@@ -678,6 +678,7 @@ function PathNodeSection({ o }: { o: PathObject }) {
 function StrokeToolSection({ tool }: { tool: StrokeTool }) {
   const s = useEditor((st) => st.brushes[tool]);
   const target = useEditor(() => strokeTarget(editor));
+  const selActive = useEditor((st) => !!st.pixelSelection);
   const set = (patch: Partial<BrushSettings>) => editor.set({ brushes: { ...editor.getState().brushes, [tool]: { ...s, ...patch } } });
   const where = target
     ? `選択中の画像「${target.name}」に${tool === 'eraser' ? 'かけます' : '描きます'}。`
@@ -710,6 +711,7 @@ function StrokeToolSection({ tool }: { tool: StrokeTool }) {
           onChange={(v) => set({ opacity: v / 100 })}
         />
       </Field>
+      {selActive && <span className="hint" data-testid="stroke-in-selection">範囲選択中：選択範囲の内側だけに{tool === 'eraser' ? 'かかります' : '描きます'}（Esc で解除）。</span>}
       <span className="hint">{where}描いた線は画像の編集情報として残り（元の画素はそのまま）、取り消しや「部分加工」の「最後の1件を削除」で戻せます。</span>
     </div>
   );

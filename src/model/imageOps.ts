@@ -93,7 +93,11 @@ export function cropImage(doc: SparcaDocument, id: Id, f: Rect, srcW: number, sr
     : null;
   const localEdits = o.pipeline.localEdits.map((e) =>
     e.kind === 'stroke'
-      ? { ...e, points: e.points.map((p) => ({ x: (p.x - fx) / fw, y: (p.y - fy) / fh })) }
+      ? {
+          ...e,
+          points: e.points.map((p) => ({ x: (p.x - fx) / fw, y: (p.y - fy) / fh })),
+          ...(e.clip ? { clip: remapMask(e.clip, fx, fy, fw, fh) } : {}),
+        }
       : { ...e, mask: remapMask(e.mask, fx, fy, fw, fh) },
   );
   // New box: the sub-rectangle of the old box, same rotation.

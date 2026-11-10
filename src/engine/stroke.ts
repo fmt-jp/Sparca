@@ -2,6 +2,7 @@
 // coverage is the round-capped band around its path (max over its segments, so a stroke
 // crossing itself does not get darker), then painted over (source-over) or erased.
 import type { LocalStroke, Point } from '../model/types';
+import { rasterizeMask } from './mask';
 import type { Raster } from './raster';
 
 /** Coverage 0..1 per pixel of a w×h image for a stroke of `radius` px along `pts` (pixel coordinates). */
@@ -103,6 +104,11 @@ export function applyStroke(img: Raster, s: LocalStroke, scale = 1): Raster {
     s.tool === 'pencil'
       ? pencilCoverage(pts, w, h, s.size * scale)
       : strokeCoverage(pts, w, h, Math.max(0.25, (s.size * scale) / 2), s.hardness, false);
+  // Drawn while a pixel selection was active: only inside it (its soft edge fades the stroke).
+  if (s.clip) {
+    const m = rasterizeMask(s.clip, w, h, scale);
+    for (let i = 0; i < cov.length; i++) cov[i] *= m[i];
+  }
   const out = new Uint8ClampedArray(img.data);
   const k = Math.min(1, Math.max(0, s.opacity));
   if (s.tool === 'eraser') {

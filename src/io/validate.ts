@@ -269,6 +269,10 @@ function checkStroke(e: Obj, w: string) {
   const op = num(e, 'opacity', w);
   if (hard < 0 || hard > 1 || op < 0 || op > 1) throw new Invalid(`${w} の硬さ・不透明度が範囲外です`);
   if (typeof e.color !== 'string' || !/^#[0-9a-f]{6}$/i.test(e.color)) throw new Invalid(`${w}.color が正しくありません`);
+  if (e.clip !== undefined) {
+    if (!isObj(e.clip) || !['rect', 'ellipse', 'polygon'].includes(e.clip.kind as string)) throw new Invalid(`${w}.clip が正しくありません`);
+    checkMaskEdge(e.clip, `${w}.clip`);
+  }
 }
 
 /** Optional edge fields of a mask: grow / feather in px, antialias flag. */
