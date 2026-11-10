@@ -1472,7 +1472,12 @@ function SmartGuides({ guides, width, height, zoom }: { guides: { v: boolean; h:
 function StrokePreviewPath({ s }: { s: StrokePreview }) {
   const { size, hardness, color, opacity } = s.settings;
   const id = useRef(`stroke-soft-${Math.random().toString(36).slice(2)}`).current;
-  const soft = s.tool !== 'pencil' && hardness < 1 ? (size * (1 - hardness)) / 4 : 0;
+  // As engine/stroke draws it: full strength out to hardness × radius, then a smoothstep fade to
+  // the radius. A band as wide as the fade's midpoint, blurred with the same slope there,
+  // matches it (σ = fade width / (1.5·√(2π))), so the line keeps its width when released.
+  const r = size / 2;
+  const soft = s.tool !== 'pencil' && hardness < 1 ? (r * (1 - hardness)) / (1.5 * Math.sqrt(2 * Math.PI)) : 0;
+  const width = s.tool === 'pencil' ? Math.max(1, size) : soft > 0 ? r * (1 + hardness) : size;
   const d = s.points.map((p, i) => `${i ? 'L' : 'M'}${p.x} ${p.y}`).join('') + (s.points.length === 1 ? 'l0 0.01' : '');
   return (
     <g className="stroke-preview" data-testid="stroke-preview" pointerEvents="none">
@@ -1488,7 +1493,7 @@ function StrokePreviewPath({ s }: { s: StrokePreview }) {
         fill="none"
         stroke={s.tool === 'eraser' ? '#ffffff' : color}
         strokeOpacity={s.tool === 'eraser' ? 0.85 * opacity : opacity}
-        strokeWidth={s.tool === 'pencil' ? Math.max(1, size) : size}
+        strokeWidth={width}
         strokeLinecap="round"
         strokeLinejoin="round"
         filter={soft > 0 ? `url(#${id})` : undefined}
