@@ -22,6 +22,7 @@ function sampleDoc(): SparcaDocument {
       { kind: 'blur', radius: 4, mask: { kind: 'rect', x: 0, y: 0, width: 0.5, height: 0.5 } },
       { kind: 'mosaic', size: 8, mask: { kind: 'ellipse', x: 0.2, y: 0.2, width: 0.5, height: 0.5 } },
       { kind: 'stroke', tool: 'brush', points: [{ x: 0.1, y: 0.1 }, { x: 0.9, y: 0.5 }], size: 6, hardness: 0.5, color: '#ff0000', opacity: 0.8 },
+      { kind: 'stroke', tool: 'eraser', points: [{ x: 0.5, y: 0.5 }], size: 4, hardness: 1, color: '#000000', opacity: 1, clip: { kind: 'ellipse', x: 0.2, y: 0.2, width: 0.5, height: 0.5, feather: 2 } },
     ];
     addObject(d, d.layers[0].id, img);
     const star = createShape({ kind: 'star', points: 7, innerRatio: 0.3 }, { x: 5, y: 5, width: 50, height: 50, rotation: 0 });
@@ -206,6 +207,7 @@ describe('project format', () => {
       { kind: 'stroke', tool: 'brush', points: [], size: 4, hardness: 1, color: '#000000', opacity: 1 },
       { kind: 'stroke', tool: 'brush', points: [{ x: 0, y: 0 }], size: 4, hardness: 1, color: 'red', opacity: 1 },
       { kind: 'stroke', tool: 'eraser', points: [{ x: 0, y: 0 }], size: 4, hardness: 1, color: '#000000', opacity: 2 },
+      { kind: 'stroke', tool: 'brush', points: [{ x: 0, y: 0 }], size: 4, hardness: 1, color: '#000000', opacity: 1, clip: { kind: 'star' } },
     ]) {
       const doc = sampleDoc();
       const raw = JSON.parse(JSON.stringify(doc));

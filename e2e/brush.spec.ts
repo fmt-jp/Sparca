@@ -131,7 +131,7 @@ test('in マスクの編集 the brush paints the mask (white shows, black hides)
 async function darkRows(page: Page, x: number, y0: number, h: number) {
   const shot = await page.screenshot({ clip: { x, y: y0, width: 1, height: h } });
   const px = (await decodePixels(page, shot, 'image/png', Array.from({ length: h }, (_, i) => [0, i] as [number, number]))).px;
-  return px.filter((p) => p[0] < 128).length;
+  return px.filter((p) => p[1] < 128).length;
 }
 
 for (const hardness of ['0', '60', '100']) {
@@ -161,7 +161,7 @@ for (const hardness of ['0', '60', '100']) {
 async function darkCols(page: Page, x0: number, y: number, w: number) {
   const shot = await page.screenshot({ clip: { x: x0, y, width: w, height: 1 } });
   const px = (await decodePixels(page, shot, 'image/png', Array.from({ length: w }, (_, i) => [i, 0] as [number, number]))).px;
-  return px.filter((p) => p[0] < 128).length;
+  return px.filter((p) => p[1] < 128).length;
 }
 
 test('a straight horizontal or vertical stroke shows at full width while drawn', async ({ page }) => {
@@ -237,4 +237,38 @@ test('Shift+drag draws a straight line (45° steps); Shift+click joins the previ
   expect(px[0][0]).toBeLessThan(80);
   expect(px[1][0]).toBeLessThan(80); // the straight horizontal line
   expect(px[2]).toEqual([255, 255, 255, 255]);
+});
+
+test('with a pixel selection the brush paints only inside it', async ({ page }) => {
+  await page.evaluate(() => (window as unknown as { __sparca: { set(p: object): void } }).__sparca.set({ zoom: 1 }));
+  const c = await canvasBox(page);
+  // Rectangle selection (200,100)–(400,300).
+  await page.keyboard.press('m');
+  await drag(page, { x: c.x + 200, y: c.y + 100 }, { x: c.x + 400, y: c.y + 300 });
+  expect(await state(page, 's => s.pixelSelection?.kind')).toBe('rect');
+  await page.keyboard.press('b');
+  await expect(props(page).getByTestId('stroke-in-selection')).toBeVisible();
+  await setColor(page, props(page), 'ブラシの色', '#ff0000');
+  await setSize(page, 'ブラシのサイズ', '20');
+  await setSize(page, 'ブラシの硬さ', '100');
+  // The properties panel grew (selection settings), which can move the canvas: measure again.
+  const sel = (await page.locator('.overlay').boundingBox())!;
+  const c2 = { x: sel.x, y: sel.y };
+  expect(await state(page, 's => [s.pixelSelection.x, s.pixelSelection.width]')).toEqual([200, 200]);
+  // Across the selection: from outside on the left to outside on the right.
+  await page.mouse.move(c2.x + 100, c2.y + 200);
+  await page.mouse.down();
+  await page.mouse.move(c2.x + 500, c2.y + 200, { steps: 10 });
+  // The preview is limited to the selection as well.
+  const live = await darkCols(page, c2.x + 90, c2.y + 200, 420);
+  expect(live).toBeGreaterThan(180);
+  expect(live).toBeLessThan(220);
+  await page.mouse.up();
+  await expect.poll(() => state(page, 's => s.doc.layers[0].children[0]?.pipeline.localEdits[0]?.clip?.kind')).toBe('rect');
+  const px = await exportPng(page, [[300, 200], [150, 200], [450, 200], [205, 200], [395, 200]]);
+  expect(px[0]).toEqual([255, 0, 0, 255]);
+  expect(px[1]).toEqual([255, 255, 255, 255]); // outside: not painted
+  expect(px[2]).toEqual([255, 255, 255, 255]);
+  expect(px[3][1]).toBeLessThan(80); // just inside the edges: painted
+  expect(px[4][1]).toBeLessThan(80);
 });

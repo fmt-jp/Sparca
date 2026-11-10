@@ -85,6 +85,23 @@ describe('brush strokes', () => {
     expect(Math.max(...counts) - Math.min(...counts)).toBeLessThanOrEqual(1);
   });
 
+  it('a stroke drawn with a pixel selection only paints inside it (soft edge fades it)', () => {
+    const clipped = applyStroke(createRaster(100, 40), stroke({ clip: { kind: 'rect', x: 0.3, y: 0, width: 0.4, height: 1 } }));
+    expect(pixel(clipped, 50, 20)).toEqual([255, 0, 0, 255]); // inside the selection
+    expect(pixel(clipped, 20, 20)[3]).toBe(0); // on the stroke, outside the selection
+    expect(pixel(clipped, 80, 20)[3]).toBe(0);
+    const erased = applyStroke(fillRaster(createRaster(100, 40), [0, 0, 255, 255]), stroke({ tool: 'eraser', clip: { kind: 'ellipse', x: 0.4, y: 0, width: 0.2, height: 1 } }));
+    expect(pixel(erased, 50, 20)[3]).toBe(0);
+    expect(pixel(erased, 30, 20)[3]).toBe(255);
+    const soft = applyStroke(createRaster(100, 40), stroke({ clip: { kind: 'rect', x: 0.3, y: 0, width: 0.4, height: 1, feather: 10 } }));
+    expect(pixel(soft, 30, 20)[3]).toBeGreaterThan(50);
+    expect(pixel(soft, 30, 20)[3]).toBeLessThan(205);
+    expect(pixel(soft, 50, 20)[3]).toBe(255);
+    const pencil = applyStroke(createRaster(100, 40), stroke({ tool: 'pencil', size: 1, clip: { kind: 'rect', x: 0.5, y: 0, width: 0.5, height: 1 } }));
+    expect(pixel(pencil, 30, 20)[3]).toBe(0);
+    expect(pixel(pencil, 70, 20)[3]).toBe(255);
+  });
+
   it('coverage of a single click is a round dot', () => {
     const c = strokeCoverage([{ x: 10, y: 10 }], 20, 20, 3, 1, true);
     expect(c[10 * 20 + 10]).toBe(1);

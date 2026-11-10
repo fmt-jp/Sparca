@@ -113,6 +113,8 @@ interface StrokePreview {
   tool: StrokeTool;
   points: Point[];
   settings: BrushSettings;
+  /** The pixel selection the stroke is limited to. */
+  clip: PixelSelection | null;
 }
 
 export function CanvasView() {
@@ -526,7 +528,7 @@ export function CanvasView() {
 
     if (STROKE_TOOLS.has(effectiveTool)) {
       const tool = effectiveTool as StrokeTool;
-      const preview: StrokePreview = { tool, points: [p], settings: editor.getState().brushes[tool] };
+      const preview: StrokePreview = { tool, points: [p], settings: editor.getState().brushes[tool], clip: editor.getState().pixelSelection };
       gesture.current = { kind: 'stroke', preview, straight: e.shiftKey, moved: false };
       setStrokes((list) => [...list, preview]);
       return;
@@ -1504,8 +1506,24 @@ function StrokePreviewPath({ s }: { s: StrokePreview }) {
     width: Math.max(...xs) - Math.min(...xs) + pad * 2,
     height: Math.max(...ys) - Math.min(...ys) + pad * 2,
   };
+  const clipId = `${id}-clip`;
+  const c = s.clip;
   return (
-    <g className="stroke-preview" data-testid="stroke-preview" pointerEvents="none">
+    <g className="stroke-preview" data-testid="stroke-preview" pointerEvents="none" clipPath={c ? `url(#${clipId})` : undefined}>
+      {c && (
+        <defs>
+          {/* Limited to the pixel selection (its soft edge is shown as a plain edge here). */}
+          <clipPath id={clipId}>
+            {c.kind === 'rect' ? (
+              <rect x={c.x} y={c.y} width={c.width} height={c.height} />
+            ) : c.kind === 'ellipse' ? (
+              <ellipse cx={c.x + c.width / 2} cy={c.y + c.height / 2} rx={c.width / 2} ry={c.height / 2} />
+            ) : (
+              <polygon points={c.points.map((q) => `${q.x},${q.y}`).join(' ')} />
+            )}
+          </clipPath>
+        </defs>
+      )}
       {soft > 0 && (
         <defs>
           {/* Region in document units around the whole line and its blur: a box relative to

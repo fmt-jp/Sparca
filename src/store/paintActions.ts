@@ -36,7 +36,10 @@ function strokeFor(ed: EditorStore, o: ImageObject, tool: StrokeTool, points: Po
   const s = ed.getState().brushes[tool];
   const shape = selectionToImageMask(o, { kind: 'polygon', points });
   const k = pxPerDoc(ed.getState().doc, o);
+  // With a pixel selection, the stroke paints only inside it.
+  const sel = ed.getState().pixelSelection;
   return {
+    ...(sel ? { clip: selectionToImageMask(o, sel, k) } : {}),
     kind: 'stroke',
     tool,
     points: shape.kind === 'polygon' ? shape.points : [],

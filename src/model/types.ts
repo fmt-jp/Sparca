@@ -421,6 +421,11 @@ export interface LocalStroke {
   color: string;
   /** 0..1: how strongly the stroke paints (or erases). */
   opacity: number;
+  /**
+   * The pixel selection when the stroke was drawn (image-normalized, with its edge): the stroke
+   * only paints inside it (2026-11-10).
+   */
+  clip?: MaskShape;
 }
 
 export type StrokeTool = 'brush' | 'pencil' | 'eraser';
