@@ -126,3 +126,33 @@ test('in マスクの編集 the brush paints the mask (white shows, black hides)
   expect(px[0]).toEqual([255, 0, 0, 255]); // painted white in the mask: shows
   expect(px[1]).toEqual([255, 255, 255, 255]); // black mask: hidden
 });
+
+/** Rows of a screen column (from y0 down, h px) darker than mid-gray. */
+async function darkRows(page: Page, x: number, y0: number, h: number) {
+  const shot = await page.screenshot({ clip: { x, y: y0, width: 1, height: h } });
+  const px = (await decodePixels(page, shot, 'image/png', Array.from({ length: h }, (_, i) => [0, i] as [number, number]))).px;
+  return px.filter((p) => p[0] < 128).length;
+}
+
+for (const hardness of ['0', '60', '100']) {
+  test(`the stroke keeps its width when released (硬さ ${hardness} %)`, async ({ page }) => {
+    await page.evaluate(() => (window as unknown as { __sparca: { set(p: object): void } }).__sparca.set({ zoom: 1 }));
+    const c = await canvasBox(page);
+    await page.keyboard.press('b');
+    await setSize(page, 'ブラシのサイズ', '40');
+    await setSize(page, 'ブラシの硬さ', hardness);
+    await page.mouse.move(c.x + 100, c.y + 200);
+    await page.mouse.down();
+    await page.mouse.move(c.x + 400, c.y + 200, { steps: 10 });
+    await page.mouse.move(c.x + 500, c.y + 400); // pointer (and its circle) away from the column measured
+    await page.mouse.move(c.x + 400, c.y + 200);
+    const live = await darkRows(page, c.x + 250, c.y + 150, 100);
+    await page.mouse.up();
+    await waitImagesIdle(page);
+    await expect(page.getByTestId('stroke-preview')).toHaveCount(0);
+    await page.mouse.move(c.x + 600, c.y + 450);
+    const done = await darkRows(page, c.x + 250, c.y + 150, 100);
+    expect(done).toBeGreaterThan(10);
+    expect(Math.abs(live - done)).toBeLessThanOrEqual(2);
+  });
+}
