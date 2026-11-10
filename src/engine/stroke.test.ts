@@ -58,6 +58,33 @@ describe('brush strokes', () => {
     expect([9, 10, 11].map((y) => pixel(edge, 10, y)[3]).filter((a) => a > 0)).toHaveLength(1);
   });
 
+  it('a pencil line is one pixel thick at any angle, wherever it starts and ends (Bresenham)', () => {
+    const W = 200;
+    const rows = (out: ReturnType<typeof applyStroke>) => {
+      let most = 0;
+      for (let y = 0; y < W; y++) {
+        let n = 0;
+        for (let x = 0; x < W; x++) if (out.data[(y * W + x) * 4 + 3]) n++;
+        most = Math.max(most, n);
+      }
+      return most;
+    };
+    // 45° lines starting at different places inside a pixel (this one doubled pixels before).
+    for (const [x0, y0, x1, y1] of [[10.3, 10.6, 150.9, 151.2], [20.2, 30.7, 120.1, 130.9], [5.5, 5.5, 100.5, 100.5], [150.8, 10.1, 10.2, 150.7]]) {
+      const out = applyStroke(createRaster(W, W), stroke({ tool: 'pencil', size: 1, points: [{ x: x0 / W, y: y0 / W }, { x: x1 / W, y: y1 / W }] }));
+      expect(rows(out)).toBe(1);
+    }
+    // A wider pencil stays the same width along a diagonal.
+    const wide = applyStroke(createRaster(W, W), stroke({ tool: 'pencil', size: 5, points: [{ x: 10.3 / W, y: 10.6 / W }, { x: 150.9 / W, y: 151.2 / W }] }));
+    const counts = new Set<number>();
+    for (let y = 30; y < 130; y++) {
+      let n = 0;
+      for (let x = 0; x < W; x++) if (wide.data[(y * W + x) * 4 + 3]) n++;
+      counts.add(n);
+    }
+    expect(Math.max(...counts) - Math.min(...counts)).toBeLessThanOrEqual(1);
+  });
+
   it('coverage of a single click is a round dot', () => {
     const c = strokeCoverage([{ x: 10, y: 10 }], 20, 20, 3, 1, true);
     expect(c[10 * 20 + 10]).toBe(1);

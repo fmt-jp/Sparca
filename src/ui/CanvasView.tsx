@@ -1521,6 +1521,7 @@ function StrokePreviewPath({ s }: { s: StrokePreview }) {
         stroke={s.tool === 'eraser' ? '#ffffff' : color}
         strokeOpacity={s.tool === 'eraser' ? 0.85 * opacity : opacity}
         strokeWidth={width}
+        shapeRendering={s.tool === 'pencil' ? 'crispEdges' : undefined}
         strokeLinecap="round"
         strokeLinejoin="round"
         filter={soft > 0 ? `url(#${id})` : undefined}
