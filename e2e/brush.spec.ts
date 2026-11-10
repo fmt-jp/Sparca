@@ -156,3 +156,41 @@ for (const hardness of ['0', '60', '100']) {
     expect(Math.abs(live - done)).toBeLessThanOrEqual(2);
   });
 }
+
+/** Columns of a screen row (from x0, w px) darker than mid-gray. */
+async function darkCols(page: Page, x0: number, y: number, w: number) {
+  const shot = await page.screenshot({ clip: { x: x0, y, width: w, height: 1 } });
+  const px = (await decodePixels(page, shot, 'image/png', Array.from({ length: w }, (_, i) => [i, 0] as [number, number]))).px;
+  return px.filter((p) => p[0] < 128).length;
+}
+
+test('a straight horizontal or vertical stroke shows at full width while drawn', async ({ page }) => {
+  await page.evaluate(() => (window as unknown as { __sparca: { set(p: object): void } }).__sparca.set({ zoom: 1 }));
+  const c = await canvasBox(page);
+  await page.keyboard.press('b');
+  await setSize(page, 'ブラシのサイズ', '30');
+  // Horizontal: measure the width (rows) while drawing and after.
+  await page.mouse.move(c.x + 100, c.y + 150);
+  await page.mouse.down();
+  await page.mouse.move(c.x + 400, c.y + 150, { steps: 10 });
+  const liveH = await darkRows(page, c.x + 200, c.y + 110, 80);
+  await page.mouse.up();
+  await waitImagesIdle(page);
+  await expect(page.getByTestId('stroke-preview')).toHaveCount(0);
+  await page.mouse.move(c.x + 700, c.y + 500);
+  const doneH = await darkRows(page, c.x + 200, c.y + 110, 80);
+  expect(doneH).toBeGreaterThan(15);
+  expect(Math.abs(liveH - doneH)).toBeLessThanOrEqual(2);
+  // Vertical: the width is in columns.
+  await page.mouse.move(c.x + 600, c.y + 100);
+  await page.mouse.down();
+  await page.mouse.move(c.x + 600, c.y + 400, { steps: 10 });
+  const liveV = await darkCols(page, c.x + 560, c.y + 250, 80);
+  await page.mouse.up();
+  await waitImagesIdle(page);
+  await expect(page.getByTestId('stroke-preview')).toHaveCount(0);
+  await page.mouse.move(c.x + 700, c.y + 500);
+  const doneV = await darkCols(page, c.x + 560, c.y + 250, 80);
+  expect(doneV).toBeGreaterThan(15);
+  expect(Math.abs(liveV - doneV)).toBeLessThanOrEqual(2);
+});

@@ -1479,11 +1479,22 @@ function StrokePreviewPath({ s }: { s: StrokePreview }) {
   const soft = s.tool !== 'pencil' && hardness < 1 ? (r * (1 - hardness)) / (1.5 * Math.sqrt(2 * Math.PI)) : 0;
   const width = s.tool === 'pencil' ? Math.max(1, size) : soft > 0 ? r * (1 + hardness) : size;
   const d = s.points.map((p, i) => `${i ? 'L' : 'M'}${p.x} ${p.y}`).join('') + (s.points.length === 1 ? 'l0 0.01' : '');
+  const pad = width / 2 + soft * 4 + 1;
+  const xs = s.points.map((p) => p.x);
+  const ys = s.points.map((p) => p.y);
+  const region = {
+    x: Math.min(...xs) - pad,
+    y: Math.min(...ys) - pad,
+    width: Math.max(...xs) - Math.min(...xs) + pad * 2,
+    height: Math.max(...ys) - Math.min(...ys) + pad * 2,
+  };
   return (
     <g className="stroke-preview" data-testid="stroke-preview" pointerEvents="none">
       {soft > 0 && (
         <defs>
-          <filter id={id} x="-50%" y="-50%" width="200%" height="200%">
+          {/* Region in document units around the whole line and its blur: a box relative to
+              the path's bounds is empty for a straight horizontal or vertical stroke. */}
+          <filter id={id} filterUnits="userSpaceOnUse" {...region}>
             <feGaussianBlur stdDeviation={soft} />
           </filter>
         </defs>
