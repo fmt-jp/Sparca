@@ -101,8 +101,12 @@ type Gesture =
   | { kind: 'node-move'; pathId: Id; start: Point; orig: DocNode[]; indices: number[]; moved: boolean }
   | { kind: 'handle-move'; pathId: Id; orig: DocNode[]; index: number; which: 'in' | 'out' }
   | { kind: 'node-marquee'; start: Point; base: number[] }
-  /** Brush / pencil / eraser: the path drawn so far (document coordinates). */
-  | { kind: 'stroke'; preview: StrokePreview };
+  /**
+   * Brush / pencil / eraser: the path drawn so far (document coordinates). `straight`: begun
+   * with Shift — a straight line from the press point (45° steps); a Shift+click without
+   * moving joins the previous stroke's end instead (as in Photoshop).
+   */
+  | { kind: 'stroke'; preview: StrokePreview; straight: boolean; moved: boolean };
 
 /** A stroke shown on screen while it is drawn and until the image shows it. */
 interface StrokePreview {
@@ -134,6 +138,8 @@ export function CanvasView() {
   /** Strokes on screen: the one being drawn, then those waiting for the image to show them. */
   const [strokes, setStrokes] = useState<StrokePreview[]>([]);
   const pendingStrokes = useRef(0);
+  /** Where the last stroke ended (for Shift+click), per tab. */
+  const lastStrokeEnd = useRef<{ tool: StrokeTool; at: Point } | null>(null);
   const brushes = useEditor((s) => s.brushes);
   // Committed strokes leave the screen once the image has been processed with them.
   const clearShownStrokes = useCallback(() => {
@@ -287,6 +293,7 @@ export function CanvasView() {
     setEditingText(null);
     setMarquee(null);
     setGuides(null);
+    lastStrokeEnd.current = null;
     gesture.current = null;
   }, [activeTabId]);
 
@@ -520,7 +527,7 @@ export function CanvasView() {
     if (STROKE_TOOLS.has(effectiveTool)) {
       const tool = effectiveTool as StrokeTool;
       const preview: StrokePreview = { tool, points: [p], settings: editor.getState().brushes[tool] };
-      gesture.current = { kind: 'stroke', preview };
+      gesture.current = { kind: 'stroke', preview, straight: e.shiftKey, moved: false };
       setStrokes((list) => [...list, preview]);
       return;
     }
@@ -789,7 +796,8 @@ export function CanvasView() {
         const last = pts[pts.length - 1];
         // Keep points about a screen pixel apart.
         if (Math.hypot(p.x - last.x, p.y - last.y) * zoom < 1) break;
-        const next = { ...g.preview, points: [...pts, p] };
+        g.moved = true;
+        const next = { ...g.preview, points: g.straight ? [pts[0], snap45(pts[0], p)] : [...pts, p] };
         const prev = g.preview;
         g.preview = next;
         setStrokes((list) => list.map((s) => (s === prev ? next : s)));
@@ -890,7 +898,15 @@ export function CanvasView() {
         editor.endGesture('グラデーションの調整');
         break;
       case 'stroke': {
-        const preview = g.preview;
+        let preview = g.preview;
+        // Shift+click: a straight line from where the previous stroke of this tool ended.
+        const prevEnd = lastStrokeEnd.current;
+        if (g.straight && !g.moved && prevEnd && prevEnd.tool === preview.tool) {
+          const joined = { ...preview, points: [prevEnd.at, preview.points[0]] };
+          setStrokes((list) => list.map((s) => (s === preview ? joined : s)));
+          preview = joined;
+        }
+        lastStrokeEnd.current = { tool: preview.tool, at: preview.points[preview.points.length - 1] };
         pendingStrokes.current++;
         commitStroke(editor, preview.tool, preview.points)
           .catch((err) => editor.notify('error', `描画に失敗しました: ${err instanceof Error ? err.message : String(err)}`))

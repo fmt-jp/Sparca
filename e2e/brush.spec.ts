@@ -194,3 +194,47 @@ test('a straight horizontal or vertical stroke shows at full width while drawn',
   expect(doneV).toBeGreaterThan(15);
   expect(Math.abs(liveV - doneV)).toBeLessThanOrEqual(2);
 });
+
+test('Shift+drag draws a straight line (45° steps); Shift+click joins the previous stroke', async ({ page }) => {
+  await page.evaluate(() => (window as unknown as { __sparca: { set(p: object): void } }).__sparca.set({ zoom: 1 }));
+  const c = await canvasBox(page);
+  await page.keyboard.press('b');
+  await setSize(page, 'ブラシのサイズ', '10');
+  const strokes = () => state<{ points: { x: number; y: number }[] }[]>(page, 's => s.doc.layers[0].children[0]?.pipeline.localEdits ?? []');
+  // A wobbly drag with Shift: one straight horizontal line from the press point.
+  await page.keyboard.down('Shift');
+  await page.mouse.move(c.x + 100, c.y + 100);
+  await page.mouse.down();
+  for (const [x, y] of [[150, 108], [220, 94], [300, 103]]) await page.mouse.move(c.x + x, c.y + y, { steps: 3 });
+  await page.mouse.up();
+  await page.keyboard.up('Shift');
+  await expect.poll(async () => (await strokes()).length).toBe(1);
+  let s = (await strokes())[0];
+  expect(s.points).toHaveLength(2);
+  expect(s.points[0].y).toBeCloseTo(s.points[1].y, 6); // horizontal
+  expect(s.points[1].x * 800).toBeCloseTo(300, 0);
+  // Mostly diagonal: 45°.
+  await page.keyboard.down('Shift');
+  await drag(page, { x: c.x + 100, y: c.y + 200 }, { x: c.x + 200, y: c.y + 290 });
+  await page.keyboard.up('Shift');
+  await expect.poll(async () => (await strokes()).length).toBe(2);
+  s = (await strokes())[1];
+  const [a, b] = s.points.map((p) => ({ x: p.x * 800, y: p.y * 600 }));
+  expect(Math.abs(b.x - a.x)).toBeCloseTo(Math.abs(b.y - a.y), 0);
+  // Shift+click: from where that stroke ended to the click.
+  await page.keyboard.down('Shift');
+  await page.mouse.click(c.x + 400, c.y + 250);
+  await page.keyboard.up('Shift');
+  await expect.poll(async () => (await strokes()).length).toBe(3);
+  const j = (await strokes())[2].points.map((p) => ({ x: p.x * 800, y: p.y * 600 }));
+  expect(j[0].x).toBeCloseTo(b.x, 0);
+  expect(j[0].y).toBeCloseTo(b.y, 0);
+  expect(j[1].x).toBeCloseTo(400, 0);
+  expect(j[1].y).toBeCloseTo(250, 0);
+  // The exported line is there along the joined segment.
+  const mid = { x: Math.round((j[0].x + j[1].x) / 2), y: Math.round((j[0].y + j[1].y) / 2) };
+  const px = await exportPng(page, [[mid.x, mid.y], [200, 100], [250, 160]]);
+  expect(px[0][0]).toBeLessThan(80);
+  expect(px[1][0]).toBeLessThan(80); // the straight horizontal line
+  expect(px[2]).toEqual([255, 255, 255, 255]);
+});
