@@ -48,16 +48,61 @@ function hexRgb(c: string): [number, number, number] {
   return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
 }
 
+/**
+ * Coverage of a pencil line (no anti-aliasing): Bresenham's line between the pixels the points
+ * fall in, so it is one pixel thick at any angle (a distance test doubles pixels where a
+ * diagonal passes between two centers; user report 2026-11-10). Wider pencils stamp a hard
+ * disk of `size` px on each of those pixels.
+ */
+export function pencilCoverage(pts: Point[], w: number, h: number, size: number): Float32Array {
+  const cov = new Float32Array(w * h);
+  if (!pts.length) return cov;
+  // Offsets of a hard disk of diameter `size` around a pixel (just the pixel at size ≤ 1).
+  const r = size / 2;
+  const disk: [number, number][] = [];
+  const n = Math.ceil(r);
+  for (let dy = -n; dy <= n; dy++) for (let dx = -n; dx <= n; dx++) if (size <= 1 ? dx === 0 && dy === 0 : Math.hypot(dx, dy) <= r) disk.push([dx, dy]);
+  const plot = (x: number, y: number) => {
+    for (const [dx, dy] of disk) {
+      const px = x + dx;
+      const py = y + dy;
+      if (px >= 0 && py >= 0 && px < w && py < h) cov[py * w + px] = 1;
+    }
+  };
+  const cells = pts.map((p) => ({ x: Math.floor(p.x), y: Math.floor(p.y) }));
+  plot(cells[0].x, cells[0].y);
+  for (let i = 1; i < cells.length; i++) {
+    let { x, y } = cells[i - 1];
+    const { x: x1, y: y1 } = cells[i];
+    const dx = Math.abs(x1 - x);
+    const dy = -Math.abs(y1 - y);
+    const sx = x < x1 ? 1 : -1;
+    const sy = y < y1 ? 1 : -1;
+    let err = dx + dy;
+    while (x !== x1 || y !== y1) {
+      const e2 = 2 * err;
+      if (e2 >= dy) {
+        err += dy;
+        x += sx;
+      }
+      if (e2 <= dx) {
+        err += dx;
+        y += sy;
+      }
+      plot(x, y);
+    }
+  }
+  return cov;
+}
+
 /** The raster with the stroke applied. `scale` (≤1) is the preview downscale. */
 export function applyStroke(img: Raster, s: LocalStroke, scale = 1): Raster {
   const { width: w, height: h } = img;
-  const pencil = s.tool === 'pencil';
-  // The pencil goes through pixel centers, so a 1 px line is exactly one pixel wide.
-  const at = (v: number) => (pencil ? Math.floor(v) + 0.5 : v);
-  const pts = s.points.map((p) => ({ x: at(p.x * w), y: at(p.y * h) }));
-  // A 1 px pencil still marks at least the pixel under it.
-  const radius = Math.max(pencil ? 0.5 : 0.25, (s.size * scale) / 2);
-  const cov = strokeCoverage(pts, w, h, radius, pencil ? 1 : s.hardness, pencil);
+  const pts = s.points.map((p) => ({ x: p.x * w, y: p.y * h }));
+  const cov =
+    s.tool === 'pencil'
+      ? pencilCoverage(pts, w, h, s.size * scale)
+      : strokeCoverage(pts, w, h, Math.max(0.25, (s.size * scale) / 2), s.hardness, false);
   const out = new Uint8ClampedArray(img.data);
   const k = Math.min(1, Math.max(0, s.opacity));
   if (s.tool === 'eraser') {
