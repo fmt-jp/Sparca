@@ -65,6 +65,16 @@ const paths: Record<string, ReactElement> = {
   ),
   pencil: <path {...S} d="M4 16 L5 12 L13.5 3.5 L16.5 6.5 L8 15 Z M12 5 L15 8 M5 12 L8 15" />,
   eraser: <path {...S} d="M3.5 12.5 L10 6 L16 12 L11 17 H8 Z M7 9 L13 15 M11 17 H17" />,
+  clone: <path {...S} d="M7.5 3 H12.5 V6.5 L11.5 9 H15.5 a1 1 0 0 1 1 1 V13 H3.5 V10 a1 1 0 0 1 1 -1 H8.5 L7.5 6.5 Z M4 16.5 H16" />,
+  blur: <path {...S} d="M10 2.8 C10 2.8 4.5 9.2 4.5 12.3 a5.5 5.5 0 0 0 11 0 C15.5 9.2 10 2.8 10 2.8 Z" />,
+  sharpen: <path {...S} d="M10 2.5 L15.5 16.5 H4.5 Z" />,
+  dodge: (
+    <>
+      <circle {...S} cx="10" cy="7" r="4.5" />
+      <path {...S} d="M10 11.5 V17.5" />
+    </>
+  ),
+  burn: <path {...S} d="M4 12 C4 7 6 5 7.5 5 C8.5 5 8.5 7 7.5 8 L12 3.5 a1.4 1.4 0 0 1 2 2 L10 9.5 L14 6 a1.4 1.4 0 0 1 2 2 L11 13 C9 15.5 4 16 4 12 Z" />,
 };
 
 export function ToolIcon({ name }: { name: string }): ReactElement {

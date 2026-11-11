@@ -102,6 +102,49 @@ describe('brush strokes', () => {
     expect(pixel(pencil, 70, 20)[3]).toBe(255);
   });
 
+  it('コピースタンプ copies the pixels at its offset (as they were), nothing from outside', () => {
+    // Left half red, right half blue; copy from 50 px to the right onto the left half.
+    const img = createRaster(100, 40);
+    for (let y = 0; y < 40; y++) for (let x = 0; x < 100; x++) img.data.set(x < 50 ? [255, 0, 0, 255] : [0, 0, 255, 255], (y * 100 + x) * 4);
+    const out = applyStroke(img, stroke({ tool: 'clone', points: [{ x: 0.1, y: 0.5 }, { x: 0.4, y: 0.5 }], offset: { x: 0.5, y: 0 } }));
+    expect(pixel(out, 25, 20)).toEqual([0, 0, 255, 255]); // copied blue
+    expect(pixel(out, 25, 5)).toEqual([255, 0, 0, 255]); // off the stroke
+    // A source outside the image copies nothing.
+    const off = applyStroke(img, stroke({ tool: 'clone', points: [{ x: 0.7, y: 0.5 }, { x: 0.9, y: 0.5 }], offset: { x: 0.5, y: 0 } }));
+    expect(pixel(off, 80, 20)).toEqual([0, 0, 255, 255]);
+    // Half strength: halfway.
+    const half = applyStroke(img, stroke({ tool: 'clone', opacity: 0.5, points: [{ x: 0.1, y: 0.5 }, { x: 0.4, y: 0.5 }], offset: { x: 0.5, y: 0 } }));
+    expect(pixel(half, 25, 20)).toEqual([128, 0, 128, 255]);
+  });
+
+  it('ぼかし and シャープ change the contrast of an edge under the stroke only', () => {
+    const img = createRaster(100, 40);
+    for (let y = 0; y < 40; y++) for (let x = 0; x < 100; x++) img.data.set(x < 50 ? [60, 60, 60, 255] : [200, 200, 200, 255], (y * 100 + x) * 4);
+    const along = { points: [{ x: 0.5, y: 0.2 }, { x: 0.5, y: 0.8 }], size: 24, opacity: 1, hardness: 1 };
+    const blurred = applyStroke(img, stroke({ tool: 'blur', ...along }));
+    expect(pixel(blurred, 49, 20)[0]).toBeGreaterThan(70); // the edge softens
+    expect(pixel(blurred, 50, 20)[0]).toBeLessThan(190);
+    expect(pixel(blurred, 10, 20)[0]).toBe(60); // off the stroke
+    const sharp = applyStroke(img, stroke({ tool: 'sharpen', ...along }));
+    expect(pixel(sharp, 48, 20)[0]).toBeLessThan(60); // darker on the dark side
+    expect(pixel(sharp, 51, 20)[0]).toBeGreaterThan(200); // lighter on the light side
+    expect(pixel(sharp, 10, 20)[0]).toBe(60);
+  });
+
+  it('覆い焼き lightens and 焼き込み darkens, most in the chosen tones', () => {
+    const gray = (v: number) => fillRaster(createRaster(100, 40), [v, v, v, 255]);
+    const at = (r: ReturnType<typeof applyStroke>) => pixel(r, 50, 20)[0];
+    expect(at(applyStroke(gray(128), stroke({ tool: 'dodge', opacity: 1 })))).toBeGreaterThan(180);
+    expect(at(applyStroke(gray(128), stroke({ tool: 'burn', opacity: 1 })))).toBeLessThan(80);
+    // Midtones (default) barely touch black; shadows do.
+    expect(at(applyStroke(gray(10), stroke({ tool: 'dodge', opacity: 1 })))).toBeLessThan(40);
+    expect(at(applyStroke(gray(10), stroke({ tool: 'dodge', opacity: 1, range: 'shadows' })))).toBeGreaterThan(100);
+    // Highlights: a light gray darkens more with 焼き込み than a dark one.
+    const light = 220 - at(applyStroke(gray(220), stroke({ tool: 'burn', opacity: 1, range: 'highlights' })));
+    const dark = 40 - at(applyStroke(gray(40), stroke({ tool: 'burn', opacity: 1, range: 'highlights' })));
+    expect(light).toBeGreaterThan(dark * 3);
+  });
+
   it('coverage of a single click is a round dot', () => {
     const c = strokeCoverage([{ x: 10, y: 10 }], 20, 20, 3, 1, true);
     expect(c[10 * 20 + 10]).toBe(1);

@@ -18,7 +18,7 @@ import {
 } from '../model/handles';
 import { findObject, isEffectivelyLocked } from '../model/tree';
 import type { Box, Id, Paint, PathNode, PathObject, Point, SceneObject, ShapeGeometry, ShapeObject, SparcaDocument, StrokeTool, TextObject } from '../model/types';
-import { commitStroke, STROKE_TOOLS } from '../store/paintActions';
+import { commitStroke, RETOUCH_TOOLS, STROKE_TOOLS } from '../store/paintActions';
 import { snapToGuides, type GuideLine } from '../model/smartGuides';
 import type { PaintCategory } from '../model/toolDefaults';
 import { DocumentSvg } from '../render/DocumentSvg';
@@ -116,6 +116,8 @@ interface StrokePreview {
   settings: BrushSettings;
   /** The pixel selection the stroke is limited to. */
   clip: PixelSelection | null;
+  /** コピースタンプ: from where it paints to where it copies from (document px). */
+  cloneOffset?: Point;
 }
 
 export function CanvasView() {
@@ -144,6 +146,7 @@ export function CanvasView() {
   /** Where the last stroke ended (for Shift+click), per tab. */
   const lastStrokeEnd = useRef<{ tool: StrokeTool; at: Point } | null>(null);
   const brushes = useEditor((s) => s.brushes);
+  const cloneSource = useEditor((s) => s.cloneSource);
   // Committed strokes leave the screen once the image has been processed with them.
   const clearShownStrokes = useCallback(() => {
     if (pendingStrokes.current === 0 && imageCache.idle && gesture.current?.kind !== 'stroke') setStrokes((list) => (list.length ? [] : list));
@@ -529,7 +532,23 @@ export function CanvasView() {
 
     if (STROKE_TOOLS.has(effectiveTool)) {
       const tool = effectiveTool as StrokeTool;
-      const preview: StrokePreview = { tool, points: [p], settings: editor.getState().brushes[tool], clip: editor.getState().pixelSelection };
+      let cloneOffset: Point | undefined;
+      if (tool === 'clone') {
+        // Alt+click: the source. The first stroke after it fixes the offset kept by later
+        // strokes (位置をそろえる, as Fireworks and Photoshop's aligned mode).
+        if (e.altKey) {
+          editor.set({ cloneSource: { at: p, offset: null } });
+          return;
+        }
+        const cs = editor.getState().cloneSource;
+        if (!cs) {
+          editor.notify('error', 'コピー元を Alt+クリックで指定してから描いてください。');
+          return;
+        }
+        cloneOffset = cs.offset ?? { x: cs.at.x - p.x, y: cs.at.y - p.y };
+        if (!cs.offset) editor.set({ cloneSource: { ...cs, offset: cloneOffset } });
+      }
+      const preview: StrokePreview = { tool, points: [p], settings: editor.getState().brushes[tool], clip: editor.getState().pixelSelection, cloneOffset };
       gesture.current = { kind: 'stroke', preview, straight: e.shiftKey, moved: false };
       setStrokes((list) => [...list, preview]);
       return;
@@ -911,7 +930,7 @@ export function CanvasView() {
         }
         lastStrokeEnd.current = { tool: preview.tool, at: preview.points[preview.points.length - 1] };
         pendingStrokes.current++;
-        commitStroke(editor, preview.tool, preview.points)
+        commitStroke(editor, preview.tool, preview.points, preview.cloneOffset)
           .catch((err) => editor.notify('error', `描画に失敗しました: ${err instanceof Error ? err.message : String(err)}`))
           .finally(() => {
             pendingStrokes.current--;
@@ -1375,6 +1394,12 @@ export function CanvasView() {
             <StrokePreviewPath key={i} s={s} />
           ))}
           {STROKE_TOOLS.has(tool) && cursorPos && <BrushCursor at={cursorPos} size={brushes[tool as StrokeTool].size} zoom={zoom} />}
+          {tool === 'clone' && cloneSource && (
+            <CloneSourceMarker
+              at={cloneSource.offset && cursorPos ? { x: cursorPos.x + cloneSource.offset.x, y: cursorPos.y + cloneSource.offset.y } : cloneSource.at}
+              zoom={zoom}
+            />
+          )}
           {polyPoints && (
             <polyline points={polyPoints.map((q) => `${q.x},${q.y}`).join(' ')} className="ants-a" strokeWidth={1 / zoom} />
           )}
@@ -1555,14 +1580,30 @@ function StrokePreviewPath({ s }: { s: StrokePreview }) {
       <path
         d={d}
         fill="none"
-        stroke={s.tool === 'eraser' ? '#ffffff' : color}
-        strokeOpacity={s.tool === 'eraser' ? 0.85 * opacity : opacity}
+        stroke={s.tool === 'eraser' ? '#ffffff' : RETOUCH_TOOLS.has(s.tool) ? '#808080' : color}
+        strokeOpacity={s.tool === 'eraser' ? 0.85 * opacity : RETOUCH_TOOLS.has(s.tool) ? 0.35 : opacity}
         strokeWidth={width}
         shapeRendering={s.tool === 'pencil' ? 'crispEdges' : undefined}
         strokeLinecap="round"
         strokeLinejoin="round"
         filter={soft > 0 ? `url(#${id})` : undefined}
       />
+    </g>
+  );
+}
+
+/** コピースタンプ: where it copies from (a crosshair in a circle). */
+function CloneSourceMarker({ at, zoom }: { at: Point; zoom: number }) {
+  const k = 1 / zoom;
+  const r = 7 * k;
+  return (
+    <g className="clone-source" data-testid="clone-source" pointerEvents="none">
+      {[3, 1].map((w, i) => (
+        <g key={i} stroke={i ? '#fff' : 'rgba(0,0,0,0.6)'} strokeWidth={w * k} fill="none">
+          <circle cx={at.x} cy={at.y} r={r} />
+          <path d={`M${at.x - r * 1.6} ${at.y}H${at.x + r * 1.6}M${at.x} ${at.y - r * 1.6}V${at.y + r * 1.6}`} />
+        </g>
+      ))}
     </g>
   );
 }
