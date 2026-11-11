@@ -97,6 +97,7 @@ export function cropImage(doc: SparcaDocument, id: Id, f: Rect, srcW: number, sr
           ...e,
           points: e.points.map((p) => ({ x: (p.x - fx) / fw, y: (p.y - fy) / fh })),
           ...(e.clip ? { clip: remapMask(e.clip, fx, fy, fw, fh) } : {}),
+          ...(e.offset ? { offset: { x: e.offset.x / fw, y: e.offset.y / fh } } : {}),
         }
       : { ...e, mask: remapMask(e.mask, fx, fy, fw, fh) },
   );

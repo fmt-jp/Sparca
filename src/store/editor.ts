@@ -5,7 +5,7 @@ import { createDocument } from '../model/factory';
 import type { FileSystemFileHandleLike } from '../io/files';
 import { newId } from '../model/factory';
 import { DEFAULT_TOOL_DEFAULTS, type ToolCategory, type ToolDefaults } from '../model/toolDefaults';
-import type { Id, MaskShape, Point, SparcaDocument, StrokeTool } from '../model/types';
+import type { Id, MaskShape, Point, SparcaDocument, StrokeTool, ToneRange } from '../model/types';
 import { findObject } from '../model/tree';
 
 export type ToolId =
@@ -31,7 +31,12 @@ export type ToolId =
   | 'text'
   | 'brush'
   | 'pencil'
-  | 'eraser';
+  | 'eraser'
+  | 'clone'
+  | 'blur'
+  | 'sharpen'
+  | 'dodge'
+  | 'burn';
 
 /** Pixel (area) selection, kept in document coordinates (edge lengths in document px). Distinct from object selection. */
 export type PixelSelection = MaskShape;
@@ -113,6 +118,7 @@ const SESSION_KEYS = [
   'compareImageId',
   'zoom',
   'maskEdit',
+  'cloneSource',
 ] as const;
 type SessionKey = (typeof SESSION_KEYS)[number];
 type Session = Pick<EditorState, SessionKey>;
@@ -175,6 +181,11 @@ export interface EditorState {
   toolDefaults: ToolDefaults;
   /** Settings of the brush, pencil and eraser (a per-browser preference). */
   brushes: BrushSettingsByTool;
+  /**
+   * コピースタンプ: the source set with Alt+click (document coordinates), and once the first
+   * stroke after it began, the offset from where strokes paint to where they copy from.
+   */
+  cloneSource: { at: Point; offset: Point | null } | null;
   notices: Notice[];
   /** Non-null while a long-running task is in progress. */
   busy: string | null;
@@ -189,8 +200,10 @@ export interface BrushSettings {
   hardness: number;
   /** Not used by the eraser. */
   color: string;
-  /** 0..1 */
+  /** 0..1 (the strength of the retouch tools) */
   opacity: number;
+  /** 覆い焼き・焼き込み: the tones they act on. */
+  range?: ToneRange;
 }
 
 export type BrushSettingsByTool = Record<StrokeTool, BrushSettings>;
@@ -201,6 +214,11 @@ export const DEFAULT_BRUSHES: BrushSettingsByTool = {
   brush: { size: 12, hardness: 0.6, color: '#000000', opacity: 1 },
   pencil: { size: 1, hardness: 1, color: '#000000', opacity: 1 },
   eraser: { size: 24, hardness: 0.6, color: '#000000', opacity: 1 },
+  clone: { size: 30, hardness: 0.5, color: '#000000', opacity: 1 },
+  blur: { size: 30, hardness: 0.5, color: '#000000', opacity: 0.5 },
+  sharpen: { size: 30, hardness: 0.5, color: '#000000', opacity: 0.5 },
+  dodge: { size: 40, hardness: 0.3, color: '#000000', opacity: 0.5, range: 'midtones' },
+  burn: { size: 40, hardness: 0.3, color: '#000000', opacity: 0.5, range: 'midtones' },
 };
 
 type Listener = () => void;
@@ -521,5 +539,6 @@ function freshSession(doc: SparcaDocument, fileName: string, fileHandle: FileSys
     compareImageId: null,
     zoom: 1,
     maskEdit: null,
+    cloneSource: null,
   };
 }

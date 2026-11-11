@@ -46,6 +46,17 @@ export const TOOL_GROUPS: ToolGroup[] = [
       { id: 'eraser', label: '消しゴムツール（選択中の画像を消す）', key: 'E' },
     ],
   },
+  {
+    id: 'retouch',
+    label: 'レタッチ',
+    tools: [
+      { id: 'clone', label: 'コピースタンプツール（Alt+クリックでコピー元を指定し、ドラッグで写す）', key: 'S' },
+      { id: 'blur', label: 'ぼかしブラシ', key: 'O' },
+      { id: 'sharpen', label: 'シャープブラシ', key: 'O' },
+      { id: 'dodge', label: '覆い焼きツール（明るく）', key: 'O' },
+      { id: 'burn', label: '焼き込みツール（暗く）', key: 'O' },
+    ],
+  },
   { id: 'line', label: 'ライン', tools: [{ id: 'line', label: 'ラインツール', key: 'N' }] },
   { id: 'pen', label: 'ペン', tools: [{ id: 'pen', label: 'ペンツール（クリックで角、ドラッグで曲線、始点クリックで閉じる、Enter で終了）', key: 'P' }] },
   {

@@ -12,9 +12,26 @@ import { importImageFile } from './assets';
 import { writableLayer } from './actions';
 import type { EditorStore } from './editor';
 
-export const STROKE_TOOLS: ReadonlySet<string> = new Set<StrokeTool>(['brush', 'pencil', 'eraser']);
+export const STROKE_TOOLS: ReadonlySet<string> = new Set<StrokeTool>(['brush', 'pencil', 'eraser', 'clone', 'blur', 'sharpen', 'dodge', 'burn']);
 
-export const STROKE_LABELS: Record<StrokeTool, string> = { brush: 'ブラシ', pencil: '鉛筆', eraser: '消しゴム' };
+/** Tools that change the selected image's own pixels (no new image when none is selected). */
+export const RETOUCH_TOOLS: ReadonlySet<string> = new Set<StrokeTool>(['clone', 'blur', 'sharpen', 'dodge', 'burn']);
+
+export const STROKE_LABELS: Record<StrokeTool, string> = {
+  brush: 'ブラシ',
+  pencil: '鉛筆',
+  eraser: '消しゴム',
+  clone: 'コピースタンプ',
+  blur: 'ぼかしブラシ',
+  sharpen: 'シャープブラシ',
+  dodge: '覆い焼き',
+  burn: '焼き込み',
+};
+
+/** 「…で描画」「…で消去」「…で加工」 */
+function verb(tool: StrokeTool): string {
+  return tool === 'eraser' ? '消去' : RETOUCH_TOOLS.has(tool) ? '加工' : '描画';
+}
 
 /** The one selected image a stroke goes onto (null: none, or something else selected). */
 export function strokeTarget(ed: EditorStore): ImageObject | null {
@@ -31,8 +48,14 @@ function pxPerDoc(doc: SparcaDocument, o: ImageObject): number {
   return (size.width / o.box.width + size.height / o.box.height) / 2;
 }
 
+/** Document points in image `o`'s normalized frame. */
+function normalized(o: ImageObject, points: Point[]): Point[] {
+  const shape = selectionToImageMask(o, { kind: 'polygon', points });
+  return shape.kind === 'polygon' ? shape.points : [];
+}
+
 /** The stroke along `points` (document coordinates) as an edit of image `o`, with the tool's settings. */
-function strokeFor(ed: EditorStore, o: ImageObject, tool: StrokeTool, points: Point[]): LocalStroke {
+function strokeFor(ed: EditorStore, o: ImageObject, tool: StrokeTool, points: Point[], cloneOffset?: Point): LocalStroke {
   const s = ed.getState().brushes[tool];
   const shape = selectionToImageMask(o, { kind: 'polygon', points });
   const k = pxPerDoc(ed.getState().doc, o);
@@ -47,6 +70,14 @@ function strokeFor(ed: EditorStore, o: ImageObject, tool: StrokeTool, points: Po
     hardness: tool === 'pencil' ? 1 : s.hardness,
     color: s.color,
     opacity: s.opacity,
+    ...(tool === 'dodge' || tool === 'burn' ? { range: s.range ?? 'midtones' } : {}),
+    // コピースタンプ: the document offset to the source, as an offset in the image's frame.
+    ...(tool === 'clone' && cloneOffset
+      ? (() => {
+          const [a, b] = normalized(o, [points[0], { x: points[0].x + cloneOffset.x, y: points[0].y + cloneOffset.y }]);
+          return { offset: { x: b.x - a.x, y: b.y - a.y } };
+        })()
+      : {}),
   };
 }
 
@@ -61,9 +92,13 @@ async function blankPng(w: number, h: number): Promise<Blob> {
  * Draw a stroke of `tool` along `points` (document coordinates): onto the selected image, or
  * (brush and pencil) onto a new transparent image covering the canvas. One undo step.
  */
-export async function commitStroke(ed: EditorStore, tool: StrokeTool, points: Point[]): Promise<boolean> {
+export async function commitStroke(ed: EditorStore, tool: StrokeTool, points: Point[], cloneOffset?: Point): Promise<boolean> {
   if (!points.length) return false;
-  const label = `${STROKE_LABELS[tool]}で${tool === 'eraser' ? '消去' : '描画'}`;
+  if (tool === 'clone' && !cloneOffset) {
+    ed.notify('error', 'コピー元を Alt+クリックで指定してから描いてください。');
+    return false;
+  }
+  const label = `${STROKE_LABELS[tool]}で${verb(tool)}`;
   const target = strokeTarget(ed);
   if (target) {
     const loc = findObject(ed.getState().doc, target.id);
@@ -71,7 +106,7 @@ export async function commitStroke(ed: EditorStore, tool: StrokeTool, points: Po
       ed.notify('error', 'ロック中の画像には描けません。');
       return false;
     }
-    const stroke = strokeFor(ed, target, tool, points);
+    const stroke = strokeFor(ed, target, tool, points, cloneOffset);
     ed.edit(label, (d) => {
       const t = findObject(d, target.id);
       if (t?.object.type === 'image') t.object.pipeline.localEdits.push(stroke);
@@ -80,6 +115,10 @@ export async function commitStroke(ed: EditorStore, tool: StrokeTool, points: Po
   }
   if (tool === 'eraser') {
     ed.notify('error', '消しゴムで消す画像を選択してください。');
+    return false;
+  }
+  if (RETOUCH_TOOLS.has(tool)) {
+    ed.notify('error', `${STROKE_LABELS[tool]}で加工する画像を選択してください。`);
     return false;
   }
   const layerId = writableLayer(ed, ed.getState().activeLayerId);

@@ -9,7 +9,7 @@ import { METHOD_LABELS } from '../engine/resample';
 import { autoColor, cancelCrop, commitCrop, fitCanvasToContent, pixelTargetImage, resetAdjust, setAdjust, setCropTarget } from '../store/imageActions';
 import { openDialog } from './dialogs';
 import { BRUSH_SIZE, FEATHER_LIMITS, type BrushSettings, type SelectionEdge } from '../store/editor';
-import { STROKE_LABELS, STROKE_TOOLS, strokeTarget } from '../store/paintActions';
+import { RETOUCH_TOOLS, STROKE_LABELS, STROKE_TOOLS, strokeTarget } from '../store/paintActions';
 import { moveAnchors } from '../model/pathEdit';
 import { convertSelectedNodes, deleteSelectedNodes, flatPath, selectedNodes, selectedOutline, setPathClosed, setPathNodes } from '../store/pathActions';
 import { fitTextBox } from '../render/text';
@@ -136,6 +136,11 @@ const TOOL_HINT: Partial<Record<string, string>> = {
   eyedropper: 'クリックした位置の色を取得します。',
   brush: 'ドラッグで描きます（クリックで点）。Shift+ドラッグで水平・垂直・45° の直線、Shift+クリックで直前の線の終わりから直線。描く先は選択中の画像、なければ新しい透明な画像です。',
   pencil: 'ドラッグでくっきりした線を描きます（クリックで点）。Shift+ドラッグで水平・垂直・45° の直線、Shift+クリックで直前の線の終わりから直線。描く先は選択中の画像、なければ新しい透明な画像です。',
+  clone: 'Alt+クリックでコピー元を指定し、ドラッグで選択中の画像に写します（ゴミや写り込みを周りの画素で消す）。コピー元とのずれは、指定し直すまで保たれます。',
+  blur: 'ドラッグした所をぼかします。',
+  sharpen: 'ドラッグした所をくっきりさせます。',
+  dodge: 'ドラッグした所を明るくします（範囲で、効かせる明るさを選べます）。',
+  burn: 'ドラッグした所を暗くします（範囲で、効かせる明るさを選べます）。',
   eraser: 'ドラッグで選択中の画像を消します（透明になります）。Shift+ドラッグで直線、Shift+クリックで直前の線の終わりから直線。',
   text: 'クリックでテキストを追加。既存テキストをクリックで編集。Esc または Ctrl+Enter で確定。',
   hand: 'ドラッグで表示位置を移動。',
@@ -679,12 +684,17 @@ function StrokeToolSection({ tool }: { tool: StrokeTool }) {
   const s = useEditor((st) => st.brushes[tool]);
   const target = useEditor(() => strokeTarget(editor));
   const selActive = useEditor((st) => !!st.pixelSelection);
+  const cloneSource = useEditor((st) => st.cloneSource);
   const set = (patch: Partial<BrushSettings>) => editor.set({ brushes: { ...editor.getState().brushes, [tool]: { ...s, ...patch } } });
+  const retouch = RETOUCH_TOOLS.has(tool);
+  const strength = tool === 'eraser' || retouch;
   const where = target
-    ? `選択中の画像「${target.name}」に${tool === 'eraser' ? 'かけます' : '描きます'}。`
+    ? `選択中の画像「${target.name}」に${tool === 'eraser' || retouch ? 'かけます' : '描きます'}。`
     : tool === 'eraser'
       ? '消す画像を選択ツールで選んでください。'
-      : '画像を選んでいないので、キャンバスと同じ大きさの新しい透明な画像に描きます（描いたあとはその画像が選ばれ、続けて描けます）。';
+      : retouch
+        ? '加工する画像を選択ツールで選んでください。'
+        : '画像を選んでいないので、キャンバスと同じ大きさの新しい透明な画像に描きます（描いたあとはその画像が選ばれ、続けて描けます）。';
   return (
     <div className="prop-section" data-testid="stroke-tool-panel">
       <span className="section-title">{STROKE_LABELS[tool]}</span>
@@ -696,14 +706,14 @@ function StrokeToolSection({ tool }: { tool: StrokeTool }) {
           <PopupSliderInput label={`${STROKE_LABELS[tool]}の硬さ`} value={Math.round(s.hardness * 100)} min={0} max={100} suffix="%" onChange={(v) => set({ hardness: v / 100 })} />
         </Field>
       )}
-      {tool !== 'eraser' && (
+      {!strength && (
         <Field label="色">
           <ColorInput label={`${STROKE_LABELS[tool]}の色`} value={s.color} onChange={(c) => set({ color: c ?? '#000000' })} />
         </Field>
       )}
-      <Field label={tool === 'eraser' ? '強さ' : '不透明度'}>
+      <Field label={strength ? '強さ' : '不透明度'}>
         <PopupSliderInput
-          label={`${STROKE_LABELS[tool]}の${tool === 'eraser' ? '強さ' : '不透明度'}`}
+          label={`${STROKE_LABELS[tool]}の${strength ? '強さ' : '不透明度'}`}
           value={Math.round(s.opacity * 100)}
           min={1}
           max={100}
@@ -711,8 +721,34 @@ function StrokeToolSection({ tool }: { tool: StrokeTool }) {
           onChange={(v) => set({ opacity: v / 100 })}
         />
       </Field>
-      {selActive && <span className="hint" data-testid="stroke-in-selection">範囲選択中：選択範囲の内側だけに{tool === 'eraser' ? 'かかります' : '描きます'}（Esc で解除）。</span>}
-      <span className="hint">{where}描いた線は画像の編集情報として残り（元の画素はそのまま）、取り消しや「部分加工」の「最後の1件を削除」で戻せます。</span>
+      {(tool === 'dodge' || tool === 'burn') && (
+        <Field label="範囲">
+          <span className="radio-row" role="radiogroup" aria-label={`${STROKE_LABELS[tool]}の範囲`}>
+            {(
+              [
+                ['shadows', 'シャドウ'],
+                ['midtones', '中間調'],
+                ['highlights', 'ハイライト'],
+              ] as const
+            ).map(([v, l]) => (
+              <label key={v}>
+                <input type="radio" checked={(s.range ?? 'midtones') === v} onChange={() => set({ range: v })} /> {l}
+              </label>
+            ))}
+          </span>
+        </Field>
+      )}
+      {tool === 'clone' && (
+        <span className="hint" data-testid="clone-status">
+          {cloneSource
+            ? cloneSource.offset
+              ? 'コピー元：指定済み（描くたびに同じずれで写します。Alt+クリックで指定し直し）。'
+              : 'コピー元：指定済み。描き始めた所に、コピー元の画素を写します。'
+            : 'コピー元：未指定。Alt+クリックでコピー元を指定してください。'}
+        </span>
+      )}
+      {selActive && <span className="hint" data-testid="stroke-in-selection">範囲選択中：選択範囲の内側だけに{strength ? 'かかります' : '描きます'}（Esc で解除）。</span>}
+      <span className="hint">{where}{retouch ? '加工は' : '描いた線は'}画像の編集情報として残り（元の画素はそのまま）、取り消しや「部分加工」の「最後の1件を削除」で戻せます。</span>
     </div>
   );
 }
@@ -856,7 +892,7 @@ function CropSection() {
   );
 }
 
-const LOCAL_EDIT_NAMES: Record<LocalEdit['kind'], string> = { blur: '部分ぼかし', mosaic: '部分モザイク', erase: '部分消去', stroke: 'ブラシの筆跡' };
+const LOCAL_EDIT_NAMES: Record<LocalEdit['kind'], string> = { blur: '部分ぼかし', mosaic: '部分モザイク', erase: '部分消去', stroke: '筆跡・レタッチ' };
 
 /** e.g. 「部分加工 3 件（ぼかし 2・モザイク 1）」 */
 function localEditsSummary(edits: LocalEdit[]): string {

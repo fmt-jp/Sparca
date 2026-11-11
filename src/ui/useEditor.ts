@@ -157,6 +157,7 @@ function sanitizeBrushes(v: Record<string, unknown>): BrushSettingsByTool {
       hardness: n(s.hardness, 0, 1, d.hardness),
       opacity: n(s.opacity, 0, 1, d.opacity),
       color: typeof s.color === 'string' && /^#[0-9a-f]{6}$/i.test(s.color) ? s.color : d.color,
+      ...(d.range ? { range: s.range === 'shadows' || s.range === 'midtones' || s.range === 'highlights' ? s.range : d.range } : {}),
     };
   }
   return out;

@@ -426,9 +426,19 @@ export interface LocalStroke {
    * only paints inside it (2026-11-10).
    */
   clip?: MaskShape;
+  /**
+   * コピースタンプ: where it copies from, relative to where it paints (image-normalized). The
+   * same for every stroke until a new source is set (位置をそろえる; 2026-11-11).
+   */
+  offset?: Point;
+  /** 覆い焼き・焼き込み: which tones it works on (default midtones). */
+  range?: ToneRange;
 }
 
-export type StrokeTool = 'brush' | 'pencil' | 'eraser';
+/** Brush tools (2026-11-09) and retouch tools (2026-11-11), all kept as strokes. */
+export type StrokeTool = 'brush' | 'pencil' | 'eraser' | 'clone' | 'blur' | 'sharpen' | 'dodge' | 'burn';
+
+export type ToneRange = 'shadows' | 'midtones' | 'highlights';
 
 export type LocalEdit = LocalBlur | LocalMosaic | LocalErase | LocalStroke;
 
