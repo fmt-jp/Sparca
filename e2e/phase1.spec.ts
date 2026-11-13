@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { readFileSync } from 'node:fs';
-import { canvasBox, disableNativePickers, drag, makePng, placePng, state } from './helpers';
+import { canvasBox, disableNativePickers, drag, makePng, placePng, state, confirmSaveName } from './helpers';
 
 test.beforeEach(async ({ page }) => {
   await disableNativePickers(page);
@@ -159,6 +159,7 @@ test('saves a project and reopens it for further editing', async ({ page }) => {
 
   const dl = page.waitForEvent('download');
   await page.keyboard.press('Control+s');
+  await confirmSaveName(page);
   const download = await dl;
   expect(download.suggestedFilename()).toMatch(/\.hnb\.png$/);
   const path = await download.path();

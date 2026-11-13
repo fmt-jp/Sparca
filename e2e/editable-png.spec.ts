@@ -1,7 +1,7 @@
 // 編集できる PNG (.hnb.png): the default save format — a normal PNG of the canvas that HANABI opens as a project.
 import { expect, test, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
-import { canvasBox, decodePixels, disableNativePickers, drag, setColor, state } from './helpers';
+import { canvasBox, decodePixels, disableNativePickers, drag, setColor, state, confirmSaveName } from './helpers';
 
 const props = (page: Page) => page.getByRole('region', { name: 'プロパティ' });
 
@@ -20,6 +20,7 @@ test('Ctrl+S saves an editable PNG: the picture of the canvas, and it reopens fo
   const before = await state<unknown>(page, 's => s.doc');
   const dl = page.waitForEvent('download');
   await page.keyboard.press('Control+s');
+  await confirmSaveName(page);
   const download = await dl;
   expect(download.suggestedFilename()).toBe('untitled.hnb.png');
   const bytes = readFileSync((await download.path())!);
@@ -143,4 +144,40 @@ test('a name that comes back without an extension keeps the suggested format', a
   await expect.poll(() => page.evaluate(() => (window as unknown as { __writes: unknown[] }).__writes.length)).toBe(1);
   // An editable PNG (the default for an untitled document): the PNG signature.
   expect(await page.evaluate(() => (window as unknown as { __writes: number[][] }).__writes[0])).toEqual([0x89, 0x50, 0x4e, 0x47]);
+});
+
+test('without a save dialog (Firefox): 名前を付けて保存 asks for the name; 保存 keeps it and says it cannot overwrite', async ({ page }) => {
+  await disableNativePickers(page);
+  await page.goto('/');
+  await expect(props(page)).toBeVisible();
+  await redRect(page);
+  // The first 保存 of a new document asks for the name. (ASCII names here: headless Chromium
+  // drops non-ASCII download names; Firefox keeps them.)
+  let dl = page.waitForEvent('download');
+  await page.keyboard.press('Control+s');
+  const dlg = page.getByRole('dialog', { name: '名前を付けて保存' });
+  await expect(dlg.getByLabel('ファイル名')).toHaveValue('untitled');
+  await expect(dlg).toContainText('.hnb.png');
+  await confirmSaveName(page, 'poster');
+  expect((await dl).suggestedFilename()).toBe('poster.hnb.png');
+  expect(await state(page, 's => s.fileName')).toBe('poster.hnb.png');
+  await expect(page.locator('.notice').last()).toContainText('上書きができない');
+  // 保存 again: no question, the same name.
+  await page.keyboard.press('Delete');
+  dl = page.waitForEvent('download');
+  await page.keyboard.press('Control+s');
+  expect((await dl).suggestedFilename()).toBe('poster.hnb.png');
+  await expect(page.getByRole('dialog', { name: '名前を付けて保存' })).toHaveCount(0);
+  // 名前を付けて保存 asks again; キャンセル saves nothing.
+  await page.keyboard.press('Control+Shift+S');
+  await expect(dlg.getByLabel('ファイル名')).toHaveValue('poster');
+  await dlg.getByRole('button', { name: 'キャンセル' }).click();
+  await expect(dlg).toHaveCount(0);
+  // HANABI プロジェクトとして保存: asks, saves as .hnb.
+  dl = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'ファイル' }).click();
+  await page.getByRole('menuitem', { name: 'HANABI プロジェクトとして保存…（.hnb）' }).click();
+  await expect(dlg).toContainText('.hnb');
+  await confirmSaveName(page, 'work2');
+  expect((await dl).suggestedFilename()).toBe('work2.hnb');
 });

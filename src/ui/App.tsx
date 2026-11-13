@@ -18,11 +18,12 @@ import type { ToolId } from '../store/editor';
 import { CanvasSizeDialog } from './CanvasSizeDialog';
 import { CanvasView } from './CanvasView';
 import { BlurSelectionDialog } from './BlurSelectionDialog';
-import { askImagePlacement, closeDialog, openDialog, useDialog } from './dialogs';
+import { askImagePlacement, askSaveName, closeDialog, openDialog, useDialog } from './dialogs';
+import { SaveNameDialog } from './SaveNameDialog';
 import { ImagePlacementDialog } from './ImagePlacementDialog';
 import { RestoreDialog } from './RestoreDialog';
 import { leftoverWork, restoreWork, startAutosave } from '../store/autosave';
-import { setPlacementPrompt } from '../store/actions';
+import { setPlacementPrompt, setSaveNamePrompt } from '../store/actions';
 import { ExportDialog } from './ExportDialog';
 import { PreferencesDialog } from './PreferencesDialog';
 import { AddMaskDialog } from './AddMaskDialog';
@@ -91,7 +92,11 @@ export function App() {
   // Placing an image larger than the canvas asks how (unless a choice is remembered).
   useEffect(() => {
     setPlacementPrompt(askImagePlacement);
-    return () => setPlacementPrompt(null);
+    setSaveNamePrompt(askSaveName);
+    return () => {
+      setPlacementPrompt(null);
+      setSaveNamePrompt(null);
+    };
   }, []);
 
   useEffect(() => {
@@ -176,6 +181,7 @@ export function App() {
       {dialog?.kind === 'export' && <ExportDialog onClose={closeDialog} />}
       {dialog?.kind === 'preferences' && <PreferencesDialog onClose={closeDialog} />}
       {dialog?.kind === 'restore' && <RestoreDialog records={dialog.records} onClose={closeDialog} />}
+      {dialog?.kind === 'save-name' && <SaveNameDialog question={dialog.question} answer={dialog.answer} />}
       {dialog?.kind === 'add-mask' && <AddMaskDialog onClose={closeDialog} />}
       {dialog?.kind === 'image-placement' && <ImagePlacementDialog question={dialog.question} answer={dialog.answer} />}
       <div className="notices" role="status" aria-live="polite">

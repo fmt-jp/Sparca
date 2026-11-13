@@ -1,7 +1,7 @@
 // 自動保存 (2026-11-10): unsaved tabs are kept in the browser; at start, work left by a window
 // that is gone is restored after asking, or at once (環境設定).
 import { expect, test, type Page } from '@playwright/test';
-import { canvasBox, disableNativePickers, drag, state } from './helpers';
+import { canvasBox, confirmSaveName, disableNativePickers, drag, state } from './helpers';
 
 const ready = (page: Page) => expect(page.getByRole('region', { name: 'プロパティ' })).toBeVisible();
 const flush = (page: Page) => page.evaluate(() => (window as unknown as { __sparcaAutosave: { flush(): Promise<void> } }).__sparcaAutosave.flush());
@@ -94,6 +94,7 @@ test('saving to a file removes the copy; work of another open window is not offe
   // Saved (download): the copy goes.
   const dl = page.waitForEvent('download');
   await page.keyboard.press('Control+s');
+  await confirmSaveName(page);
   await dl;
   await expect.poll(() => records(page)).toBe(0);
 });
