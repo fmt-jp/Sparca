@@ -16,7 +16,7 @@ import { IDENTITY_TRANSFORM, unionBounds } from '../model/geometry';
 import { cloneWithNewIds, findObject, isEffectivelyLocked, walkObjects } from '../model/tree';
 import type { Background, SceneObject, SparcaDocument } from '../model/types';
 import { IMAGE_ACCEPT, stripImageExtension } from '../io/imageFormats';
-import { isAbort, pickFiles, pickSaveFile, saveBlob } from '../io/files';
+import { hasFileSystemAccess, isAbort, pickFiles, pickSaveFile, saveBlob } from '../io/files';
 import { EDITABLE_PNG_EXTENSION, EditablePngError, embedProject, extractProject, isEditablePngName, isPng } from '../io/editablePng';
 import { exportImage, ExportError } from '../io/export';
 import { newMask, settleMask } from '../model/mask';
@@ -183,6 +183,22 @@ const HNB_TYPE = { description: 'HANABI プロジェクト', accept: { [PROJECT_
 
 export type SaveFormat = 'png' | 'hnb';
 
+/** What the name window asks: the name without extension, saved with `extension`. */
+export interface SaveNameQuestion {
+  name: string;
+  extension: string;
+}
+type SaveNamePrompt = (q: SaveNameQuestion) => Promise<string | null>;
+let saveNamePrompt: SaveNamePrompt | null = null;
+
+/**
+ * The UI's way of asking for a file name where the browser has no save dialog (Firefox and
+ * others: saving is a download; user report 2026-11-13). Without one, the suggested name is used.
+ */
+export function setSaveNamePrompt(fn: SaveNamePrompt | null): void {
+  saveNamePrompt = fn;
+}
+
 /**
  * Save as an editable PNG (the canvas as a picture, with the project inside) or a .hnb project.
  * - 保存 (Ctrl+S): overwrites the file (its format); the first save of a new document asks where.
@@ -194,7 +210,16 @@ export async function saveProject(ed: EditorStore, saveAs = false, format?: Save
   try {
     const current: SaveFormat = isEditablePngName(projectName(fileName)) ? 'png' : 'hnb';
     const fmt = format ?? current;
-    const suggested = withoutProjectExtension(projectName(fileName)) + (fmt === 'png' ? EDITABLE_PNG_EXTENSION : PROJECT_EXTENSION);
+    const ext = fmt === 'png' ? EDITABLE_PNG_EXTENSION : PROJECT_EXTENSION;
+    let suggested = withoutProjectExtension(projectName(fileName)) + ext;
+    // A browser without a save dialog downloads: HANABI asks for the name itself when one is to
+    // be chosen (名前を付けて保存, another format, the first save of a new document).
+    const download = !hasFileSystemAccess() && !fileHandle;
+    if (download && (saveAs || format !== undefined || fileName === UNTITLED) && saveNamePrompt) {
+      const typed = await saveNamePrompt({ name: withoutProjectExtension(projectName(fileName)), extension: ext });
+      if (typed === null) return false;
+      suggested = withoutProjectExtension(typed.trim() || 'untitled') + ext;
+    }
     // Ask where to save first; a known file in the same format is overwritten.
     let target = saveAs || fmt !== current ? null : fileHandle;
     if (!target) {
@@ -225,7 +250,12 @@ export async function saveProject(ed: EditorStore, saveAs = false, format?: Save
     // The user may have switched tabs while saving: only mark the saved document.
     if (ed.getState().doc === doc) ed.markSaved(handle ? handle.name : name, handle);
     else ed.notify('info', `「${fileName}」を保存しました。保存後の変更は未保存です。`);
-    ed.notify('info', '保存しました。');
+    ed.notify(
+      'info',
+      handle
+        ? '保存しました。'
+        : `「${name}」としてダウンロードしました。このブラウザはファイルの上書きができないため、保存するたびに新しいファイルになります（同じ名前があると、ブラウザが名前に (1) などを付けます）。上書き保存は Chrome・Edge で使えます。`,
+    );
     return true;
   } catch (e) {
     ed.notify(

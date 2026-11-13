@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react';
-import type { PlacementAnswer, PlacementQuestion } from '../store/actions';
+import type { PlacementAnswer, PlacementQuestion, SaveNameQuestion } from '../store/actions';
 import type { AutosaveRecord } from '../store/autosave';
 
 export type DialogState =
@@ -12,6 +12,7 @@ export type DialogState =
   | { kind: 'export' }
   | { kind: 'preferences' }
   | { kind: 'restore'; records: AutosaveRecord[] }
+  | { kind: 'save-name'; question: SaveNameQuestion; answer: (name: string | null) => void }
   | { kind: 'add-mask' }
   | { kind: 'image-placement'; question: PlacementQuestion; answer: (a: PlacementAnswer | null) => void }
   | { kind: 'help'; section?: string }
@@ -48,6 +49,20 @@ export function askImagePlacement(question: PlacementQuestion): Promise<Placemen
       answer: (a) => {
         closeDialog();
         resolve(a);
+      },
+    });
+  });
+}
+
+/** Ask for a file name to download a save as (browsers without a save dialog). */
+export function askSaveName(question: SaveNameQuestion): Promise<string | null> {
+  return new Promise((resolve) => {
+    openDialog({
+      kind: 'save-name',
+      question,
+      answer: (name) => {
+        closeDialog();
+        resolve(name);
       },
     });
   });

@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { readFileSync } from 'node:fs';
-import { disableNativePickers, makePng, placePng, state } from './helpers';
+import { disableNativePickers, makePng, placePng, state, confirmSaveName } from './helpers';
 
 test.beforeEach(async ({ page }) => {
   await disableNativePickers(page);
@@ -19,6 +19,7 @@ test('an image copied into a new document can be saved and reopened there', asyn
   await expect(page.locator('[data-testid=canvas] image')).toHaveCount(1);
   const dl = page.waitForEvent('download');
   await page.keyboard.press('Control+s');
+  await confirmSaveName(page);
   const path = await (await dl).path();
   await expect(page.locator('.notice.error')).toHaveCount(0);
   await page.reload();
@@ -44,6 +45,7 @@ test('an image-processing failure is reported to the user', async ({ page }) => 
 test('opening a corrupt project shows the reason and keeps the current document', async ({ page }) => {
   await placePng(page, 'x.png', makePng(4, 4, () => [0, 0, 0, 255]));
   await page.keyboard.press('Control+s'); // save so no confirmation is needed
+  await confirmSaveName(page);
   const chooser = page.waitForEvent('filechooser');
   await page.getByRole('button', { name: 'ファイル' }).click();
   await page.getByRole('menuitem', { name: /開く/ }).click();

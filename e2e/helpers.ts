@@ -188,3 +188,10 @@ export async function addEffect(page: Page, group: string, kind: string) {
   await page.getByRole('menuitem', { name: group }).hover();
   await page.getByRole('menuitem', { name: kind, exact: true }).click();
 }
+
+/** Where the browser has no save dialog, HANABI asks for the file name: confirm it (optionally typing one). */
+export async function confirmSaveName(page: Page, name?: string) {
+  const dlg = page.getByRole('dialog', { name: '名前を付けて保存' });
+  if (name !== undefined) await dlg.getByLabel('ファイル名').fill(name);
+  await dlg.getByRole('button', { name: '保存', exact: true }).click();
+}
