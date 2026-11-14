@@ -23,6 +23,7 @@ import { menuCopy, menuPaste } from './clipboard';
 import { canConvertSelectionToPaths, convertSelectionToPaths } from '../store/pathActions';
 import { canCombineSelection, COMBINE_LABELS } from '../store/pathCombine';
 import { attachTextToPath, canAttachTextToPath, canDetachTextFromPath, detachTextFromPath } from '../store/textPathActions';
+import { canOutlineText, outlineSelectedText } from '../store/textOutlineActions';
 import { COMBINE_OPS, runCombine } from './combine';
 import { editor, useEditor } from './useEditor';
 
@@ -136,6 +137,7 @@ export function MenuBar({ onNew }: { onNew: () => void }) {
         { label: 'グループ解除', shortcut: `${mod}Shift+G`, action: () => ungroupSelection(editor), disabled: !hasSel },
         { separator: true, label: '' },
         { label: 'パスに変換', action: () => convertSelectionToPaths(editor), disabled: !canConvertSelectionToPaths(editor) },
+        { label: 'テキストをアウトライン化', shortcut: `${mod}Shift+O`, action: () => void outlineSelectedText(editor), disabled: !canOutlineText(editor) },
         {
           label: 'パスの結合',
           disabled: !canCombineSelection(editor),

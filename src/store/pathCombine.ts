@@ -42,7 +42,7 @@ function combineInputs(ed: EditorStore): { objects: { o: SceneObject; contours: 
     const loc = findObject(doc, id);
     if (!loc || isEffectivelyLocked(loc)) continue;
     const contours = outlinesOf(loc.object);
-    if (!contours) return { error: 'パスの結合に使えるのは、閉じた図形とパスだけです（テキスト・画像・グループ・直線・開いたパスは使えません）。' };
+    if (!contours) return { error: 'パスの結合に使えるのは、閉じた図形とパスだけです（画像・グループ・直線・開いたパスは使えません。テキストは「テキストをアウトライン化」してから使えます）。' };
     picked.push({ o: loc.object, contours });
   }
   if (picked.length < 2) return { error: 'パスの結合には、閉じた図形やパスを 2 つ以上選択してください。' };
@@ -58,7 +58,7 @@ export function canCombineSelection(ed: EditorStore): boolean {
 const NO_ROTATION: Box = { x: 0, y: 0, width: 1, height: 1, rotation: 0 };
 
 /** A box-relative fill (gradient points) moved from the old box to the new one, staying in place. */
-function refitFill<F extends Fill>(fill: F | null, from: Box, to: Box): F | null {
+export function refitFill<F extends Fill>(fill: F | null, from: Box, to: Box): F | null {
   if (!fill || typeof fill === 'string' || fill.kind === 'pattern') return fill;
   const g: Gradient = fill;
   const move = (p: Point): Point => {

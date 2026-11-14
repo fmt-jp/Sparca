@@ -77,3 +77,16 @@ export function booleanContours(objects: DocContour[][], op: BooleanOp): DocCont
   }
   return fromPaperItem(result);
 }
+
+/**
+ * Outlines meant to be filled with the non-zero rule (font glyphs, whose contours may
+ * overlap) as outlines that fill the same area with the even-odd rule HANABI uses: the
+ * overlaps are merged (テキストのアウトライン化; 2026-11-14).
+ */
+export function mergeNonzero(contours: DocContour[]): DocContour[] {
+  if (!contours.length) return [];
+  const s = paperScope();
+  const cp = new s.CompoundPath({ insert: false, children: contours.map((c) => toPaperPath(s, c)) });
+  cp.fillRule = 'nonzero';
+  return fromPaperItem(cp.unite(new s.Path({ insert: false }), { insert: false }));
+}

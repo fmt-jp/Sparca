@@ -31,11 +31,12 @@ export const loadRasterize = lazy(() => import('./render/rasterize'));
 export const loadSvgExport = lazy(() => import('./io/svgExport'));
 export const loadFontNames = lazy(() => import('./render/fontNames'));
 export const loadPathBoolean = lazy(() => import('./engine/pathBoolean'));
+export const loadTextOutline = lazy(() => import('./render/textOutline'));
 
 /** Fetch every split-off module (and start the image worker) so later use needs no download. */
 export function preloadLazyModules(startWorker: () => void): void {
   const run = () => {
-    for (const load of [loadRasterize, loadSvgExport, loadFontNames, loadPathBoolean]) void load().catch(() => undefined);
+    for (const load of [loadRasterize, loadSvgExport, loadFontNames, loadPathBoolean, loadTextOutline]) void load().catch(() => undefined);
     startWorker();
   };
   // After the first paint, so startup stays fast.
