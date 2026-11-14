@@ -55,6 +55,7 @@ export const TOOL_GROUPS: ToolGroup[] = [
       { id: 'sharpen', label: 'シャープブラシ', key: 'O' },
       { id: 'dodge', label: '覆い焼きツール（明るく）', key: 'O' },
       { id: 'burn', label: '焼き込みツール（暗く）', key: 'O' },
+      { id: 'redeye', label: '赤目除去ツール（目をクリック）', key: 'J' },
     ],
   },
   { id: 'line', label: 'ライン', tools: [{ id: 'line', label: 'ラインツール', key: 'N' }] },

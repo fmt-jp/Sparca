@@ -133,3 +133,27 @@ test('覆い焼き lightens, 焼き込み darkens (O cycles through the retouch 
   expect(px[1][0]).toBeLessThan(90);
   expect(px[2][0]).toBe(128);
 });
+
+test('赤目除去: clicking a red eye makes it dark gray, the skin around stays (J)', async ({ page }) => {
+  // Skin-colored image with a red disk (the pupil) at its center (400, 300).
+  const chooser = page.waitForEvent('filechooser');
+  await page.getByRole('button', { name: 'ファイル' }).click();
+  await page.getByRole('menuitem', { name: /画像を配置/ }).click();
+  const png = makePng(200, 200, (x, y) => (Math.hypot(x - 100, y - 100) < 15 ? [200, 25, 35, 255] : [225, 175, 145, 255]));
+  await (await chooser).setFiles({ name: 'face.png', mimeType: 'image/png', buffer: png });
+  await expect(page.locator('[data-testid=canvas] image')).toHaveCount(1);
+  await page.evaluate(() => (window as unknown as { __sparca: { set(p: object): void } }).__sparca.set({ zoom: 1 }));
+  await page.waitForTimeout(100);
+  const ws = (await page.locator('.overlay').boundingBox())!;
+  await page.keyboard.press('j');
+  await expect(page.locator('.toolbar [data-tool="redeye"]')).toHaveAttribute('aria-pressed', 'true');
+  await expect(props(page).getByTestId('stroke-tool-panel')).toContainText('瞳の大きさ');
+  await setNum(page, '赤目除去のサイズ', '40');
+  await page.mouse.click(ws.x + 400, ws.y + 300);
+  await expect.poll(async () => (await edits(page)).map((e) => e.tool)).toEqual(['redeye']);
+  const px = await exportPng(page, [[400, 300], [425, 300], [470, 300]]);
+  expect(px[0][0]).toBeLessThan(80); // the pupil: no longer red
+  expect(Math.abs(px[0][0] - px[0][1])).toBeLessThan(25);
+  expect(px[1]).toEqual([225, 175, 145, 255]); // skin inside the circle: unchanged
+  expect(px[2]).toEqual([225, 175, 145, 255]);
+});

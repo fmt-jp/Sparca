@@ -12,10 +12,10 @@ import { importImageFile } from './assets';
 import { writableLayer } from './actions';
 import type { EditorStore } from './editor';
 
-export const STROKE_TOOLS: ReadonlySet<string> = new Set<StrokeTool>(['brush', 'pencil', 'eraser', 'clone', 'blur', 'sharpen', 'dodge', 'burn']);
+export const STROKE_TOOLS: ReadonlySet<string> = new Set<StrokeTool>(['brush', 'pencil', 'eraser', 'clone', 'blur', 'sharpen', 'dodge', 'burn', 'redeye']);
 
 /** Tools that change the selected image's own pixels (no new image when none is selected). */
-export const RETOUCH_TOOLS: ReadonlySet<string> = new Set<StrokeTool>(['clone', 'blur', 'sharpen', 'dodge', 'burn']);
+export const RETOUCH_TOOLS: ReadonlySet<string> = new Set<StrokeTool>(['clone', 'blur', 'sharpen', 'dodge', 'burn', 'redeye']);
 
 export const STROKE_LABELS: Record<StrokeTool, string> = {
   brush: 'ブラシ',
@@ -26,6 +26,7 @@ export const STROKE_LABELS: Record<StrokeTool, string> = {
   sharpen: 'シャープブラシ',
   dodge: '覆い焼き',
   burn: '焼き込み',
+  redeye: '赤目除去',
 };
 
 /** 「…で描画」「…で消去」「…で加工」 */

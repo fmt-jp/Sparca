@@ -68,6 +68,12 @@ const paths: Record<string, ReactElement> = {
   clone: <path {...S} d="M7.5 3 H12.5 V6.5 L11.5 9 H15.5 a1 1 0 0 1 1 1 V13 H3.5 V10 a1 1 0 0 1 1 -1 H8.5 L7.5 6.5 Z M4 16.5 H16" />,
   blur: <path {...S} d="M10 2.8 C10 2.8 4.5 9.2 4.5 12.3 a5.5 5.5 0 0 0 11 0 C15.5 9.2 10 2.8 10 2.8 Z" />,
   sharpen: <path {...S} d="M10 2.5 L15.5 16.5 H4.5 Z" />,
+  redeye: (
+    <>
+      <path {...S} d="M2.5 10 C5 5.5 15 5.5 17.5 10 C15 14.5 5 14.5 2.5 10 Z" />
+      <circle cx="10" cy="10" r="2.6" fill="#e5484d" />
+    </>
+  ),
   dodge: (
     <>
       <circle {...S} cx="10" cy="7" r="4.5" />

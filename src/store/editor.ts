@@ -36,7 +36,8 @@ export type ToolId =
   | 'blur'
   | 'sharpen'
   | 'dodge'
-  | 'burn';
+  | 'burn'
+  | 'redeye';
 
 /** Pixel (area) selection, kept in document coordinates (edge lengths in document px). Distinct from object selection. */
 export type PixelSelection = MaskShape;
@@ -219,6 +220,7 @@ export const DEFAULT_BRUSHES: BrushSettingsByTool = {
   sharpen: { size: 30, hardness: 0.5, color: '#000000', opacity: 0.5 },
   dodge: { size: 40, hardness: 0.3, color: '#000000', opacity: 0.5, range: 'midtones' },
   burn: { size: 40, hardness: 0.3, color: '#000000', opacity: 0.5, range: 'midtones' },
+  redeye: { size: 24, hardness: 0.7, color: '#000000', opacity: 0.5 },
 };
 
 type Listener = () => void;

@@ -141,6 +141,7 @@ const TOOL_HINT: Partial<Record<string, string>> = {
   sharpen: 'ドラッグした所をくっきりさせます。',
   dodge: 'ドラッグした所を明るくします（範囲で、効かせる明るさを選べます）。',
   burn: 'ドラッグした所を暗くします（範囲で、効かせる明るさを選べます）。',
+  redeye: '目（赤く写った瞳）をクリックすると、円の中の赤い部分だけを暗い灰色にします。サイズを瞳より少し大きめに、強さで暗さを調整します。',
   eraser: 'ドラッグで選択中の画像を消します（透明になります）。Shift+ドラッグで直線、Shift+クリックで直前の線の終わりから直線。',
   text: 'クリックでテキストを追加。既存テキストをクリックで編集。Esc または Ctrl+Enter で確定。',
   hand: 'ドラッグで表示位置を移動。',
@@ -698,7 +699,7 @@ function StrokeToolSection({ tool }: { tool: StrokeTool }) {
   return (
     <div className="prop-section" data-testid="stroke-tool-panel">
       <span className="section-title">{STROKE_LABELS[tool]}</span>
-      <Field label="サイズ">
+      <Field label={tool === 'redeye' ? '瞳の大きさ' : 'サイズ'}>
         <PopupSliderInput label={`${STROKE_LABELS[tool]}のサイズ`} value={s.size} min={BRUSH_SIZE.min} max={BRUSH_SIZE.max} suffix="px" onChange={(v) => set({ size: Math.round(v) })} />
       </Field>
       {tool !== 'pencil' && (
@@ -711,7 +712,7 @@ function StrokeToolSection({ tool }: { tool: StrokeTool }) {
           <ColorInput label={`${STROKE_LABELS[tool]}の色`} value={s.color} onChange={(c) => set({ color: c ?? '#000000' })} />
         </Field>
       )}
-      <Field label={strength ? '強さ' : '不透明度'}>
+      <Field label={tool === 'redeye' ? '暗くする量' : strength ? '強さ' : '不透明度'}>
         <PopupSliderInput
           label={`${STROKE_LABELS[tool]}の${strength ? '強さ' : '不透明度'}`}
           value={Math.round(s.opacity * 100)}

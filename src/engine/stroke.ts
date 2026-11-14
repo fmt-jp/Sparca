@@ -133,7 +133,7 @@ export function applyStroke(img: Raster, s: LocalStroke, scale = 1): Raster {
   return { width: w, height: h, data: out };
 }
 
-const RETOUCH = new Set(['clone', 'blur', 'sharpen', 'dodge', 'burn']);
+const RETOUCH = new Set(['clone', 'blur', 'sharpen', 'dodge', 'burn', 'redeye']);
 
 /** Bounds (pixels) where the coverage is non-zero, widened by `pad`; null when empty. */
 function coverageBounds(cov: Float32Array, w: number, h: number, pad: number): { x: number; y: number; width: number; height: number } | null {
@@ -225,6 +225,25 @@ function retouch(img: Raster, s: LocalStroke, cov: Float32Array, scale: number):
     }
     return { width: w, height: h, data: out };
   }
+  if (s.tool === 'redeye') {
+    // 赤目除去 (2026-11-14): inside the circle, only red pixels change — their red becomes
+    // the average of green and blue (no hue left), then darkened by the strength.
+    for (let i = 0; i < cov.length; i++) {
+      if (cov[i] <= 0) continue;
+      const d = i * 4;
+      const r = src[d];
+      const g = src[d + 1];
+      const b = src[d + 2];
+      const w = cov[i] * redness(r, g, b);
+      if (w <= 0) continue;
+      const dark = 1 - 0.7 * k;
+      const mono = ((g + b) / 2) * dark;
+      out[d] = Math.round(r + (mono - r) * w);
+      out[d + 1] = Math.round(g + (g * dark - g) * w);
+      out[d + 2] = Math.round(b + (b * dark - b) * w);
+    }
+    return { width: w, height: h, data: out };
+  }
   // dodge / burn
   const dodge = s.tool === 'dodge';
   for (let i = 0; i < cov.length; i++) {
@@ -236,4 +255,15 @@ function retouch(img: Raster, s: LocalStroke, cov: Float32Array, scale: number):
     for (let c = 0; c < 3; c++) out[d + c] = Math.round(dodge ? src[d + c] + (255 - src[d + c]) * t : src[d + c] * (1 - t));
   }
   return { width: w, height: h, data: out };
+}
+
+/**
+ * How red a pixel is for 赤目除去 (0..1): red well above both green and blue. Skin and orange
+ * tones (red only a little above green) stay below the threshold.
+ */
+export function redness(r: number, g: number, b: number): number {
+  const other = Math.max(g, b);
+  if (r < 50 || r <= other) return 0;
+  const ratio = (r - other) / r; // 0 (gray) … 1 (pure red)
+  return Math.min(1, Math.max(0, (ratio - 0.35) / 0.25));
 }

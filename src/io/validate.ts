@@ -256,7 +256,7 @@ function checkLocalEdits(v: unknown, where: string) {
 
 /** A brush / pencil / eraser stroke (LocalStroke). */
 function checkStroke(e: Obj, w: string) {
-  if (!['brush', 'pencil', 'eraser', 'clone', 'blur', 'sharpen', 'dodge', 'burn'].includes(e.tool as string)) throw new Invalid(`${w}.tool が正しくありません`);
+  if (!['brush', 'pencil', 'eraser', 'clone', 'blur', 'sharpen', 'dodge', 'burn', 'redeye'].includes(e.tool as string)) throw new Invalid(`${w}.tool が正しくありません`);
   if (e.range !== undefined && !['shadows', 'midtones', 'highlights'].includes(e.range as string)) throw new Invalid(`${w}.range が正しくありません`);
   if (e.offset !== undefined && (!isObj(e.offset) || !Number.isFinite(e.offset.x) || !Number.isFinite(e.offset.y))) throw new Invalid(`${w}.offset が正しくありません`);
   const pts = arr(e, 'points', w);
