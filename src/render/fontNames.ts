@@ -85,3 +85,21 @@ export async function japaneseFamilyName(blob: Blob, postscriptName?: string): P
     return null;
   }
 }
+
+/**
+ * Where the font with PostScript name `postscriptName` starts in a font file: its table
+ * directory's offset in a collection (.ttc / .otc), else 0. -1 when the collection has no such font.
+ */
+export async function collectionOffset(blob: Blob, postscriptName?: string): Promise<number> {
+  const read: Reader = async (offset, length) => new DataView(await blob.slice(offset, offset + length).arrayBuffer());
+  const head = await read(0, 12);
+  const tag = String.fromCharCode(head.getUint8(0), head.getUint8(1), head.getUint8(2), head.getUint8(3));
+  if (tag !== 'ttcf') return 0;
+  const n = head.getUint32(8);
+  const offsets = await read(12, n * 4);
+  for (let i = 0; i < n; i++) {
+    const off = offsets.getUint32(i * 4);
+    if (!postscriptName || (await readNames(read, off)).postscript === postscriptName) return off;
+  }
+  return -1;
+}

@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { attachTextToPath } from '../store/textPathActions';
+import { outlineSelectedText } from '../store/textOutlineActions';
 import { eraseSelection, pixelTargetImage } from '../store/imageActions';
 import {
   alignSelection,
@@ -222,6 +223,8 @@ function handleShortcut(e: KeyboardEvent): boolean {
     if (k === 'z' && !e.shiftKey) editor.undo();
     else if ((k === 'z' && e.shiftKey) || k === 'y') editor.redo();
     else if (k === 's') void saveProject(editor, e.shiftKey);
+    // Ctrl+Shift+O: テキストをアウトライン化 (as in Illustrator); Ctrl+O opens.
+    else if (k === 'o' && e.shiftKey) void outlineSelectedText(editor);
     else if (k === 'o') void chooseAndOpenProject(editor);
     else if (k === 'i' && e.shiftKey) void chooseAndPlaceImage(editor);
     else if (k === 'e' && e.shiftKey) openDialog({ kind: 'export' });

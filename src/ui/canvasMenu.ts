@@ -1,5 +1,6 @@
 // Items of the canvas right-click menu: for objects, empty canvas, and path anchors.
 import { eraseSelection } from '../store/imageActions';
+import { canOutlineText, outlineSelectedText } from '../store/textOutlineActions';
 import { findObject, isEffectivelyLocked } from '../model/tree';
 import { locateNode, segmentCount } from '../model/pathEdit';
 import {
@@ -51,6 +52,7 @@ export function objectMenu(): MenuItem[] {
     },
     ...(canAttachTextToPath(editor) ? [{ label: 'テキストをパスに添付', shortcut: `${mod}Shift+Y`, action: () => attachTextToPath(editor) }] : []),
     ...(canDetachTextFromPath(editor) ? [{ label: 'テキストをパスから外す', action: () => detachTextFromPath(editor) }] : []),
+    ...(canOutlineText(editor) ? [{ label: 'テキストをアウトライン化', shortcut: `${mod}Shift+O`, action: () => void outlineSelectedText(editor) }] : []),
     SEP,
     {
       label: '整列',
