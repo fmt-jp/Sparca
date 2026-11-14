@@ -436,7 +436,7 @@ export interface LocalStroke {
 }
 
 /** Brush tools (2026-11-09) and retouch tools (2026-11-11), all kept as strokes. */
-export type StrokeTool = 'brush' | 'pencil' | 'eraser' | 'clone' | 'blur' | 'sharpen' | 'dodge' | 'burn';
+export type StrokeTool = 'brush' | 'pencil' | 'eraser' | 'clone' | 'blur' | 'sharpen' | 'dodge' | 'burn' | 'redeye';
 
 export type ToneRange = 'shadows' | 'midtones' | 'highlights';
 

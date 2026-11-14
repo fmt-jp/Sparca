@@ -145,6 +145,22 @@ describe('brush strokes', () => {
     expect(light).toBeGreaterThan(dark * 3);
   });
 
+  it('赤目除去 turns red pixels into dark gray inside the circle; skin, gray and the outside stay', () => {
+    const img = createRaster(40, 40);
+    for (let y = 0; y < 40; y++) for (let x = 0; x < 40; x++) img.data.set(x < 20 ? [210, 30, 40, 255] : [230, 180, 150, 255], (y * 40 + x) * 4);
+    img.data.set([128, 128, 128, 255], (20 * 40 + 15) * 4);
+    const out = applyStroke(img, stroke({ tool: 'redeye', points: [{ x: 0.5, y: 0.5 }], size: 30, hardness: 1, opacity: 0.5 }));
+    const [r, g, b] = pixel(out, 10, 20);
+    expect(r).toBeLessThan(60); // no longer red
+    expect(Math.abs(r - (g + b) / 2)).toBeLessThan(15); // gray-ish
+    expect(pixel(out, 30, 20)).toEqual([230, 180, 150, 255]); // skin tone unchanged
+    expect(pixel(out, 15, 20)).toEqual([128, 128, 128, 255]); // gray unchanged
+    expect(pixel(out, 1, 1)).toEqual([210, 30, 40, 255]); // outside the circle
+    // More strength: darker.
+    const dark = applyStroke(img, stroke({ tool: 'redeye', points: [{ x: 0.5, y: 0.5 }], size: 30, hardness: 1, opacity: 1 }));
+    expect(pixel(dark, 10, 20)[1]).toBeLessThan(pixel(out, 10, 20)[1]);
+  });
+
   it('coverage of a single click is a round dot', () => {
     const c = strokeCoverage([{ x: 10, y: 10 }], 20, 20, 3, 1, true);
     expect(c[10 * 20 + 10]).toBe(1);
