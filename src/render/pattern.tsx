@@ -249,20 +249,24 @@ function tileOf(motif: PatternMotif, s: number, weight: number, seed = 1): Tile 
       };
     }
     case 'sayagata': {
-      // 紗綾形: the manji of a 5×5 grid joined to its neighbors' (卍つなぎ), as lines;
-      // shown turned 45° by default (the motif's starting angle).
-      const c = s / 5;
-      const lw = f(clamp(c * (0.25 + t * 0.6), 0.3, c * 0.9));
-      const m = ['X.XXX', 'X.X..', 'XXXXX', '..X.X', 'XXX.X'];
-      const on = (x: number, y: number) => m[((y % 5) + 5) % 5][((x % 5) + 5) % 5] === 'X';
+      // 紗綾形: interlocking 卍 drawn on a grid of cells c = s / 26 with lines as wide as the gaps.
+      // Each 卍 has arms 2c long and hooks 6c long, so every hook runs on and meets the side of
+      // a neighbor's line; centers on the lattice (4c, −6c), (6c, 4c), which repeats every 26c
+      // both ways. Shown turned 45° by default.
+      const c = s / 26;
+      const lw = f(clamp(c * (0.6 + t), 0.3, c * 1.6));
+      const P = (x: number, y: number) => `${f(x * c)} ${f(y * c)}`;
+      const manji = (x: number, y: number) =>
+        `M${P(x, y - 2)}V${f((y + 2) * c)}M${P(x - 2, y)}H${f((x + 2) * c)}` +
+        `M${P(x, y - 2)}H${f((x + 6) * c)}M${P(x + 2, y)}V${f((y + 6) * c)}` +
+        `M${P(x, y + 2)}H${f((x - 6) * c)}M${P(x - 2, y)}V${f((y - 6) * c)}`;
       let d = '';
-      for (let y = 0; y < 5; y++) {
-        for (let x = 0; x < 5; x++) {
-          if (!on(x, y)) continue;
-          const cx = f((x + 0.5) * c);
-          const cy = f((y + 0.5) * c);
-          if (on(x + 1, y)) d += `M${cx} ${cy}H${f(cx + c)}`;
-          if (on(x, y + 1)) d += `M${cx} ${cy}V${f(cy + c)}`;
+      for (let i = -8; i <= 8; i++) {
+        for (let j = -8; j <= 8; j++) {
+          const x = 4 * i + 6 * j + 0.5;
+          const y = -6 * i + 4 * j + 0.5;
+          if (x < -8 || x > 34 || y < -8 || y > 34) continue;
+          d += manji(x, y);
         }
       }
       return {
@@ -271,9 +275,7 @@ function tileOf(motif: PatternMotif, s: number, weight: number, seed = 1): Tile 
         draw: (fg, bg) => (
           <>
             {bgRect(s, s, bg)}
-            {[[0, 0], [-s, 0], [0, -s], [-s, -s]].map(([dx, dy], i) => (
-              <path key={i} d={d} transform={`translate(${f(dx)} ${f(dy)})`} fill="none" stroke={fg} strokeWidth={lw} strokeLinecap="square" />
-            ))}
+            <path d={d} fill="none" stroke={fg} strokeWidth={lw} strokeLinecap="square" />
           </>
         ),
       };
@@ -416,46 +418,20 @@ function tileOf(motif: PatternMotif, s: number, weight: number, seed = 1): Tile 
       };
     }
     case 'higaki': {
-      // 檜垣: thin cypress boards woven in blocks of three, crosswise in turn (drawn as outlined
-      // boards; shown turned 45° by default, the motif's starting angle).
-      const q = s / 2;
-      const board = q / 3;
-      const lw = f(clamp(board * t * 0.6, 0.3, board * 0.45));
-      const boards = (x: number, y: number, horizontal: boolean) =>
-        [0, 1, 2].map((i) =>
-          horizontal ? (
-            <rect key={`${x}-${y}-${i}`} x={f(x)} y={f(y + board * i)} width={f(q)} height={f(board)} />
-          ) : (
-            <rect key={`${x}-${y}-${i}`} x={f(x + board * i)} y={f(y)} width={f(board)} height={f(q)} />
-          ),
-        );
-      return {
-        w: s,
-        h: s,
-        draw: (fg, bg) => (
-          <>
-            {bgRect(s, s, bg)}
-            <g fill="none" stroke={fg} strokeWidth={lw}>
-              {boards(0, 0, true)}
-              {boards(q, 0, false)}
-              {boards(0, q, false)}
-              {boards(q, q, true)}
-            </g>
-          </>
-        ),
-      };
-    }
-    case 'chidori': {
-      // 千鳥格子 (houndstooth): a 2/2 twill woven with four dark and four light threads each
-      // way. In each of the 8×8 cells the warp or the weft shows, by the twill; its color is
-      // that thread's. One path, so the cells join without seams.
-      const c = s / 8;
-      const dark = (i: number) => Math.floor(i / 4) % 2 === 0;
-      let d = '';
-      for (let y = 0; y < 8; y++) {
-        for (let x = 0; x < 8; x++) {
-          const warpShows = (x + y) % 4 < 2;
-          if (warpShows ? dark(x) : dark(y)) d += `M${f(x * c)} ${f(y * c)}h${f(c)}v${f(c)}h${f(-c)}Z`;
+      // 檜垣: boards twice as long as wide laid in a herringbone — along each step a lying
+      // board [k, k+2]×[k, k+1] and a standing one [k, k+1]×[k+1, k+3] (unit u = s / 4); the
+      // rows repeat every (2u, −2u), so the tile is 4u square. Outlined boards (the lines in
+      // the motif color, the boards in the background color). Shown turned 45° by default.
+      const u = s / 4;
+      const lw = f(clamp(u * t * 0.5, 0.3, u * 0.3));
+      const boards: ReactElement[] = [];
+      for (let m = -3; m <= 3; m++) {
+        for (let k = -4; k <= 6; k++) {
+          const ox = (k + 2 * m) * u;
+          const oy = (k - 2 * m) * u;
+          if (ox > s + 2 * u || oy > s + 3 * u || ox < -3 * u || oy < -4 * u) continue;
+          boards.push(<rect key={`h${m},${k}`} x={f(ox)} y={f(oy)} width={f(2 * u)} height={f(u)} />);
+          boards.push(<rect key={`v${m},${k}`} x={f(ox)} y={f(oy + u)} width={f(u)} height={f(2 * u)} />);
         }
       }
       return {
@@ -464,7 +440,44 @@ function tileOf(motif: PatternMotif, s: number, weight: number, seed = 1): Tile 
         draw: (fg, bg) => (
           <>
             {bgRect(s, s, bg)}
-            <path d={d} fill={fg} />
+            <g fill="none" stroke={fg} strokeWidth={lw}>
+              {boards}
+            </g>
+          </>
+        ),
+      };
+    }
+    case 'chidori': {
+      // 千鳥格子 (houndstooth): the 2/2 twill of four dark and four light threads each way, with
+      // its steps drawn as straight 45° edges. Unit c = s / 8: the dark square [0, 4c]²; in the
+      // top-right quarter the bands where (x + y) mod 4c is in [2c, 4c), in the bottom-left
+      // quarter those where it is in [0, 2c).
+      const c = s / 8;
+      const band = (a: number, b: number) =>
+        pts([
+          [a + 20 * c, -20 * c],
+          [b + 20 * c, -20 * c],
+          [b - 20 * c, 20 * c],
+          [a - 20 * c, 20 * c],
+        ]);
+      const quarter = (x: number, y: number, from: number) => (
+        <svg x={f(x)} y={f(y)} width={f(4 * c)} height={f(4 * c)} viewBox={`${f(x)} ${f(y)} ${f(4 * c)} ${f(4 * c)}`} overflow="hidden">
+          {[0, 1, 2, 3].map((k) => (
+            <polygon key={k} points={band((from + 4 * k) * c, (from + 2 + 4 * k) * c)} />
+          ))}
+        </svg>
+      );
+      return {
+        w: s,
+        h: s,
+        draw: (fg, bg) => (
+          <>
+            {bgRect(s, s, bg)}
+            <g fill={fg}>
+              <rect width={f(4 * c)} height={f(4 * c)} />
+              {quarter(4 * c, 0, 2)}
+              {quarter(0, 4 * c, 0)}
+            </g>
           </>
         ),
       };
