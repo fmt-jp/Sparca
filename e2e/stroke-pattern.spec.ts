@@ -139,6 +139,10 @@ test('和柄 and 油（しぶき）: 紗綾形 starts turned 45° and squashed (
   await setNumber(page, '柄のつぶし', '45');
   expect(await first<object>(page, 'fill')).toMatchObject({ slant: 45 });
   expect(await transform()).not.toContain('scale');
+  // Choosing a motif puts back its own angle and つぶし (籠目: 0°, none).
+  await motifs.getByRole('radio', { name: '籠目' }).click();
+  expect(await first<{ angle: number; slant?: number }>(page, 'fill')).toMatchObject({ motif: 'kagome', angle: 0 });
+  expect(await first<{ slant?: number }>(page, 'fill')).not.toHaveProperty('slant');
   await motifs.getByRole('radio', { name: '油（しぶき）' }).click();
   expect(await first<object>(page, 'fill')).toMatchObject({ motif: 'splatter', size: 160 });
   await setNumber(page, '柄の量', '80');
