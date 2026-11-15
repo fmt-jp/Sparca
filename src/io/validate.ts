@@ -322,6 +322,7 @@ function checkPattern(v: Obj, where: string) {
   num(v, 'angle', where);
   const weight = num(v, 'weight', where);
   if (!(weight >= 0 && weight <= 1)) throw new Invalid(`${where}.weight が範囲外です`);
+  if (v.seed !== undefined && !(typeof v.seed === 'number' && Number.isFinite(v.seed))) throw new Invalid(`${where}.seed が正しくありません`);
 }
 
 /** A fill is a color string, a gradient, (where allowed) a pattern, or (where allowed) null. */

@@ -125,3 +125,23 @@ test('text can be filled with a pattern; the color field remembers the motif col
   await props(page).getByLabel('文字色の種類').selectOption('solid');
   expect(typeof (await first<unknown>(page, 'color'))).toBe('string');
 });
+
+test('和柄 and 油（しぶき）: 紗綾形 starts turned 45°; 油 has 量 and 「別の散らし方」', async ({ page }) => {
+  await rect(page);
+  await props(page).getByLabel('塗りの種類').selectOption('pattern');
+  const motifs = props(page).getByRole('radiogroup', { name: '塗りの柄' });
+  for (const name of ['紗綾形', '籠目', '菱', '立涌', '雷文', '鹿の子', '網代', '油（しぶき）']) await expect(motifs.getByRole('radio', { name })).toBeVisible();
+  await motifs.getByRole('radio', { name: '紗綾形' }).click();
+  expect(await first<object>(page, 'fill')).toMatchObject({ motif: 'sayagata', angle: 45, size: 30 });
+  await motifs.getByRole('radio', { name: '油（しぶき）' }).click();
+  expect(await first<object>(page, 'fill')).toMatchObject({ motif: 'splatter', size: 160 });
+  await setNumber(page, '柄の量', '80');
+  expect(await first<{ weight: number }>(page, 'fill')).toMatchObject({ weight: 0.8 });
+  const before = await page.locator('[data-testid=canvas] pattern').first().innerHTML();
+  await props(page).getByRole('button', { name: '別の散らし方' }).click();
+  expect(await first<{ seed?: number }>(page, 'fill')).toHaveProperty('seed');
+  expect(await page.locator('[data-testid=canvas] pattern').first().innerHTML()).not.toBe(before);
+  // Undo goes back to the previous scattering.
+  await page.keyboard.press('Control+z');
+  expect(await page.locator('[data-testid=canvas] pattern').first().innerHTML()).toBe(before);
+});

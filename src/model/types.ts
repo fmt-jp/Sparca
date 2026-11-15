@@ -177,7 +177,16 @@ export type PatternMotif =
   | 'seigaiha'
   | 'shippo'
   | 'kikko'
-  | 'asanoha';
+  | 'asanoha'
+  // 2026-11-15
+  | 'sayagata'
+  | 'kagome'
+  | 'hishi'
+  | 'tatewaku'
+  | 'raimon'
+  | 'kanoko'
+  | 'ajiro'
+  | 'splatter';
 
 /**
  * Pattern fill (decided with the user 2026-10-31): a built-in vector motif repeated over the
@@ -195,8 +204,10 @@ export interface Pattern {
   size: number;
   /** Turn of the motif in degrees (clockwise). */
   angle: number;
-  /** Thickness of the motif's lines / bands / dots, 0..1 (motifs that have none ignore it). */
+  /** Thickness of the motif's lines / bands / dots, 0..1 (motifs that have none ignore it). 油（しぶき）: how much is splattered. */
   weight: number;
+  /** 油（しぶき）: which random scattering (「別の散らし方」). */
+  seed?: number;
 }
 
 /** A solid color (#rrggbb), a gradient or a pattern. */
