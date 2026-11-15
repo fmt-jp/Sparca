@@ -125,6 +125,28 @@ editor.subscribe(() => {
   }
 });
 
+// 自動選択 settings: per browser too.
+const WAND_KEY = 'sparca.wand';
+try {
+  const w = JSON.parse(localStorage.getItem(WAND_KEY) ?? 'null') as { tolerance?: unknown; contiguous?: unknown } | null;
+  if (w && typeof w.tolerance === 'number' && w.tolerance >= 0 && w.tolerance <= 255 && typeof w.contiguous === 'boolean') {
+    editor.set({ wand: { tolerance: w.tolerance, contiguous: w.contiguous } });
+  }
+} catch {
+  // Defaults apply.
+}
+let lastWand = editor.getState().wand;
+editor.subscribe(() => {
+  const w = editor.getState().wand;
+  if (w === lastWand) return;
+  lastWand = w;
+  try {
+    localStorage.setItem(WAND_KEY, JSON.stringify(w));
+  } catch {
+    // Not remembered; harmless.
+  }
+});
+
 // Brush / pencil / eraser settings: per browser as well.
 const BRUSHES_KEY = 'sparca.brushes';
 try {

@@ -20,7 +20,10 @@ export interface PixelCopy {
 
 /** The selection in normalized coordinates of `frame` (edge lengths stay in px = document px). */
 function selectionInFrame(sel: PixelSelection, f: Rect): MaskShape {
-  if (sel.kind === 'polygon') return { ...sel, points: sel.points.map((p) => ({ x: (p.x - f.x) / f.width, y: (p.y - f.y) / f.height })) };
+  if (sel.kind === 'polygon') {
+    const map = (ps: { x: number; y: number }[]) => ps.map((p) => ({ x: (p.x - f.x) / f.width, y: (p.y - f.y) / f.height }));
+    return { ...sel, points: map(sel.points), ...(sel.more ? { more: sel.more.map(map) } : {}) };
+  }
   return { ...sel, x: (sel.x - f.x) / f.width, y: (sel.y - f.y) / f.height, width: sel.width / f.width, height: sel.height / f.height };
 }
 

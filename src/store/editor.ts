@@ -1,3 +1,4 @@
+import { DEFAULT_WAND, type WandSettings } from './wandActions';
 import type { GradientTarget } from '../model/gradient';
 import { produce, type Draft } from 'immer';
 import { emptyHistory, record, redo as historyRedo, undo as historyUndo, type HistoryState } from '../history/history';
@@ -37,7 +38,8 @@ export type ToolId =
   | 'sharpen'
   | 'dodge'
   | 'burn'
-  | 'redeye';
+  | 'redeye'
+  | 'wand';
 
 /** Pixel (area) selection, kept in document coordinates (edge lengths in document px). Distinct from object selection. */
 export type PixelSelection = MaskShape;
@@ -178,6 +180,8 @@ export interface EditorState {
   alignToCanvas: boolean;
   /** Edge setting of the marquee / lasso tools. */
   selectionEdge: SelectionEdge;
+  /** 自動選択ツール settings (a per-browser preference). */
+  wand: WandSettings;
   /** Settings for new objects, per kind of drawing tool. */
   toolDefaults: ToolDefaults;
   /** Settings of the brush, pencil and eraser (a per-browser preference). */
@@ -252,6 +256,7 @@ export class EditorStore {
       imagePlacement: 'ask',
       restoreMode: 'ask',
       selectionEdge: DEFAULT_SELECTION_EDGE,
+      wand: DEFAULT_WAND,
       toolDefaults: DEFAULT_TOOL_DEFAULTS,
       brushes: DEFAULT_BRUSHES,
       alignToCanvas: false,

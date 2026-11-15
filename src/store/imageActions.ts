@@ -41,7 +41,7 @@ export function pixelTargetImage(ed: EditorStore): ImageObject | null {
 
 /** Bounds of a pixel selection, including how far grow and feather reach. */
 export function pixelSelectionBounds(s: PixelSelection): Rect {
-  const b = s.kind === 'polygon' ? boundsOfPoints(s.points) : { x: s.x, y: s.y, width: s.width, height: s.height };
+  const b = s.kind === 'polygon' ? boundsOfPoints([s.points, ...(s.more ?? [])].flat()) : { x: s.x, y: s.y, width: s.width, height: s.height };
   const m = Math.max(0, s.grow ?? 0) + (s.feather ?? 0);
   return m > 0 ? { x: b.x - m, y: b.y - m, width: b.width + m * 2, height: b.height + m * 2 } : b;
 }
