@@ -26,7 +26,7 @@ export const PATTERN_MOTIFS: MotifInfo[] = [
   { motif: 'shippo', label: '七宝', usesWeight: true, weight: 0.3 },
   { motif: 'kikko', label: '亀甲', usesWeight: true, weight: 0.3 },
   { motif: 'asanoha', label: '麻の葉', usesWeight: true, weight: 0.3 },
-  { motif: 'sayagata', label: '紗綾形', usesWeight: true, weight: 0.4, size: 104, angle: 45, thumb: 40 },
+  { motif: 'sayagata', label: '紗綾形', usesWeight: true, weight: 0.4, size: 140, angle: 45, thumb: 40 },
   { motif: 'kagome', label: '籠目', usesWeight: true, weight: 0.3, size: 30, thumb: 14 },
   { motif: 'hishi', label: '菱', usesWeight: true, weight: 0.5, size: 40, thumb: 16 },
   { motif: 'tatewaku', label: '立涌', usesWeight: true, weight: 0.3, size: 36, thumb: 14 },

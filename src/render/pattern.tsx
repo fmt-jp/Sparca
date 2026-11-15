@@ -43,6 +43,10 @@ function triangles(a: number, rowH: number, w: number, h: number): [number, numb
   return out;
 }
 
+/** 紗綾形 lines on its 10 × 10 grid (runs of the line drawing within one repeat). */
+const SAYAGATA_PATH =
+  'M0 0H1M4 0H5M6 0H7M8 0H9M0 1H1M4 1H6M9 1H10M1 2H2M3 2H4M5 2H6M9 2H10M0 3H6M9 3H10M0 4H6M9 4H10M1 5H2M3 5H4M5 5H6M9 5H10M0 6H1M4 6H6M9 6H10M0 7H1M4 7H5M6 7H7M8 7H9M0 8H1M4 8H10M0 9H1M4 9H10M0 10H1M4 10H5M6 10H7M8 10H9M0 0V2M0 5V7M1 1V2M1 5V6M1 7V8M1 9V10M2 0V2M2 5V10M3 0V2M3 5V10M4 1V2M4 5V6M4 7V8M4 9V10M5 0V2M5 5V7M6 0V1M6 2V3M6 4V5M6 6V7M7 0V7M8 0V7M9 0V1M9 2V3M9 4V5M9 6V7M10 0V2M10 5V7';
+
 function tileOf(motif: PatternMotif, s: number, weight: number, seed = 1): Tile {
   const t = clamp(weight, 0.02, 0.98);
   switch (motif) {
@@ -249,26 +253,12 @@ function tileOf(motif: PatternMotif, s: number, weight: number, seed = 1): Tile 
       };
     }
     case 'sayagata': {
-      // 紗綾形: interlocking 卍 drawn on a grid of cells c = s / 26 with lines as wide as the gaps.
-      // Each 卍 has arms 2c long and hooks 6c long, so every hook runs on and meets the side of
-      // a neighbor's line; centers on the lattice (4c, −6c), (6c, 4c), which repeats every 26c
-      // both ways. Shown turned 45° by default.
-      const c = s / 26;
-      const lw = f(clamp(c * (0.6 + t), 0.3, c * 1.6));
-      const P = (x: number, y: number) => `${f(x * c)} ${f(y * c)}`;
-      const manji = (x: number, y: number) =>
-        `M${P(x, y - 2)}V${f((y + 2) * c)}M${P(x - 2, y)}H${f((x + 2) * c)}` +
-        `M${P(x, y - 2)}H${f((x + 6) * c)}M${P(x + 2, y)}V${f((y + 6) * c)}` +
-        `M${P(x, y + 2)}H${f((x - 6) * c)}M${P(x - 2, y)}V${f((y - 6) * c)}`;
-      let d = '';
-      for (let i = -8; i <= 8; i++) {
-        for (let j = -8; j <= 8; j++) {
-          const x = 4 * i + 6 * j + 0.5;
-          const y = -6 * i + 4 * j + 0.5;
-          if (x < -8 || x > 34 || y < -8 || y > 34) continue;
-          d += manji(x, y);
-        }
-      }
+      // 紗綾形: the traditional line drawing — interlocking 卍 drawn as thin lines on a grid of
+      // g = s / 10, traced from a reference the user gave (2026-11-15). The tile repeats every
+      // 10g both ways (and also on (5g, 5g)). Shown turned 45° by default.
+      const g = s / 10;
+      const lw = f(clamp(g * (0.08 + t * 0.45), 0.3, g * 0.6));
+      const d = SAYAGATA_PATH.replace(/\d+/g, (n) => String(f(Number(n) * g)));
       return {
         w: s,
         h: s,

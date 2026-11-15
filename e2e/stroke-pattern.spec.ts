@@ -132,7 +132,7 @@ test('和柄 and 油（しぶき）: 紗綾形 starts turned 45°; 油 has 量 a
   const motifs = props(page).getByRole('radiogroup', { name: '塗りの柄' });
   for (const name of ['紗綾形', '籠目', '菱', '立涌', '雷文', '鹿の子', '網代', '檜垣', '千鳥格子', '油（しぶき）']) await expect(motifs.getByRole('radio', { name })).toBeVisible();
   await motifs.getByRole('radio', { name: '紗綾形' }).click();
-  expect(await first<object>(page, 'fill')).toMatchObject({ motif: 'sayagata', angle: 45, size: 104 });
+  expect(await first<object>(page, 'fill')).toMatchObject({ motif: 'sayagata', angle: 45, size: 140 });
   await motifs.getByRole('radio', { name: '油（しぶき）' }).click();
   expect(await first<object>(page, 'fill')).toMatchObject({ motif: 'splatter', size: 160 });
   await setNumber(page, '柄の量', '80');
