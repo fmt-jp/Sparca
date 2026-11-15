@@ -8,7 +8,7 @@ export interface MotifInfo {
   usesWeight: boolean;
   /** Initial thickness when the motif is chosen. */
   weight: number;
-  /** Size (px) and angle the motif starts with when chosen, if it needs its own. */
+  /** Size (px) the motif starts with when chosen, if it needs its own; its angle (default 0°). */
   size?: number;
   angle?: number;
   /** つぶし the motif starts with when chosen (degrees; missing = 45, none). */
@@ -61,7 +61,10 @@ export function toPattern(current: Fill | null, color: string | null): Pattern {
   return { kind: 'pattern', motif: 'stripes', color: color ?? '#000000', background: '#ffffff', size: 20, angle: 0, weight: motifInfo('stripes').weight };
 }
 
-/** The pattern with another motif (its usual thickness when the thickness matters). */
+/**
+ * The pattern with another motif: its usual thickness, its own size (if it has one), and its
+ * own angle and つぶし (0° / none unless it has them; reset every time, 2026-11-15 user request).
+ */
 export function withMotif(p: Pattern, motif: PatternMotif): Pattern {
   const m = motifInfo(motif);
   const { slant: _old, ...rest } = p;
@@ -71,7 +74,7 @@ export function withMotif(p: Pattern, motif: PatternMotif): Pattern {
     motif,
     weight: m.weight,
     ...(m.size !== undefined ? { size: m.size } : {}),
-    ...(m.angle !== undefined ? { angle: m.angle } : {}),
+    angle: m.angle ?? 0,
     ...(m.slant !== undefined ? { slant: m.slant } : {}),
   };
 }

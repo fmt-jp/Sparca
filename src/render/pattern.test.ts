@@ -10,7 +10,7 @@ import { patternDef, patternTileSize } from './pattern';
 const base: Pattern = { kind: 'pattern', motif: 'stripes', color: '#123456', background: '#ffffff', size: 20, angle: 30, weight: 0.5 };
 
 describe('pattern fills', () => {
-  it('every motif draws a tile centered on the box, turned by the angle', () => {
+  it('every motif draws a tile centered on the box, turned by its angle', () => {
     for (const { motif } of PATTERN_MOTIFS) {
       const p = withMotif(base, motif);
       const svg = renderToStaticMarkup(patternDef(p, 'pt', 100, 60));
@@ -18,7 +18,7 @@ describe('pattern fills', () => {
       expect(width).toBeGreaterThan(0);
       expect(svg).toContain('patternUnits="userSpaceOnUse"');
       const squash = p.slant !== undefined ? ` scale(1 ${Math.round(Math.tan((p.slant * Math.PI) / 180) * 1000) / 1000})` : '';
-      expect(svg).toContain(`patternTransform="translate(50 30)${squash} rotate(${p.angle})"`);
+      expect(svg).toContain(`patternTransform="translate(50 30)${squash}${p.angle ? ` rotate(${p.angle})` : ''}"`);
       expect(svg).toContain(`x="${-width / 2}"`);
       expect(svg).toContain('#123456');
       expect(height).toBeGreaterThan(0);
@@ -28,7 +28,8 @@ describe('pattern fills', () => {
   it('the motifs added 2026-11-15 start with their own size and angle (紗綾形 turned 45°)', () => {
     expect(withMotif(base, 'sayagata')).toMatchObject({ motif: 'sayagata', size: 140, angle: 45, slant: 27 });
     expect(withMotif(base, 'splatter')).toMatchObject({ size: 160 });
-    expect(withMotif(base, 'kagome').angle).toBe(30); // keeps the current angle
+    expect(withMotif(base, 'kagome').angle).toBe(0); // back to its own angle (0°)
+    expect(withMotif({ ...base, angle: 60 }, 'higaki').angle).toBe(45);
     expect(withMotif(base, 'higaki')).toMatchObject({ angle: 45, size: 60 });
     for (const motif of ['sayagata', 'kagome', 'hishi', 'tatewaku', 'raimon', 'kanoko', 'ajiro', 'splatter', 'higaki', 'chidori'] as const) {
       expect(PATTERN_MOTIFS.some((m) => m.motif === motif)).toBe(true);
