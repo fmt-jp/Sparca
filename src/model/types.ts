@@ -186,7 +186,10 @@ export type PatternMotif =
   | 'raimon'
   | 'kanoko'
   | 'ajiro'
-  | 'splatter';
+  | 'splatter'
+  // 2026-11-15 (2)
+  | 'higaki'
+  | 'chidori';
 
 /**
  * Pattern fill (decided with the user 2026-10-31): a built-in vector motif repeated over the

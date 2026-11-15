@@ -415,6 +415,60 @@ function tileOf(motif: PatternMotif, s: number, weight: number, seed = 1): Tile 
         ),
       };
     }
+    case 'higaki': {
+      // 檜垣: thin cypress boards woven in blocks of three, crosswise in turn (drawn as outlined
+      // boards; shown turned 45° by default, the motif's starting angle).
+      const q = s / 2;
+      const board = q / 3;
+      const lw = f(clamp(board * t * 0.6, 0.3, board * 0.45));
+      const boards = (x: number, y: number, horizontal: boolean) =>
+        [0, 1, 2].map((i) =>
+          horizontal ? (
+            <rect key={`${x}-${y}-${i}`} x={f(x)} y={f(y + board * i)} width={f(q)} height={f(board)} />
+          ) : (
+            <rect key={`${x}-${y}-${i}`} x={f(x + board * i)} y={f(y)} width={f(board)} height={f(q)} />
+          ),
+        );
+      return {
+        w: s,
+        h: s,
+        draw: (fg, bg) => (
+          <>
+            {bgRect(s, s, bg)}
+            <g fill="none" stroke={fg} strokeWidth={lw}>
+              {boards(0, 0, true)}
+              {boards(q, 0, false)}
+              {boards(0, q, false)}
+              {boards(q, q, true)}
+            </g>
+          </>
+        ),
+      };
+    }
+    case 'chidori': {
+      // 千鳥格子 (houndstooth): a 2/2 twill woven with four dark and four light threads each
+      // way. In each of the 8×8 cells the warp or the weft shows, by the twill; its color is
+      // that thread's. One path, so the cells join without seams.
+      const c = s / 8;
+      const dark = (i: number) => Math.floor(i / 4) % 2 === 0;
+      let d = '';
+      for (let y = 0; y < 8; y++) {
+        for (let x = 0; x < 8; x++) {
+          const warpShows = (x + y) % 4 < 2;
+          if (warpShows ? dark(x) : dark(y)) d += `M${f(x * c)} ${f(y * c)}h${f(c)}v${f(c)}h${f(-c)}Z`;
+        }
+      }
+      return {
+        w: s,
+        h: s,
+        draw: (fg, bg) => (
+          <>
+            {bgRect(s, s, bg)}
+            <path d={d} fill={fg} />
+          </>
+        ),
+      };
+    }
     case 'splatter': {
       // 油（しぶき）: blots and droplets scattered at random (`seed`); shapes crossing the
       // tile's edge are drawn again on the other side, so no seam shows. The thickness is

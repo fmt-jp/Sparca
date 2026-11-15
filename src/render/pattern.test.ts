@@ -28,7 +28,8 @@ describe('pattern fills', () => {
     expect(withMotif(base, 'sayagata')).toMatchObject({ motif: 'sayagata', size: 30, angle: 45 });
     expect(withMotif(base, 'splatter')).toMatchObject({ size: 160 });
     expect(withMotif(base, 'kagome').angle).toBe(30); // keeps the current angle
-    for (const motif of ['sayagata', 'kagome', 'hishi', 'tatewaku', 'raimon', 'kanoko', 'ajiro', 'splatter'] as const) {
+    expect(withMotif(base, 'higaki')).toMatchObject({ angle: 45, size: 40 });
+    for (const motif of ['sayagata', 'kagome', 'hishi', 'tatewaku', 'raimon', 'kanoko', 'ajiro', 'splatter', 'higaki', 'chidori'] as const) {
       expect(PATTERN_MOTIFS.some((m) => m.motif === motif)).toBe(true);
     }
     // 籠目: a tile √3 times as tall as it is wide (three families of lines).
