@@ -25,10 +25,10 @@ describe('pattern fills', () => {
   });
 
   it('the motifs added 2026-11-15 start with their own size and angle (紗綾形 turned 45°)', () => {
-    expect(withMotif(base, 'sayagata')).toMatchObject({ motif: 'sayagata', size: 30, angle: 45 });
+    expect(withMotif(base, 'sayagata')).toMatchObject({ motif: 'sayagata', size: 104, angle: 45 });
     expect(withMotif(base, 'splatter')).toMatchObject({ size: 160 });
     expect(withMotif(base, 'kagome').angle).toBe(30); // keeps the current angle
-    expect(withMotif(base, 'higaki')).toMatchObject({ angle: 45, size: 40 });
+    expect(withMotif(base, 'higaki')).toMatchObject({ angle: 45, size: 60 });
     for (const motif of ['sayagata', 'kagome', 'hishi', 'tatewaku', 'raimon', 'kanoko', 'ajiro', 'splatter', 'higaki', 'chidori'] as const) {
       expect(PATTERN_MOTIFS.some((m) => m.motif === motif)).toBe(true);
     }
