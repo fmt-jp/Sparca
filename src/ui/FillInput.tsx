@@ -231,7 +231,8 @@ export function GradientEditor({
 
 /** Thumbnail of a motif for the motif buttons. */
 function MotifThumb({ motif, id }: { motif: Pattern['motif']; id: string }) {
-  const p: Pattern = { kind: 'pattern', motif, color: '#333333', background: '#ffffff', size: 12, angle: 0, weight: motifInfo(motif).weight };
+  const m = motifInfo(motif);
+  const p: Pattern = { kind: 'pattern', motif, color: '#333333', background: '#ffffff', size: m.thumb ?? 12, angle: m.angle ?? 0, weight: m.weight };
   return (
     <svg width={26} height={26} viewBox="0 0 26 26" aria-hidden="true">
       <defs>{patternDef(p, id, 26, 26)}</defs>
@@ -279,9 +280,9 @@ function PatternEditor({ p, label, onChange }: { p: Pattern; label: string; onCh
       <PopupSliderInput label="柄の角度" value={Math.round(p.angle)} min={-180} max={180} suffix="°" onChange={(angle) => set({ angle }, '柄の角度の変更', 'pattern-angle')} />
       {motifInfo(p.motif).usesWeight && (
         <>
-          <span className="field-label">太さ</span>
+          <span className="field-label">{p.motif === 'splatter' ? '量' : '太さ'}</span>
           <PopupSliderInput
-            label="柄の太さ"
+            label={p.motif === 'splatter' ? '柄の量' : '柄の太さ'}
             value={Math.round(p.weight * 100)}
             min={2}
             max={98}
@@ -289,6 +290,11 @@ function PatternEditor({ p, label, onChange }: { p: Pattern; label: string; onCh
             onChange={(v) => set({ weight: v / 100 }, '柄の太さの変更', 'pattern-weight')}
           />
         </>
+      )}
+      {p.motif === 'splatter' && (
+        <button type="button" onClick={() => set({ seed: 1 + Math.floor(Math.random() * 1e6) }, '散らし方の変更')}>
+          別の散らし方
+        </button>
       )}
     </span>
   );

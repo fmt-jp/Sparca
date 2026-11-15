@@ -17,11 +17,38 @@ describe('pattern fills', () => {
       const { width, height } = patternTileSize(p);
       expect(width).toBeGreaterThan(0);
       expect(svg).toContain('patternUnits="userSpaceOnUse"');
-      expect(svg).toContain('patternTransform="translate(50 30) rotate(30)"');
+      expect(svg).toContain(`patternTransform="translate(50 30) rotate(${p.angle})"`);
       expect(svg).toContain(`x="${-width / 2}"`);
       expect(svg).toContain('#123456');
       expect(height).toBeGreaterThan(0);
     }
+  });
+
+  it('the motifs added 2026-11-15 start with their own size and angle (紗綾形 turned 45°)', () => {
+    expect(withMotif(base, 'sayagata')).toMatchObject({ motif: 'sayagata', size: 30, angle: 45 });
+    expect(withMotif(base, 'splatter')).toMatchObject({ size: 160 });
+    expect(withMotif(base, 'kagome').angle).toBe(30); // keeps the current angle
+    for (const motif of ['sayagata', 'kagome', 'hishi', 'tatewaku', 'raimon', 'kanoko', 'ajiro', 'splatter'] as const) {
+      expect(PATTERN_MOTIFS.some((m) => m.motif === motif)).toBe(true);
+    }
+    // 籠目: a tile √3 times as tall as it is wide (three families of lines).
+    const k = patternTileSize(withMotif(base, 'kagome'));
+    expect(k.height / k.width).toBeCloseTo(Math.sqrt(3), 5);
+  });
+
+  it('油（しぶき） scatters the same way for the same seed, differently for another, and more with more thickness', () => {
+    const p = withMotif(base, 'splatter');
+    const svg = (q: Pattern) => renderToStaticMarkup(patternDef(q, 'pt', 100, 100));
+    expect(svg({ ...p, seed: 5 })).toBe(svg({ ...p, seed: 5 }));
+    expect(svg({ ...p, seed: 5 })).not.toBe(svg({ ...p, seed: 6 }));
+    const count = (q: Pattern) => (svg(q).match(/<circle/g) ?? []).length;
+    expect(count({ ...p, weight: 0.9 })).toBeGreaterThan(count({ ...p, weight: 0.1 }));
+    // Each shape is drawn 9 times (the tile and its 8 neighbors), so nothing is cut at the seam.
+    expect(count(p) % 9).toBe(0);
+  });
+
+  it('鹿の子 keeps its dots open without a background (through a mask)', () => {
+    expect(renderToStaticMarkup(patternDef({ ...withMotif(base, 'kanoko'), background: null }, 'pt', 100, 100))).toContain('<mask');
   });
 
   it('keeps its size in px whatever the box size', () => {
