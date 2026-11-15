@@ -33,6 +33,8 @@ export const PATTERN_MOTIFS: MotifInfo[] = [
   { motif: 'raimon', label: '雷文', usesWeight: true, weight: 0.4, size: 32, thumb: 14 },
   { motif: 'kanoko', label: '鹿の子', usesWeight: true, weight: 0.6, size: 20, thumb: 10 },
   { motif: 'ajiro', label: '網代', usesWeight: true, weight: 0.6, size: 36, thumb: 14 },
+  { motif: 'higaki', label: '檜垣', usesWeight: true, weight: 0.3, size: 40, angle: 45, thumb: 16 },
+  { motif: 'chidori', label: '千鳥格子', usesWeight: false, weight: 0.5, size: 32, thumb: 12 },
   { motif: 'splatter', label: '油（しぶき）', usesWeight: true, weight: 0.5, size: 160, thumb: 40 },
 ];
 
