@@ -225,6 +225,11 @@ function renderPlain(o: SceneObject, opts: RenderOptions, prefix: string, canvas
       body = renderImage(o, opts);
       break;
   }
+  // 反転 (image / text): the content mirrored in its box, inside the effects (so shadows and
+  // glows keep their direction).
+  if ((o.type === 'image' || o.type === 'text') && (o.flip?.x || o.flip?.y) && body) {
+    body = <g transform={`translate(${o.flip.x ? w : 0} ${o.flip.y ? h : 0}) scale(${o.flip.x ? -1 : 1} ${o.flip.y ? -1 : 1})`}>{body}</g>;
+  }
   // Effects run in order; each zoom blur splits them into filters around its copies.
   const defs: ReactElement[] = [];
   let content: ReactElement | null = body;

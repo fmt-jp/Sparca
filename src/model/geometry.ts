@@ -69,6 +69,15 @@ export function toLocal(b: Box, p: Point): Point {
   return { x: q.x - b.x, y: q.y - b.y };
 }
 
+/**
+ * A document point in the frame of what an object shows: its box's local frame, mirrored for
+ * a flipped image or text (反転), so (0, 0) is the top-left of its pixels / letters.
+ */
+export function toContentLocal(o: { box: Box; flip?: { x: boolean; y: boolean } }, p: Point): Point {
+  const l = toLocal(o.box, p);
+  return { x: o.flip?.x ? o.box.width - l.x : l.x, y: o.flip?.y ? o.box.height - l.y : l.y };
+}
+
 export function pointInBox(b: Box, p: Point, tolerance = 0): boolean {
   const l = toLocal(b, p);
   return (

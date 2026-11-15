@@ -335,6 +335,8 @@ export interface TextObject extends BaseObject {
   /** Line height as a multiple of the font size. */
   lineHeight: number;
   align: 'left' | 'center' | 'right';
+  /** 左右反転・上下反転: mirror writing, still editable (2026-11-15). */
+  flip?: Flip;
 }
 
 export type ResampleMethod =
@@ -465,6 +467,14 @@ export interface ImageObject extends BaseObject {
   type: 'image';
   assetId: AssetId;
   pipeline: ImagePipeline;
+  /** 左右反転・上下反転, drawn mirrored in its box (the pixels are kept; 2026-11-15). */
+  flip?: Flip;
+}
+
+/** Mirrored left–right (x) and / or top–bottom (y) within the object's box. */
+export interface Flip {
+  x: boolean;
+  y: boolean;
 }
 
 export interface GroupObject {

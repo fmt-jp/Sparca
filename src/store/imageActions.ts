@@ -1,6 +1,6 @@
 // Raster-related editor actions (spec §7).
 import { updateObject } from '../model/commands';
-import { boundsOfPoints, boxCorners, objectBounds, rectsIntersect, toLocal, type Rect } from '../model/geometry';
+import { boundsOfPoints, boxCorners, objectBounds, rectsIntersect, type Rect, toContentLocal } from '../model/geometry';
 import { addLocalBlur, addLocalErase, addLocalMosaic, cropDocument, cropImage, fitCanvasToObject, fitCanvasToRect, resizeCanvas, resizeImagePixels, selectionToImageMask, type Anchor } from '../model/imageOps';
 import { allObjects, findObject, isEffectivelyLocked, isEffectivelyVisible } from '../model/tree';
 import { defaultAdjust } from '../model/factory';
@@ -294,7 +294,7 @@ export function commitCrop(ed: EditorStore): void {
     // Rect corners in the image's local frame → fractions of its box.
     const b = img.box;
     const local = boundsOfPoints(
-      boxCorners({ ...r, rotation: 0 }).map((p) => toLocal(b, p)),
+      boxCorners({ ...r, rotation: 0 }).map((p) => toContentLocal(img, p)),
     );
     const f = {
       x: Math.max(0, local.x / b.width),
