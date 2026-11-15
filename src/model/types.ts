@@ -211,6 +211,11 @@ export interface Pattern {
   weight: number;
   /** 油（しぶき）: which random scattering (「別の散らし方」). */
   seed?: number;
+  /**
+   * つぶし (2026-11-15, user request): the motif is squashed (or stretched) vertically after
+   * turning, so that lines at 45° lean at this many degrees (10..80). Missing = 45 (as drawn).
+   */
+  slant?: number;
 }
 
 /** A solid color (#rrggbb), a gradient or a pattern. */

@@ -126,13 +126,19 @@ test('text can be filled with a pattern; the color field remembers the motif col
   expect(typeof (await first<unknown>(page, 'color'))).toBe('string');
 });
 
-test('和柄 and 油（しぶき）: 紗綾形 starts turned 45°; 油 has 量 and 「別の散らし方」', async ({ page }) => {
+test('和柄 and 油（しぶき）: 紗綾形 starts turned 45° and squashed (つぶし 27°); 油 has 量 and 「別の散らし方」', async ({ page }) => {
   await rect(page);
   await props(page).getByLabel('塗りの種類').selectOption('pattern');
   const motifs = props(page).getByRole('radiogroup', { name: '塗りの柄' });
   for (const name of ['紗綾形', '籠目', '菱', '立涌', '雷文', '鹿の子', '網代', '檜垣', '千鳥格子', '油（しぶき）']) await expect(motifs.getByRole('radio', { name })).toBeVisible();
   await motifs.getByRole('radio', { name: '紗綾形' }).click();
-  expect(await first<object>(page, 'fill')).toMatchObject({ motif: 'sayagata', angle: 45, size: 140 });
+  expect(await first<object>(page, 'fill')).toMatchObject({ motif: 'sayagata', angle: 45, size: 140, slant: 27 });
+  // つぶし: squashed at first (27°); 45° draws it as is.
+  const transform = () => page.locator('[data-testid=canvas] pattern').first().getAttribute('patternTransform');
+  expect(await transform()).toContain('scale(1 0.51)');
+  await setNumber(page, '柄のつぶし', '45');
+  expect(await first<object>(page, 'fill')).toMatchObject({ slant: 45 });
+  expect(await transform()).not.toContain('scale');
   await motifs.getByRole('radio', { name: '油（しぶき）' }).click();
   expect(await first<object>(page, 'fill')).toMatchObject({ motif: 'splatter', size: 160 });
   await setNumber(page, '柄の量', '80');

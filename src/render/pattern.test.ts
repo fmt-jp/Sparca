@@ -17,7 +17,8 @@ describe('pattern fills', () => {
       const { width, height } = patternTileSize(p);
       expect(width).toBeGreaterThan(0);
       expect(svg).toContain('patternUnits="userSpaceOnUse"');
-      expect(svg).toContain(`patternTransform="translate(50 30) rotate(${p.angle})"`);
+      const squash = p.slant !== undefined ? ` scale(1 ${Math.round(Math.tan((p.slant * Math.PI) / 180) * 1000) / 1000})` : '';
+      expect(svg).toContain(`patternTransform="translate(50 30)${squash} rotate(${p.angle})"`);
       expect(svg).toContain(`x="${-width / 2}"`);
       expect(svg).toContain('#123456');
       expect(height).toBeGreaterThan(0);
@@ -25,7 +26,7 @@ describe('pattern fills', () => {
   });
 
   it('the motifs added 2026-11-15 start with their own size and angle (紗綾形 turned 45°)', () => {
-    expect(withMotif(base, 'sayagata')).toMatchObject({ motif: 'sayagata', size: 140, angle: 45 });
+    expect(withMotif(base, 'sayagata')).toMatchObject({ motif: 'sayagata', size: 140, angle: 45, slant: 27 });
     expect(withMotif(base, 'splatter')).toMatchObject({ size: 160 });
     expect(withMotif(base, 'kagome').angle).toBe(30); // keeps the current angle
     expect(withMotif(base, 'higaki')).toMatchObject({ angle: 45, size: 60 });
@@ -35,6 +36,19 @@ describe('pattern fills', () => {
     // 籠目: a tile √3 times as tall as it is wide (three families of lines).
     const k = patternTileSize(withMotif(base, 'kagome'));
     expect(k.height / k.width).toBeCloseTo(Math.sqrt(3), 5);
+  });
+
+  it('つぶし squashes the turned motif so 45° lines lean at the given angle (紗綾形 starts at 27°)', () => {
+    const p = withMotif(base, 'sayagata');
+    expect(p.slant).toBe(27);
+    expect(withMotif(p, 'stripes').slant).toBeUndefined(); // another motif drops it
+    const tf = (q: Pattern) => /patternTransform="([^"]*)"/.exec(renderToStaticMarkup(patternDef(q, 'pt', 100, 100)))![1];
+    expect(tf({ ...p, slant: 45 })).toBe('translate(50 50) rotate(45)');
+    const m = /scale\(1 ([\d.]+)\)/.exec(tf(p));
+    expect(Number(m![1])).toBeCloseTo(Math.tan((27 * Math.PI) / 180), 3);
+    // A line along the tile's x axis, turned 45° and squashed, leans at 27°.
+    const k = Number(m![1]);
+    expect((Math.atan(k * Math.tan(Math.PI / 4)) * 180) / Math.PI).toBeCloseTo(27, 1);
   });
 
   it('油（しぶき） scatters the same way for the same seed, differently for another, and more with more thickness', () => {

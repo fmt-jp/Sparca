@@ -529,7 +529,8 @@ export function patternTileSize(p: Pattern): { width: number; height: number } {
 /** The <pattern> for a pattern fill over a w×h box (centered on it). */
 export function patternDef(p: Pattern, id: string, w: number, h: number): ReactElement {
   const tile = tileOf(p.motif, Math.max(1, p.size), p.weight, p.seed);
-  const tf = `translate(${f(w / 2)} ${f(h / 2)})` + (p.angle ? ` rotate(${f(p.angle)})` : '');
+  const k = p.slant !== undefined && p.slant !== 45 ? Math.tan((p.slant * Math.PI) / 180) : 1;
+  const tf = `translate(${f(w / 2)} ${f(h / 2)})` + (k !== 1 ? ` scale(1 ${f(k)})` : '') + (p.angle ? ` rotate(${f(p.angle)})` : '');
   const common = {
     id,
     patternUnits: 'userSpaceOnUse' as const,

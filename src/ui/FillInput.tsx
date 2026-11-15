@@ -12,7 +12,7 @@ import {
   toGradient,
   withAngle,
 } from '../model/gradient';
-import { PATTERN_MOTIFS, PATTERN_SIZE, isPattern, motifInfo, toPattern, withMotif } from '../model/pattern';
+import { PATTERN_MOTIFS, PATTERN_SIZE, PATTERN_SLANT, isPattern, motifInfo, toPattern, withMotif } from '../model/pattern';
 import type { Fill, Gradient, GradientStop, Pattern } from '../model/types';
 import { patternDef } from '../render/pattern';
 import { ColorPicker } from './ColorPicker';
@@ -232,7 +232,7 @@ export function GradientEditor({
 /** Thumbnail of a motif for the motif buttons. */
 function MotifThumb({ motif, id }: { motif: Pattern['motif']; id: string }) {
   const m = motifInfo(motif);
-  const p: Pattern = { kind: 'pattern', motif, color: '#333333', background: '#ffffff', size: m.thumb ?? 12, angle: m.angle ?? 0, weight: m.weight };
+  const p: Pattern = { kind: 'pattern', motif, color: '#333333', background: '#ffffff', size: m.thumb ?? 12, angle: m.angle ?? 0, slant: m.slant, weight: m.weight };
   return (
     <svg width={26} height={26} viewBox="0 0 26 26" aria-hidden="true">
       <defs>{patternDef(p, id, 26, 26)}</defs>
@@ -278,6 +278,17 @@ function PatternEditor({ p, label, onChange }: { p: Pattern; label: string; onCh
       />
       <span className="field-label">角度</span>
       <PopupSliderInput label="柄の角度" value={Math.round(p.angle)} min={-180} max={180} suffix="°" onChange={(angle) => set({ angle }, '柄の角度の変更', 'pattern-angle')} />
+      <span className="field-label" title="45° の線がこの角度に傾くように縦方向につぶす（45° でそのまま）">
+        つぶし
+      </span>
+      <PopupSliderInput
+        label="柄のつぶし"
+        value={Math.round(p.slant ?? PATTERN_SLANT.none)}
+        min={PATTERN_SLANT.min}
+        max={PATTERN_SLANT.max}
+        suffix="°"
+        onChange={(slant) => set({ slant }, '柄のつぶしの変更', 'pattern-slant')}
+      />
       {motifInfo(p.motif).usesWeight && (
         <>
           <span className="field-label">{p.motif === 'splatter' ? '量' : '太さ'}</span>
