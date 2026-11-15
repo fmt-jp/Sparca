@@ -124,3 +124,38 @@ test('a dragged object snaps its edges and center to another object, with guide 
   const [, b2] = await boxes();
   expect(b2.x + b2.width / 2).toBeCloseTo(150, 5);
 });
+
+test('resizing: the dragged edge snaps to the canvas center with a guide; not on a turned object', async ({ page }) => {
+  const { w } = await size(page);
+  const { at } = await startDrag(page);
+  await page.mouse.up();
+  // The right-middle handle of the 100×60 rect at (40, 40) is at (140, 70).
+  const handle = page.locator('[data-handle="e"]').first();
+  const hb = (await handle.boundingBox())!;
+  await page.mouse.move(hb.x + hb.width / 2, hb.y + hb.height / 2);
+  await page.mouse.down();
+  // Right edge 4 doc px (2 screen px) short of the canvas center.
+  const target = at(w / 2 - 4, 70);
+  await page.mouse.move(target.x, target.y, { steps: 8 });
+  await expect(page.getByTestId('smart-guide-v')).toHaveCount(1);
+  const b = await box(page);
+  expect(b.x).toBeCloseTo(40, 5);
+  expect(b.x + b.width).toBeCloseTo(w / 2, 5);
+  await page.mouse.up();
+  await expect(page.getByTestId('smart-guide-v')).toHaveCount(0);
+  expect((await box(page)).x + (await box(page)).width).toBeCloseTo(w / 2, 5);
+
+  // Turned 30°: no guides, no snapping.
+  await page.evaluate(() =>
+    (window as unknown as { __sparca: { edit(l: string, f: (d: { layers: { children: { box: { rotation: number } }[] }[] }) => void): void } }).__sparca.edit('t', (d) => {
+      d.layers[0].children[0].box.rotation = 30;
+    }),
+  );
+  const h2 = (await page.locator('[data-handle="e"]').first().boundingBox())!;
+  await page.mouse.move(h2.x + h2.width / 2, h2.y + h2.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(h2.x + h2.width / 2 + 20, h2.y + h2.height / 2 + 5, { steps: 4 });
+  await expect(page.getByTestId('smart-guide-v')).toHaveCount(0);
+  await expect(page.getByTestId('smart-guide-h')).toHaveCount(0);
+  await page.mouse.up();
+});
