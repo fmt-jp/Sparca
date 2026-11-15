@@ -19,6 +19,7 @@ import {
 import { findObject, isEffectivelyLocked } from '../model/tree';
 import type { Box, Id, Paint, PathNode, PathObject, Point, SceneObject, ShapeGeometry, ShapeObject, SparcaDocument, StrokeTool, TextObject } from '../model/types';
 import { commitStroke, RETOUCH_TOOLS, STROKE_TOOLS } from '../store/paintActions';
+import { magicWand } from '../store/wandActions';
 import { snapToGuides, type GuideLine } from '../model/smartGuides';
 import type { PaintCategory } from '../model/toolDefaults';
 import { DocumentSvg } from '../render/DocumentSvg';
@@ -590,6 +591,10 @@ export function CanvasView() {
       return;
     }
 
+    if (effectiveTool === 'wand') {
+      void magicWand(editor, p, e.shiftKey);
+      return;
+    }
     if (effectiveTool === 'marquee-rect' || effectiveTool === 'marquee-ellipse') {
       editor.set({ pixelSelection: null });
       gesture.current = { kind: 'select-area', shape: effectiveTool === 'marquee-rect' ? 'rect' : 'ellipse', start: p };
@@ -1563,7 +1568,7 @@ function StrokePreviewPath({ s }: { s: StrokePreview }) {
             ) : c.kind === 'ellipse' ? (
               <ellipse cx={c.x + c.width / 2} cy={c.y + c.height / 2} rx={c.width / 2} ry={c.height / 2} />
             ) : (
-              <polygon points={c.points.map((q) => `${q.x},${q.y}`).join(' ')} />
+              <path d={[c.points, ...(c.more ?? [])].map((ps) => `M${ps.map((q) => `${q.x},${q.y}`).join(' L')} Z`).join(' ')} clipRule="evenodd" />
             )}
           </clipPath>
         </defs>
@@ -1694,6 +1699,8 @@ function PixelSelectionOutline({ sel, zoom }: { sel: PixelSelection; zoom: numbe
       <rect className={cls} x={sel.x} y={sel.y} width={sel.width} height={sel.height} strokeWidth={k} />
     ) : sel.kind === 'ellipse' ? (
       <ellipse className={cls} cx={sel.x + sel.width / 2} cy={sel.y + sel.height / 2} rx={sel.width / 2} ry={sel.height / 2} strokeWidth={k} />
+    ) : sel.more?.length ? (
+      <path className={cls} d={[sel.points, ...sel.more].map((c) => `M${c.map((q) => `${q.x},${q.y}`).join(' L')} Z`).join(' ')} strokeWidth={k} />
     ) : (
       <polygon className={cls} points={sel.points.map((q) => `${q.x},${q.y}`).join(' ')} strokeWidth={k} />
     );

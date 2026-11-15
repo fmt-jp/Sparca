@@ -12,6 +12,12 @@ const paths: Record<string, ReactElement> = {
   lasso: (
     <path {...S} d="M6 14 C1 10 4 3 11 3 C17 3 19 8 15 11 C12 13 8 12 7 14 C6.5 15.5 7.5 17.5 9 17.5" strokeDasharray="2.2 2" />
   ),
+  wand: (
+    <>
+      <path {...S} d="M3.5 16.5 L12 8" />
+      <path {...S} d="M14 2.5 V5 M14 9 V11.5 M9.5 7 H12 M16 7 H18.5 M11 4 L12.2 5.2 M17 4 L15.8 5.2 M11 10 L12.2 8.8 M17 10 L15.8 8.8" />
+    </>
+  ),
   'polygon-lasso': <path {...S} d="M3 15 L5 4 L12 7 L17 3 L16 16 Z" strokeDasharray="2.2 2" />,
   eyedropper: (
     <>

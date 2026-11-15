@@ -390,7 +390,15 @@ export interface MaskEdge {
 export type MaskShape = (
   | { kind: 'rect'; x: number; y: number; width: number; height: number }
   | { kind: 'ellipse'; x: number; y: number; width: number; height: number }
-  | { kind: 'polygon'; points: Point[] }
+  | {
+      kind: 'polygon';
+      points: Point[];
+      /**
+       * Further outlines (自動選択: separate parts and holes; 2026-11-15), filled together with
+       * `points` by the even-odd rule.
+       */
+      more?: Point[][];
+    }
 ) &
   MaskEdge;
 

@@ -35,6 +35,7 @@ export const TOOL_GROUPS: ToolGroup[] = [
       { id: 'marquee-ellipse', label: '楕円選択ツール', key: 'M' },
       { id: 'lasso', label: '投げ縄ツール', key: 'L' },
       { id: 'polygon-lasso', label: '多角形選択ツール（クリックで頂点、始点クリック／ダブルクリック／Enter で閉じる）', key: 'L' },
+      { id: 'wand', label: '自動選択ツール（クリックした所と似た色の範囲を選択、Shift+クリックで追加）', key: 'W' },
     ],
   },
   {

@@ -117,7 +117,10 @@ export function cropImage(doc: SparcaDocument, id: Id, f: Rect, srcW: number, sr
 function remapMask(m: MaskShape, fx: number, fy: number, fw: number, fh: number): MaskShape {
   const px = (x: number) => (x - fx) / fw;
   const py = (y: number) => (y - fy) / fh;
-  if (m.kind === 'polygon') return { ...m, points: m.points.map((p) => ({ x: px(p.x), y: py(p.y) })) };
+  if (m.kind === 'polygon') {
+    const map = (ps: Point[]) => ps.map((p) => ({ x: px(p.x), y: py(p.y) }));
+    return { ...m, points: map(m.points), ...(m.more ? { more: m.more.map(map) } : {}) };
+  }
   return { ...m, x: px(m.x), y: py(m.y), width: m.width / fw, height: m.height / fh };
 }
 
@@ -164,7 +167,7 @@ function maskGeometry(o: ImageObject, sel: MaskShape): MaskShape {
     const l = toContentLocal(o, p);
     return { x: l.x / b.width, y: l.y / b.height };
   };
-  if (sel.kind === 'polygon') return { kind: 'polygon', points: sel.points.map(norm) };
+  if (sel.kind === 'polygon') return { kind: 'polygon', points: sel.points.map(norm), ...(sel.more ? { more: sel.more.map((c) => c.map(norm)) } : {}) };
   if (b.rotation === 0 && !o.flip?.x && !o.flip?.y) {
     return {
       kind: sel.kind,

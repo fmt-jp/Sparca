@@ -96,6 +96,7 @@ export function PropertiesPanel() {
   return (
     <section className="properties" aria-label="プロパティ">
       {editingMask && <MaskEditSection owner={editingMask} />}
+      {tool === 'wand' && <WandSection />}
       {SELECTION_TOOLS.has(tool) && <SelectionEdgeSection />}
       {tool !== 'crop' && <PixelSelectionSection />}
       {tool === 'eyedropper' && <EyedropperSection />}
@@ -130,6 +131,7 @@ const TOOL_HINT: Partial<Record<string, string>> = {
   'marquee-ellipse': 'ドラッグで楕円の範囲を選択（Shift で正円）。',
   lasso: 'ドラッグで自由な形の範囲を選択。',
   'polygon-lasso': 'クリックで頂点を追加。始点をクリック、ダブルクリック、または Enter で閉じる。Esc で取消。',
+  wand: 'クリックした所と似た色の範囲を自動で選択（Shift+クリックで追加）。',
   subselect:
     'パスをクリックしてアンカーを表示。アンカーをドラッグで移動（Shift で追加選択、空き部分のドラッグで範囲選択）、ハンドルのドラッグで曲線を調整（Alt で左右を独立）。アンカーをダブルクリックで角／曲線の切り替え、輪郭をダブルクリックでアンカー追加、Delete で削除。',
   pen: 'クリックで角のアンカー、ドラッグで曲線のアンカー（Shift で 45° 単位）。始点クリックで閉じたパス、Enter・Esc・ダブルクリックで開いたパスとして終了。',
@@ -754,6 +756,23 @@ function StrokeToolSection({ tool }: { tool: StrokeTool }) {
   );
 }
 
+function WandSection() {
+  const wand = useEditor((s) => s.wand);
+  const set = (patch: Partial<typeof wand>) => editor.set({ wand: { ...editor.getState().wand, ...patch } });
+  return (
+    <div className="prop-section" data-testid="wand-panel">
+      <span className="section-title">自動選択</span>
+      <Field label="許容値">
+        <PopupSliderInput label="自動選択の許容値" value={wand.tolerance} min={0} max={255} onChange={(v) => set({ tolerance: Math.round(v) })} />
+      </Field>
+      <Toggle checked={wand.contiguous} onChange={(contiguous) => set({ contiguous })}>
+        隣接する範囲のみ
+      </Toggle>
+      <span className="hint">クリックした所と似た色の範囲を選択します（画面に見えているとおりの色で判定）。許容値を大きくすると広く選ばれます。Shift+クリックで範囲を追加。</span>
+    </div>
+  );
+}
+
 function GradientToolSection() {
   const target = useEditor((s) => s.gradientToolTarget);
   const options = [
@@ -935,7 +954,7 @@ function PixelSelectionSection() {
   );
 }
 
-const SELECTION_TOOLS = new Set(['marquee-rect', 'marquee-ellipse', 'lasso', 'polygon-lasso']);
+const SELECTION_TOOLS = new Set(['marquee-rect', 'marquee-ellipse', 'lasso', 'polygon-lasso', 'wand']);
 
 /** Edge of the selection tools (Fireworks 「エッジ」): used for new selections and the current one. */
 function SelectionEdgeSection() {

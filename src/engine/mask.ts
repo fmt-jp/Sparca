@@ -6,6 +6,12 @@ import { blurChannel } from './blur';
 const SUBSAMPLES = 4;
 const ELLIPSE_SEGMENTS = 128;
 
+/** Every outline of a mask (a polygon may have more: parts and holes), filled even-odd. */
+export function maskContours(shape: MaskShape): Point[][] {
+  return shape.kind === 'polygon' ? [shape.points, ...(shape.more ?? [])] : [maskPolygon(shape)];
+}
+
+/** The (first) outline of a mask. */
 export function maskPolygon(shape: MaskShape): Point[] {
   switch (shape.kind) {
     case 'rect':
@@ -36,8 +42,8 @@ export function maskPolygon(shape: MaskShape): Point[] {
  * preview downscale, applied to them like to every other pixel-sized parameter.
  */
 export function rasterizeMask(shape: MaskShape, w: number, h: number, scale = 1): Float32Array {
-  const pts = maskPolygon(shape).map((p) => ({ x: p.x * w, y: p.y * h }));
-  return rasterizeEdged(pts, w, h, scaledEdge(shape, scale));
+  const cs = maskContours(shape).map((c) => c.map((p) => ({ x: p.x * w, y: p.y * h })));
+  return rasterizeEdged(cs, w, h, scaledEdge(shape, scale));
 }
 
 /** Edge parameters in output pixels. */
@@ -64,14 +70,14 @@ export const featherSigma = (f: number) => f / 2;
  * and feathered. Work happens on a grid padded by the reach of grow and feather, so the
  * selection outside the image still pulls the edge correctly (no false edge at the border).
  */
-function rasterizeEdged(pts: Point[], w: number, h: number, edge: Edge): Float32Array {
+function rasterizeEdged(cs: Point[][], w: number, h: number, edge: Edge): Float32Array {
   const plain = Math.abs(edge.grow) < 0.01 && edge.feather <= 0 && edge.antialias;
-  if (plain || pts.length < 3) return fillCoverage(pts, w, h);
+  if (plain || cs.every((c) => c.length < 3)) return fillCoverage(cs, w, h);
   const pad = Math.ceil(Math.abs(edge.grow) + featherSigma(edge.feather) * 3) + 2;
   const pw = w + pad * 2;
   const ph = h + pad * 2;
   let m = fillCoverage(
-    pts.map((p) => ({ x: p.x + pad, y: p.y + pad })),
+    cs.map((c) => c.map((p) => ({ x: p.x + pad, y: p.y + pad }))),
     pw,
     ph,
   );
@@ -86,15 +92,18 @@ function rasterizeEdged(pts: Point[], w: number, h: number, edge: Edge): Float32
   return out;
 }
 
-/** Plain anti-aliased coverage of a polygon given in pixel coordinates. */
-function fillCoverage(pts: Point[], w: number, h: number): Float32Array {
+/** Plain anti-aliased coverage of polygons given in pixel coordinates (even-odd). */
+function fillCoverage(all: Point[][], w: number, h: number): Float32Array {
   const mask = new Float32Array(w * h);
-  if (pts.length < 3) return mask;
+  const cs = all.filter((c) => c.length >= 3);
+  if (!cs.length) return mask;
   let minY = Infinity;
   let maxY = -Infinity;
-  for (const p of pts) {
-    minY = Math.min(minY, p.y);
-    maxY = Math.max(maxY, p.y);
+  for (const c of cs) {
+    for (const p of c) {
+      minY = Math.min(minY, p.y);
+      maxY = Math.max(maxY, p.y);
+    }
   }
   const y0 = Math.max(0, Math.floor(minY));
   const y1 = Math.min(h - 1, Math.ceil(maxY));
@@ -104,11 +113,13 @@ function fillCoverage(pts: Point[], w: number, h: number): Float32Array {
     for (let s = 0; s < SUBSAMPLES; s++) {
       const sy = y + (s + 0.5) / SUBSAMPLES;
       xs.length = 0;
-      for (let i = 0; i < pts.length; i++) {
-        const a = pts[i];
-        const b = pts[(i + 1) % pts.length];
-        if ((a.y <= sy && b.y > sy) || (b.y <= sy && a.y > sy)) {
-          xs.push(a.x + ((sy - a.y) / (b.y - a.y)) * (b.x - a.x));
+      for (const pts of cs) {
+        for (let i = 0; i < pts.length; i++) {
+          const a = pts[i];
+          const b = pts[(i + 1) % pts.length];
+          if ((a.y <= sy && b.y > sy) || (b.y <= sy && a.y > sy)) {
+            xs.push(a.x + ((sy - a.y) / (b.y - a.y)) * (b.x - a.x));
+          }
         }
       }
       xs.sort((p, q) => p - q);
@@ -220,8 +231,9 @@ const OUTLINE_GRID = 512;
  */
 export function edgeOutline(shape: MaskShape): Point[][] | null {
   if (Math.abs(shape.grow ?? 0) < 0.01) return null;
-  const poly = maskPolygon(shape);
-  if (poly.length < 3) return [];
+  const cs = maskContours(shape).filter((c) => c.length >= 3);
+  if (!cs.length) return [];
+  const poly = cs.flat();
   let minX = Infinity;
   let minY = Infinity;
   let maxX = -Infinity;
@@ -238,7 +250,7 @@ export function edgeOutline(shape: MaskShape): Point[][] | null {
   const k = Math.min(1, OUTLINE_GRID / Math.max(maxX - minX + reach * 2, maxY - minY + reach * 2, 1));
   const w = Math.max(1, Math.ceil((maxX - minX + reach * 2) * k));
   const h = Math.max(1, Math.ceil((maxY - minY + reach * 2) * k));
-  const pts = poly.map((p) => ({ x: (p.x - ox) * k, y: (p.y - oy) * k }));
+  const pts = cs.map((c) => c.map((p) => ({ x: (p.x - ox) * k, y: (p.y - oy) * k })));
   const m = rasterizeEdged(pts, w, h, { grow: (shape.grow ?? 0) * k, antialias: true, feather: 0 });
   return contours(m, w, h, 0.5).map((line) => line.map((p) => ({ x: ox + p.x / k, y: oy + p.y / k })));
 }
