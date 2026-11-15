@@ -3,7 +3,7 @@
 // color adjustments and partial edits; not its effects), sampled at each document pixel
 // and cut out by the selection's coverage, so hard / feathered / grown edges carry over.
 import { rasterizeMask } from '../engine/mask';
-import { objectBounds, toLocal, type Rect } from '../model/geometry';
+import { objectBounds, type Rect, toContentLocal } from '../model/geometry';
 import type { ImageObject, MaskShape } from '../model/types';
 import { imageCache } from '../render/imageCache';
 import { validateDimensions } from './assets';
@@ -83,7 +83,7 @@ export async function copySelectionPixels(ed: EditorStore): Promise<PixelCopy | 
       for (let i = 0; i < w; i++) {
         const m = mask[j * w + i];
         if (m <= 0) continue;
-        const l = toLocal(img.box, { x: rect.x + i + 0.5, y: rect.y + j + 0.5 });
+        const l = toContentLocal(img, { x: rect.x + i + 0.5, y: rect.y + j + 0.5 });
         const fx = l.x * kx - 0.5;
         const fy = l.y * ky - 0.5;
         if (fx < -0.5 || fy < -0.5 || fx > sw - 0.5 || fy > sh - 0.5) continue;

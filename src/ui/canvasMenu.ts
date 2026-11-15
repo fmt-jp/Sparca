@@ -1,6 +1,7 @@
 // Items of the canvas right-click menu: for objects, empty canvas, and path anchors.
 import { eraseSelection } from '../store/imageActions';
 import { canOutlineText, outlineSelectedText } from '../store/textOutlineActions';
+import { canFlip, flipSelection } from '../store/flipActions';
 import { findObject, isEffectivelyLocked } from '../model/tree';
 import { locateNode, segmentCount } from '../model/pathEdit';
 import {
@@ -43,6 +44,9 @@ export function objectMenu(): MenuItem[] {
     SEP,
     { label: 'グループ化', shortcut: `${mod}G`, action: () => groupSelection(editor), disabled: selection.length < 2 },
     { label: 'グループ解除', shortcut: `${mod}Shift+G`, action: () => ungroupSelection(editor), disabled: !isGroup },
+    SEP,
+    { label: '左右反転', action: () => flipSelection(editor, 'x'), disabled: !canFlip(editor) },
+    { label: '上下反転', action: () => flipSelection(editor, 'y'), disabled: !canFlip(editor) },
     SEP,
     { label: 'パスに変換', action: () => convertSelectionToPaths(editor), disabled: !canConvertSelectionToPaths(editor) },
     {

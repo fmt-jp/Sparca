@@ -24,6 +24,7 @@ import { canConvertSelectionToPaths, convertSelectionToPaths } from '../store/pa
 import { canCombineSelection, COMBINE_LABELS } from '../store/pathCombine';
 import { attachTextToPath, canAttachTextToPath, canDetachTextFromPath, detachTextFromPath } from '../store/textPathActions';
 import { canOutlineText, outlineSelectedText } from '../store/textOutlineActions';
+import { canFlip, flipSelection } from '../store/flipActions';
 import { COMBINE_OPS, runCombine } from './combine';
 import { editor, useEditor } from './useEditor';
 
@@ -135,6 +136,9 @@ export function MenuBar({ onNew }: { onNew: () => void }) {
         { separator: true, label: '' },
         { label: 'グループ化', shortcut: `${mod}G`, action: () => groupSelection(editor), disabled: selection.length < 2 },
         { label: 'グループ解除', shortcut: `${mod}Shift+G`, action: () => ungroupSelection(editor), disabled: !hasSel },
+        { separator: true, label: '' },
+        { label: '左右反転', action: () => flipSelection(editor, 'x'), disabled: !canFlip(editor) },
+        { label: '上下反転', action: () => flipSelection(editor, 'y'), disabled: !canFlip(editor) },
         { separator: true, label: '' },
         { label: 'パスに変換', action: () => convertSelectionToPaths(editor), disabled: !canConvertSelectionToPaths(editor) },
         { label: 'テキストをアウトライン化', shortcut: `${mod}Shift+O`, action: () => void outlineSelectedText(editor), disabled: !canOutlineText(editor) },

@@ -1,6 +1,6 @@
 // Canvas and raster-object operations (spec §7). Document-level operations (canvas size,
 // document crop) and per-image operations (image crop, image resize) are kept separate.
-import { boxCenter, objectBounds, rotatePoint, toLocal, transformObject, IDENTITY_TRANSFORM, type Rect } from './geometry';
+import { boxCenter, objectBounds, rotatePoint, transformObject, IDENTITY_TRANSFORM, type Rect, toContentLocal } from './geometry';
 import { findObject } from './tree';
 import type { Id, ImageObject, LocalEdit, MaskEdge, MaskShape, Point, ResampleMethod, SparcaDocument } from './types';
 
@@ -103,7 +103,10 @@ export function cropImage(doc: SparcaDocument, id: Id, f: Rect, srcW: number, sr
   );
   // New box: the sub-rectangle of the old box, same rotation.
   const b = o.box;
-  const localCenter = { x: b.x + (fx + fw / 2) * b.width, y: b.y + (fy + fh / 2) * b.height };
+  // The kept part, where it shows in the box (mirrored when the image is flipped).
+  const cxf = fx + fw / 2;
+  const cyf = fy + fh / 2;
+  const localCenter = { x: b.x + (o.flip?.x ? 1 - cxf : cxf) * b.width, y: b.y + (o.flip?.y ? 1 - cyf : cyf) * b.height };
   const c = rotatePoint(localCenter, boxCenter(b), b.rotation);
   const w = b.width * fw;
   const h = b.height * fh;
@@ -156,12 +159,13 @@ function scaleEdge(e: MaskEdge, k: number): MaskEdge {
 
 function maskGeometry(o: ImageObject, sel: MaskShape): MaskShape {
   const b = o.box;
+  // In the image's own pixels: mirrored back when the image is flipped (反転).
   const norm = (p: Point): Point => {
-    const l = toLocal(b, p);
+    const l = toContentLocal(o, p);
     return { x: l.x / b.width, y: l.y / b.height };
   };
   if (sel.kind === 'polygon') return { kind: 'polygon', points: sel.points.map(norm) };
-  if (b.rotation === 0) {
+  if (b.rotation === 0 && !o.flip?.x && !o.flip?.y) {
     return {
       kind: sel.kind,
       x: (sel.x - b.x) / b.width,

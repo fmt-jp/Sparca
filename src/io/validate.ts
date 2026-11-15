@@ -143,12 +143,14 @@ function checkObject(o: unknown, where: string, ids: Set<string>, assets: Obj): 
       num(o, 'fontSize', where);
       checkFill(o.color, `${where}.color`, false);
       if (o.path !== undefined) checkTextPath(o.path, `${where}.path`);
+      checkFlip(o, where);
       break;
     case 'image': {
       const assetId = str(o, 'assetId', where);
       if (!isObj(assets[assetId])) throw new Invalid(`${where} が参照する画像 ${assetId} がありません`);
       o.pipeline = mergeDefaults(defaultPipeline(), o.pipeline);
       checkLocalEdits((o.pipeline as Obj).localEdits, `${where}.pipeline.localEdits`);
+      checkFlip(o, where);
       // Blur first, so the tone (applied before the blur in the old pipeline) ends up first.
       migrateImageBlur(o);
       migrateImageTone(o);
@@ -252,6 +254,12 @@ function checkLocalEdits(v: unknown, where: string) {
       if (num(e, 'size', w) < 1) throw new Invalid(`${w}.size が小さすぎます`);
     } else throw new Invalid(`${w} の種類が正しくありません`);
   });
+}
+
+/** 反転 of an image or text: { x, y } booleans when present. */
+function checkFlip(o: Obj, where: string) {
+  if (o.flip === undefined) return;
+  if (!isObj(o.flip) || typeof o.flip.x !== 'boolean' || typeof o.flip.y !== 'boolean') throw new Invalid(`${where}.flip が正しくありません`);
 }
 
 /** A brush / pencil / eraser stroke (LocalStroke). */
