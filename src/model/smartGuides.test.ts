@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { snapToGuides } from './smartGuides';
+import { resizeBox } from './handles';
+import { snapResize, snapToGuides } from './smartGuides';
 
 const canvas = { width: 800, height: 600 };
 const free = { x: true, y: true };
@@ -41,5 +42,43 @@ describe('smart guides', () => {
     expect(r.lines.filter((l) => l.axis === 'v')).toEqual([]);
     const exact = snapToGuides({ x: 500, y: 300, width: 100, height: 40 }, [other], canvas, 6, { x: false, y: true });
     expect(exact.lines.filter((l) => l.axis === 'v').map((l) => l.at).sort((a, b) => a - b)).toEqual([500, 550, 600]);
+  });
+});
+
+describe('smart guides while resizing', () => {
+  const start = { x: 100, y: 100, width: 100, height: 50, rotation: 0 };
+  const other = { x: 300, y: 50, width: 80, height: 200 };
+
+  it('the dragged right edge snaps to another object; the left edge stays', () => {
+    const boxAt = (p: { x: number; y: number }) => resizeBox(start, 'e', p, { keepAspect: false, fromCenter: false });
+    const r = snapResize(boxAt, { x: 296, y: 125 }, [other], canvas, 6, false);
+    expect(boxAt(r.p)).toMatchObject({ x: 100, width: 200 });
+    expect(r.lines).toEqual([{ axis: 'v', at: 300, from: 50, to: 250 }]);
+    // Too far: no snap, no lines.
+    expect(snapResize(boxAt, { x: 290, y: 125 }, [other], canvas, 6, false)).toEqual({ p: { x: 290, y: 125 }, lines: [] });
+  });
+
+  it('a corner snaps each axis on its own', () => {
+    const boxAt = (p: { x: number; y: number }) => resizeBox(start, 'se', p, { keepAspect: false, fromCenter: false });
+    // Right edge near 300 (other's left), bottom near 150 (other's middle).
+    const r = snapResize(boxAt, { x: 303, y: 147 }, [other], canvas, 6, false);
+    expect(boxAt(r.p)).toMatchObject({ x: 100, y: 100, width: 200, height: 50 });
+    expect(r.lines.map((l) => [l.axis, l.at])).toEqual([['v', 300], ['h', 150]]);
+  });
+
+  it('from the center, the far edge snaps too', () => {
+    const boxAt = (p: { x: number; y: number }) => resizeBox(start, 'e', p, { keepAspect: false, fromCenter: true });
+    // Center 150: the right edge at 240 puts the left edge at 60, 2 px from a target at 58.
+    const r = snapResize(boxAt, { x: 240, y: 125 }, [{ x: 58, y: 0, width: 10, height: 10 }], canvas, 6, false);
+    expect(boxAt(r.p)).toMatchObject({ x: 58, width: 184 });
+  });
+
+  it('keeping the aspect, only the nearest edge snaps and the other follows the ratio', () => {
+    const boxAt = (p: { x: number; y: number }) => resizeBox(start, 'se', p, { keepAspect: true, fromCenter: false });
+    const r = snapResize(boxAt, { x: 298, y: 150 }, [other], canvas, 6, true);
+    const b = boxAt(r.p);
+    expect(b.x + b.width).toBeCloseTo(300, 6);
+    expect(b.width / b.height).toBeCloseTo(2, 6);
+    expect(r.lines.some((l) => l.axis === 'v' && l.at === 300)).toBe(true);
   });
 });

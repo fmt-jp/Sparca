@@ -20,7 +20,7 @@ import { findObject, isEffectivelyLocked } from '../model/tree';
 import type { Box, Id, Paint, PathNode, PathObject, Point, SceneObject, ShapeGeometry, ShapeObject, SparcaDocument, StrokeTool, TextObject } from '../model/types';
 import { commitStroke, RETOUCH_TOOLS, STROKE_TOOLS } from '../store/paintActions';
 import { magicWand } from '../store/wandActions';
-import { snapToGuides, type GuideLine } from '../model/smartGuides';
+import { snapResize, snapToGuides, type GuideLine } from '../model/smartGuides';
 import type { PaintCategory } from '../model/toolDefaults';
 import { DocumentSvg } from '../render/DocumentSvg';
 import { imageCache } from '../render/imageCache';
@@ -875,11 +875,30 @@ export function CanvasView() {
       case 'resize': {
         // From the center with Alt, or Ctrl (⌘ on a Mac).
         const opt = { keepAspect: e.shiftKey, fromCenter: e.altKey || e.ctrlKey || e.metaKey };
-        const p = editor.snap(toDoc(e.clientX, e.clientY));
-        if (g.single) {
+        let p = editor.snap(toDoc(e.clientX, e.clientY));
+        const single = g.single;
+        const isText = !!single && [...g.originals.values()][0].type === 'text';
+        if (single) opt.keepAspect = opt.keepAspect || isText;
+        // Smart guides: the edges being moved snap to the other objects and the canvas (not for
+        // a turned object, whose edges are slanted).
+        const st = editor.getState();
+        let lines: GuideLine[] = [];
+        if (st.smartGuides && (!single || single.rotation % 360 === 0)) {
+          const boxAt = (q: Point): Rect => {
+            if (single) return resizeBox(single, g.handle, q, opt);
+            const t = boundsResize(g.bounds, g.handle, q, opt);
+            const x0 = t.pivot.x + (g.bounds.x - t.pivot.x) * t.sx;
+            const y0 = t.pivot.y + (g.bounds.y - t.pivot.y) * t.sy;
+            return { x: x0, y: y0, width: g.bounds.width * t.sx, height: g.bounds.height * t.sy };
+          };
+          const r = snapResize(boxAt, p, guideTargets(st.doc, g.originals), st.doc, SMART_GUIDE_PX / zoom, opt.keepAspect);
+          p = r.p;
+          lines = r.lines;
+        }
+        setGuides(lines.length ? lines : null);
+        if (single) {
           const [id, orig] = [...g.originals][0];
-          const isText = orig.type === 'text';
-          const box = resizeBox(g.single, g.handle, p, { ...opt, keepAspect: opt.keepAspect || isText });
+          const box = resizeBox(single, g.handle, p, opt);
           applyTransformed(new Map([[id, orig]]), (o) => resizeLeaf(o, box));
         } else {
           const t = boundsResize(g.bounds, g.handle, p, opt);
@@ -957,6 +976,7 @@ export function CanvasView() {
         } else editor.cancelGesture();
         break;
       case 'resize':
+        setGuides(null);
         editor.endGesture('拡大縮小');
         break;
       case 'rotate':
