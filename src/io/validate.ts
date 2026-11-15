@@ -3,7 +3,7 @@
 import { createEffect, EFFECT_KINDS, migrateLegacyEffects } from '../model/effects';
 import { MAX_CURVE_POINTS } from '../model/curves';
 import { defaultPipeline } from '../model/factory';
-import { PATTERN_MOTIFS, PATTERN_SIZE } from '../model/pattern';
+import { PATTERN_MOTIFS, PATTERN_SIZE, PATTERN_SLANT } from '../model/pattern';
 import { gradientRect } from '../model/mask';
 import { effectsMargin } from '../render/effects';
 import type { Box, Effect, EffectKind, Gradient, PatternMotif } from '../model/types';
@@ -331,6 +331,9 @@ function checkPattern(v: Obj, where: string) {
   const weight = num(v, 'weight', where);
   if (!(weight >= 0 && weight <= 1)) throw new Invalid(`${where}.weight が範囲外です`);
   if (v.seed !== undefined && !(typeof v.seed === 'number' && Number.isFinite(v.seed))) throw new Invalid(`${where}.seed が正しくありません`);
+  if (v.slant !== undefined && !(typeof v.slant === 'number' && v.slant >= PATTERN_SLANT.min && v.slant <= PATTERN_SLANT.max)) {
+    throw new Invalid(`${where}.slant が範囲外です`);
+  }
 }
 
 /** A fill is a color string, a gradient, (where allowed) a pattern, or (where allowed) null. */

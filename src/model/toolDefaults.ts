@@ -1,7 +1,7 @@
 // Settings for new objects, chosen in the properties panel while a drawing tool is active
 // (nothing selected). Each kind of drawing tool has its own: lines, shapes, block arrows,
 // pen paths and text. They are a per-browser preference, not part of the document.
-import { PATTERN_MOTIFS, PATTERN_SIZE } from './pattern';
+import { PATTERN_MOTIFS, PATTERN_SIZE, PATTERN_SLANT } from './pattern';
 import type { Fill, Paint, Stroke, StrokeCap, StrokeJoin, StrokeStyle, TextObject } from './types';
 import type { ToolId } from '../store/editor';
 
@@ -79,7 +79,8 @@ function sanitizeFill(v: unknown, allowNull: boolean, allowPattern = true): Fill
     Number.isFinite(v.angle) &&
     typeof v.weight === 'number' &&
     v.weight >= 0 &&
-    v.weight <= 1
+    v.weight <= 1 &&
+    (v.slant === undefined || (typeof v.slant === 'number' && v.slant >= PATTERN_SLANT.min && v.slant <= PATTERN_SLANT.max))
   ) {
     return v as unknown as Fill;
   }

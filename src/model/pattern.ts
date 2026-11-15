@@ -11,6 +11,8 @@ export interface MotifInfo {
   /** Size (px) and angle the motif starts with when chosen, if it needs its own. */
   size?: number;
   angle?: number;
+  /** つぶし the motif starts with when chosen (degrees; missing = 45, none). */
+  slant?: number;
   /** Repeat size of its thumbnail in the motif buttons (default 12). */
   thumb?: number;
 }
@@ -26,7 +28,7 @@ export const PATTERN_MOTIFS: MotifInfo[] = [
   { motif: 'shippo', label: '七宝', usesWeight: true, weight: 0.3 },
   { motif: 'kikko', label: '亀甲', usesWeight: true, weight: 0.3 },
   { motif: 'asanoha', label: '麻の葉', usesWeight: true, weight: 0.3 },
-  { motif: 'sayagata', label: '紗綾形', usesWeight: true, weight: 0.4, size: 140, angle: 45, thumb: 40 },
+  { motif: 'sayagata', label: '紗綾形', usesWeight: true, weight: 0.4, size: 140, angle: 45, slant: 27, thumb: 40 },
   { motif: 'kagome', label: '籠目', usesWeight: true, weight: 0.3, size: 30, thumb: 14 },
   { motif: 'hishi', label: '菱', usesWeight: true, weight: 0.5, size: 40, thumb: 16 },
   { motif: 'tatewaku', label: '立涌', usesWeight: true, weight: 0.3, size: 36, thumb: 14 },
@@ -39,6 +41,8 @@ export const PATTERN_MOTIFS: MotifInfo[] = [
 ];
 
 export const PATTERN_SIZE = { min: 4, max: 500 };
+/** つぶし: the angle lines at 45° lean at after squashing (45 = as drawn). */
+export const PATTERN_SLANT = { min: 10, max: 80, none: 45 };
 
 export function motifInfo(m: PatternMotif): MotifInfo {
   return PATTERN_MOTIFS.find((x) => x.motif === m) ?? PATTERN_MOTIFS[0];
@@ -60,5 +64,14 @@ export function toPattern(current: Fill | null, color: string | null): Pattern {
 /** The pattern with another motif (its usual thickness when the thickness matters). */
 export function withMotif(p: Pattern, motif: PatternMotif): Pattern {
   const m = motifInfo(motif);
-  return { ...p, motif, weight: m.weight, ...(m.size !== undefined ? { size: m.size } : {}), ...(m.angle !== undefined ? { angle: m.angle } : {}) };
+  const { slant: _old, ...rest } = p;
+  void _old;
+  return {
+    ...rest,
+    motif,
+    weight: m.weight,
+    ...(m.size !== undefined ? { size: m.size } : {}),
+    ...(m.angle !== undefined ? { angle: m.angle } : {}),
+    ...(m.slant !== undefined ? { slant: m.slant } : {}),
+  };
 }
