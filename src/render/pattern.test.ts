@@ -29,6 +29,7 @@ describe('pattern fills', () => {
     expect(withMotif(base, 'sayagata')).toMatchObject({ motif: 'sayagata', size: 140, angle: 45, slant: 27 });
     expect(withMotif(base, 'splatter')).toMatchObject({ size: 160 });
     expect(withMotif(base, 'kagome').angle).toBe(0); // back to its own angle (0°)
+    expect(withMotif({ ...base, size: 77 }, 'dots').size).toBe(20); // and size (motifs without their own: 20px)
     expect(withMotif({ ...base, angle: 60 }, 'higaki').angle).toBe(45);
     expect(withMotif(base, 'higaki')).toMatchObject({ angle: 45, size: 60 });
     for (const motif of ['sayagata', 'kagome', 'hishi', 'tatewaku', 'raimon', 'kanoko', 'ajiro', 'splatter', 'higaki', 'chidori'] as const) {

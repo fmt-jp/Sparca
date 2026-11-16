@@ -8,7 +8,7 @@ export interface MotifInfo {
   usesWeight: boolean;
   /** Initial thickness when the motif is chosen. */
   weight: number;
-  /** Size (px) the motif starts with when chosen, if it needs its own; its angle (default 0°). */
+  /** Size (px) the motif starts with when chosen (default 20); its angle (default 0°). */
   size?: number;
   angle?: number;
   /** つぶし the motif starts with when chosen (degrees; missing = 45, none). */
@@ -41,6 +41,8 @@ export const PATTERN_MOTIFS: MotifInfo[] = [
 ];
 
 export const PATTERN_SIZE = { min: 4, max: 500 };
+/** Size of a motif that has no size of its own (px). */
+export const PATTERN_DEFAULT_SIZE = 20;
 /** つぶし: the angle lines at 45° lean at after squashing (45 = as drawn). */
 export const PATTERN_SLANT = { min: 10, max: 80, none: 45 };
 
@@ -58,12 +60,12 @@ export function isPattern(f: Fill | null | undefined): f is Pattern {
  */
 export function toPattern(current: Fill | null, color: string | null): Pattern {
   if (isPattern(current)) return current;
-  return { kind: 'pattern', motif: 'stripes', color: color ?? '#000000', background: '#ffffff', size: 20, angle: 0, weight: motifInfo('stripes').weight };
+  return { kind: 'pattern', motif: 'stripes', color: color ?? '#000000', background: '#ffffff', size: PATTERN_DEFAULT_SIZE, angle: 0, weight: motifInfo('stripes').weight };
 }
 
 /**
- * The pattern with another motif: its usual thickness, its own size (if it has one), and its
- * own angle and つぶし (0° / none unless it has them; reset every time, 2026-11-15 user request).
+ * The pattern with another motif: its usual thickness, and its own size, angle and つぶし
+ * (20px, 0° and none unless it has its own; reset every time, 2026-11-15/16 user request).
  */
 export function withMotif(p: Pattern, motif: PatternMotif): Pattern {
   const m = motifInfo(motif);
@@ -73,7 +75,7 @@ export function withMotif(p: Pattern, motif: PatternMotif): Pattern {
     ...rest,
     motif,
     weight: m.weight,
-    ...(m.size !== undefined ? { size: m.size } : {}),
+    size: m.size ?? PATTERN_DEFAULT_SIZE,
     angle: m.angle ?? 0,
     ...(m.slant !== undefined ? { slant: m.slant } : {}),
   };
