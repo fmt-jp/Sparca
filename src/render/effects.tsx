@@ -260,6 +260,51 @@ function grow(c: Chain, alpha: string, px: number): string {
   );
 }
 
+/** σ = step / K: the edge lands where a straight edge's blur is at 1 − Φ(K). */
+const GROW_K = 1.1;
+const GROW_STEP = 6;
+
+function normalTail(k: number): number {
+  // 1 − Φ(k) (Abramowitz–Stegun 26.2.17)
+  const t = 1 / (1 + 0.2316419 * k);
+  const d = Math.exp((-k * k) / 2) / Math.sqrt(2 * Math.PI);
+  return d * t * (0.31938153 + t * (-0.356563782 + t * (1.781477937 + t * (-1.821255978 + t * 1.330274429))));
+}
+
+/**
+ * Grown by `px` in every direction, as by a disk (feMorphology alone grows by a square, which
+ * makes slanted and curved edges blocky; fixed 2026-11-17). After 1 px by a square (so thin
+ * lines are thick enough), in steps of up to 6 px: each a Gaussian blur thresholded back to a
+ * crisp edge at the level a straight edge has `step` px out. The blur stays large enough on
+ * screen for that level to hold from 50 % zoom up (measured within about ±1 px in Chromium),
+ * and the chain does not branch, so glows stacked on each other stay fast.
+ */
+function growRound(c: Chain, alpha: string, px: number): string {
+  if (px <= 0) return alpha;
+  const K = GROW_K;
+  const S = GROW_STEP;
+  if (px <= 1.5) return c.dilate(alpha, px);
+  // 1 px by a square first: thin lines get thick enough for the blurred steps (a square that
+  // small does not show).
+  let out = c.dilate(alpha, 1);
+  const rest = px - 1;
+  const steps = Math.min(16, Math.ceil(rest / S));
+  const s = rest / steps;
+  const intercept = 0.5 - 20 * normalTail(K);
+  for (let i = 0; i < steps; i++) {
+    const b = c.blurSigma(out, s / K);
+    out = c.add(
+      (r) => (
+        <feComponentTransfer key={r} in={b} result={r}>
+          <feFuncA type="linear" slope={20} intercept={Math.round(intercept * 1000) / 1000} />
+        </feComponentTransfer>
+      ),
+      'g',
+    );
+  }
+  return out;
+}
+
 function linear(slope: number, intercept: number) {
   return (
     <>
@@ -291,11 +336,13 @@ function applyEffect(c: Chain, e: Effect, input: string, rotation: number): stri
       return c.merge([input, inner]);
     }
     case 'glow': {
-      const g = c.blur(c.dilate(c.alpha(input), e.spread), e.blur);
+      // Spread by a disk (feMorphology alone grows by a square, which turned slanted and curved
+      // edges blocky, more so with each glow on top: fixed 2026-11-17).
+      const g = c.blur(growRound(c, c.alpha(input), e.spread), e.blur);
       return c.merge([c.paint(g, e.color, e.opacity), input]);
     }
     case 'inner-glow': {
-      const g = c.blur(c.dilate(c.inverse(c.alpha(input)), e.spread), e.blur);
+      const g = c.blur(growRound(c, c.inverse(c.alpha(input)), e.spread), e.blur);
       const inner = c.composite(c.paint(g, e.color, e.opacity), input, 'in');
       return c.merge([input, inner]);
     }

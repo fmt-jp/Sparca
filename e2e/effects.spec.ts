@@ -426,3 +426,33 @@ test('ぼかし（ズーム） stays inside the canvas, also on screen', async (
   const workspace = (await decodePixels(page, await page.screenshot({ clip: { x: c.x + 830, y: c.y + 500, width: 1, height: 1 } }), 'image/png', [[0, 0]])).px[0];
   expect(px[1]).toEqual(workspace);
 });
+
+test('a glow spreads evenly all round (round corners, as far as set), also stacked on another', async ({ page }) => {
+  await rect(page);
+  await page.evaluate(() => {
+    const ed = (window as unknown as { __sparca: { edit(l: string, f: (d: { layers: { children: { effects: unknown[] }[] }[] }) => void): void } }).__sparca;
+    ed.edit('t', (d) => {
+      d.layers[0].children[0].effects = [
+        { id: 'g1', kind: 'glow', enabled: true, strength: 1, color: '#ff0000', opacity: 1, blur: 0, spread: 20 },
+        { id: 'g2', kind: 'glow', enabled: true, strength: 1, color: '#00c000', opacity: 1, blur: 0, spread: 10 },
+      ];
+    });
+  });
+  const red = (p: number[]) => p[0] > 200 && p[1] < 80;
+  const green = (p: number[]) => p[1] > 150 && p[0] < 80;
+  const white = (p: number[]) => lum(p) > 740;
+  const px = await exportPixels(page, [
+    [83, 200], // 17 px out from the left edge: red (spread 20)
+    [76, 200], // 24: green (the second glow, 20–30 out)
+    [66, 200], // 34: beyond both
+    [90, 90], // 14 px from the corner: red
+    [84, 84], // 22.6 px from the corner: not red (a square spread reaches 28 px here)
+    [77, 77], // 32.5 px: beyond both (a square spread would be green)
+  ]);
+  expect(red(px[0])).toBe(true);
+  expect(green(px[1])).toBe(true);
+  expect(white(px[2])).toBe(true);
+  expect(red(px[3])).toBe(true);
+  expect(green(px[4])).toBe(true);
+  expect(white(px[5])).toBe(true);
+});
