@@ -42,7 +42,7 @@ export function BlurSelectionDialog({ onClose }: { onClose: () => void }) {
       <Toggle checked={preview} onChange={setPreview}>
         プレビュー（適用前にキャンバスで確認）
       </Toggle>
-      <div className="hint">ぼかしは編集情報として保持され、画像のプロパティからいつでも取り消せます。</div>
+      <div className="hint explain">ぼかしは編集情報として保持され、画像のプロパティからいつでも取り消せます。</div>
     </Dialog>
   );
 }

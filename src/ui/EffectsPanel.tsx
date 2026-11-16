@@ -196,7 +196,7 @@ export function EffectsPanel({ o }: { o: Exclude<SceneObject, { type: 'group' }>
         >
           ＋ 追加
         </button>
-        {effects.length > 1 && <span className="hint">上から順に適用されます</span>}
+        {effects.length > 1 && <span className="hint explain">上から順に適用されます</span>}
         {!effects.length && <span className="hint">エフェクトはありません</span>}
       </div>
       {menu && (
@@ -325,7 +325,7 @@ export function EffectsPanel({ o }: { o: Exclude<SceneObject, { type: 'group' }>
               }
             >
               <CurveEditor curves={e.curves} name={names[i]} size={256} gestures={false} onChange={(c) => replace(i, { ...e, curves: c }, `${names[i]}の変更`)} />
-              <p className="hint">変更はキャンバスにすぐ反映されます（プレビュー）。OK で確定、キャンセルで元に戻ります。タイトルをドラッグすると画面を移動できます。</p>
+              <p className="hint explain">変更はキャンバスにすぐ反映されます（プレビュー）。OK で確定、キャンセルで元に戻ります。タイトルをドラッグすると画面を移動できます。</p>
             </Dialog>,
             document.body,
           );

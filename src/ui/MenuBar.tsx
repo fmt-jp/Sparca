@@ -80,6 +80,7 @@ export function MenuBar({ onNew }: { onNew: () => void }) {
   const pixelSel = useEditor((s) => s.pixelSelection);
   const grid = useEditor((s) => s.grid);
   const rulers = useEditor((s) => s.rulers);
+  const explanations = useEditor((s) => s.explanations);
   const alignToCanvas = useEditor((s) => s.alignToCanvas);
   const [panels] = usePanelSizes();
   const image = selectedImage(editor);
@@ -212,6 +213,7 @@ export function MenuBar({ onNew }: { onNew: () => void }) {
         { label: 'グリッドにスナップ', checked: grid.snap, action: () => editor.setGrid({ snap: !grid.snap }) },
         { label: 'ルーラー・ガイド・グリッドの設定…（環境設定）', action: () => openDialog({ kind: 'preferences' }) },
         { separator: true, label: '' },
+        { label: '画面の説明を表示', checked: explanations, action: () => editor.set({ explanations: !explanations }) },
         { label: 'レイヤーパネル', checked: !panels.layersHidden, action: () => setPanelSizes({ layersHidden: !panels.layersHidden }) },
         { label: 'プロパティパネル', checked: !panels.propsHidden, action: () => setPanelSizes({ propsHidden: !panels.propsHidden }) },
         {

@@ -108,7 +108,7 @@ export function ExportDialog({ onClose }: { onClose: () => void }) {
           </Field>
         </>
       )}
-      {!askName && <div className="hint">「書き出し」を押すと、保存先とファイル名を選ぶ画面が開きます。</div>}
+      {!askName && <div className="hint explain">「書き出し」を押すと、保存先とファイル名を選ぶ画面が開きます。</div>}
       <div className="hint">
         書き出し範囲: キャンバス全体 {doc.width} × {doc.height} px（キャンバス外のオブジェクトは含まれません）
       </div>

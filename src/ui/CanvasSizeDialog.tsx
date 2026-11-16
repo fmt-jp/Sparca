@@ -52,7 +52,7 @@ export function CanvasSizeDialog({ onClose }: { onClose: () => void }) {
       }
     >
       <div className="hint">
-        現在: {doc.width} × {doc.height} px。内部の画像や図形は拡大縮小されません。
+        現在: {doc.width} × {doc.height} px。<span className="explain">内部の画像や図形は拡大縮小されません。</span>
       </div>
       <div className="field-row">
         <Field label="幅">

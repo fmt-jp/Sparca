@@ -33,7 +33,7 @@ export function GrowSelectionDialog({ contract, onClose }: { contract: boolean; 
       <Field label={contract ? '縮小する幅' : '拡張する幅'}>
         <NumberInput label={contract ? '縮小する幅' : '拡張する幅'} value={px} min={1} max={GROW_LIMIT} suffix="px" onCommit={setPx} />
       </Field>
-      <div className="hint">
+      <div className="hint explain">
         {contract
           ? '選択範囲の輪郭を内側へ指定の幅だけ移動します。'
           : '選択範囲の輪郭を外側へ指定の幅だけ広げます（角は丸くなります）。'}

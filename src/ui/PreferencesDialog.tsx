@@ -23,6 +23,7 @@ export function PreferencesDialog({ onClose }: { onClose: () => void }) {
   const grid = useEditor((s) => s.grid);
   const rulerOrigin = useEditor((s) => s.rulerOrigin);
   const smartGuides = useEditor((s) => s.smartGuides);
+  const explanations = useEditor((s) => s.explanations);
   const imagePlacement = useEditor((s) => s.imagePlacement);
   const restoreMode = useEditor((s) => s.restoreMode);
   return (
@@ -35,6 +36,11 @@ export function PreferencesDialog({ onClose }: { onClose: () => void }) {
         </button>
       }
     >
+      <h3 className="prefs-heading">画面の説明</h3>
+      <Toggle checked={explanations} onChange={(v) => editor.set({ explanations: v })}>
+        画面の説明を表示（パネルやダイアログの使い方の説明。オフでも、大きさ・数などの情報と注意・エラーは表示）
+      </Toggle>
+
       <h3 className="prefs-heading">ルーラーとガイド</h3>
       <Field label="ルーラーの原点">
         <Radios
@@ -48,7 +54,7 @@ export function PreferencesDialog({ onClose }: { onClose: () => void }) {
         />
       </Field>
       <Toggle checked={smartGuides} onChange={(v) => editor.set({ smartGuides: v })}>
-        スマートガイド（ドラッグ中、ほかのオブジェクトやキャンバスの端・中央に合わせる）
+        スマートガイド<span className="explain">（ドラッグ中、ほかのオブジェクトやキャンバスの端・中央に合わせる）</span>
       </Toggle>
 
       <h3 className="prefs-heading">グリッド</h3>
@@ -69,7 +75,7 @@ export function PreferencesDialog({ onClose }: { onClose: () => void }) {
         <ColorInput label="グリッドの色" value={grid.color} onChange={(color) => editor.setGrid({ color: color ?? '#00a0ff' })} />
       </Field>
       <Toggle checked={grid.snap} onChange={(snap) => editor.setGrid({ snap })}>
-        グリッドにスナップ（移動・拡大縮小・描画の位置をグリッドに合わせる）
+        グリッドにスナップ<span className="explain">（移動・拡大縮小・描画の位置をグリッドに合わせる）</span>
       </Toggle>
 
       <h3 className="prefs-heading">画像の配置</h3>
@@ -97,8 +103,8 @@ export function PreferencesDialog({ onClose }: { onClose: () => void }) {
           onChange={(v) => editor.set({ restoreMode: v })}
         />
       </Field>
-      <div className="hint">保存していない変更は、30 秒ほどでこのブラウザの中に自動保存されます（PC のファイルは増えません）。ブラウザが落ちたりタブを閉じたりしても、次に開いたときに復元できます。</div>
-      <div className="hint">ルーラー・ガイド・グリッドは画面表示用で、書き出し画像やプロジェクトファイルには含まれません。設定はこのブラウザに保存されます。</div>
+      <div className="hint explain">保存していない変更は、30 秒ほどでこのブラウザの中に自動保存されます（PC のファイルは増えません）。ブラウザが落ちたりタブを閉じたりしても、次に開いたときに復元できます。</div>
+      <div className="hint explain">ルーラー・ガイド・グリッドは画面表示用で、書き出し画像やプロジェクトファイルには含まれません。設定はこのブラウザに保存されます。</div>
     </Dialog>
   );
 }

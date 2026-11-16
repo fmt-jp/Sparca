@@ -42,7 +42,7 @@ export function MosaicSelectionDialog({ onClose }: { onClose: () => void }) {
       <Toggle checked={preview} onChange={setPreview}>
         プレビュー（適用前にキャンバスで確認）
       </Toggle>
-      <div className="hint">モザイクは編集情報として保持され、画像のプロパティからいつでも取り消せます。</div>
+      <div className="hint explain">モザイクは編集情報として保持され、画像のプロパティからいつでも取り消せます。</div>
     </Dialog>
   );
 }

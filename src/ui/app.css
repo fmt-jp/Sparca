@@ -569,6 +569,10 @@ kbd {
 .hint {
   color: var(--text-dim);
 }
+/* 画面の説明 off (環境設定 / 表示 menu): the explanations go; facts and warnings stay. */
+.no-explain .explain {
+  display: none !important;
+}
 
 /* ---- Dialogs & notices ---- */
 .dialog-backdrop {
