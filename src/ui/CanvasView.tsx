@@ -146,6 +146,8 @@ export function CanvasView() {
   const pendingStrokes = useRef(0);
   /** Where the last stroke ended (for Shift+click), per tab. */
   const lastStrokeEnd = useRef<{ tool: StrokeTool; at: Point } | null>(null);
+  /** The last left press, to tell a double-click (pointerdown's `detail` is 0 in Chromium). */
+  const lastPress = useRef<{ t: number; x: number; y: number; count: number } | null>(null);
   const brushes = useEditor((s) => s.brushes);
   const cloneSource = useEditor((s) => s.cloneSource);
   // Committed strokes leave the screen once the image has been processed with them.
@@ -479,6 +481,12 @@ export function CanvasView() {
       return;
     }
     if (e.button !== 0) return;
+    // Presses in quick succession at about the same spot count up like clicks do.
+    const prevPress = lastPress.current;
+    const count =
+      prevPress && e.timeStamp - prevPress.t < DOUBLE_CLICK_MS && Math.hypot(e.clientX - prevPress.x, e.clientY - prevPress.y) <= DOUBLE_CLICK_PX ? prevPress.count + 1 : 1;
+    lastPress.current = { t: e.timeStamp, x: e.clientX, y: e.clientY, count };
+    const double = count >= 2 || e.detail >= 2;
     if (editingText) return;
     const p = toDoc(e.clientX, e.clientY);
     const target = e.target as Element;
@@ -566,7 +574,7 @@ export function CanvasView() {
         finishPen(penNodes, true);
         return;
       }
-      if (e.detail >= 2) {
+      if (double) {
         finishPen(penNodes, false);
         return;
       }
@@ -614,7 +622,7 @@ export function CanvasView() {
       const closeEnough = Math.hypot(first.x - p.x, first.y - p.y) * zoom < 8;
       // Closing click on the start point, or the second click of a double-click
       // (whose first click already placed this vertex).
-      if (closeEnough || e.detail >= 2) finishPolygon(polyPoints.slice(0, -1));
+      if (closeEnough || double) finishPolygon(polyPoints.slice(0, -1));
       else setPolyPoints([...polyPoints.slice(0, -1), p, p]);
       return;
     }
@@ -1522,6 +1530,9 @@ function PathNodeOverlay({ zoom }: { zoom: number }) {
 /** Grid lines over the canvas area (screen only, never exported). */
 /** Screen px within which a dragged object's center snaps to the canvas's center lines. */
 const SMART_GUIDE_PX = 6;
+/** A second press within this time (ms) and distance (screen px) of the first is a double-click. */
+const DOUBLE_CLICK_MS = 500;
+const DOUBLE_CLICK_PX = 5;
 
 /** Lines through the canvas's center, shown while a dragged object's center sits on them. */
 function SmartGuides({ guides, zoom }: { guides: GuideLine[]; zoom: number }) {
