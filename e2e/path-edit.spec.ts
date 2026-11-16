@@ -133,3 +133,36 @@ test('double-clicking a path with the select tool starts anchor editing', async 
   expect(await state<string>(page, 's => s.tool')).toBe('subselect');
   await expect(page.getByTestId('path-nodes').locator('[data-node]')).toHaveCount(2);
 });
+
+test('a double-click finishes the pen path and the polygon lasso (Chromium gives pointerdown no click count)', async ({ page }) => {
+  const c = await canvasBox(page);
+  await page.keyboard.press('p');
+  await page.mouse.click(c.x + 100, c.y + 100);
+  await page.mouse.click(c.x + 300, c.y + 100);
+  await page.mouse.dblclick(c.x + 300, c.y + 300);
+  // Three anchors (the double-click's first press places the last one), left open.
+  await expect.poll(async () => (await pathNodes(page))?.length).toBe(3);
+  expect(await state(page, 's => s.doc.layers[0].children[0].closed')).toBeFalsy();
+
+  await page.evaluate(() => (window as unknown as { __sparca: { set(p: object): void } }).__sparca.set({ tool: 'polygon-lasso' }));
+  await page.mouse.click(c.x + 400, c.y + 100);
+  await page.mouse.click(c.x + 500, c.y + 100);
+  await page.mouse.dblclick(c.x + 500, c.y + 200);
+  await expect.poll(() => state(page, 's => s.pixelSelection?.kind')).toBe('polygon');
+  expect(await state<number>(page, 's => s.pixelSelection.points.length')).toBe(3);
+});
+
+test('two single clicks apart in time or place do not finish the pen path', async ({ page }) => {
+  const c = await canvasBox(page);
+  await page.keyboard.press('p');
+  await page.mouse.click(c.x + 100, c.y + 100);
+  await page.mouse.click(c.x + 300, c.y + 100);
+  await page.mouse.click(c.x + 300, c.y + 120); // close in time, 20 px away: another anchor
+  await page.waitForTimeout(600);
+  await page.mouse.click(c.x + 300, c.y + 120); // same spot, but later: still drawing
+  await page.mouse.click(c.x + 400, c.y + 300);
+  await page.keyboard.press('Enter');
+  // One path with all the anchors (a finished path would have left the last click to a new one).
+  await expect.poll(() => state<number>(page, 's => s.doc.layers[0].children.length')).toBe(1);
+  expect((await pathNodes(page)).length).toBeGreaterThanOrEqual(4);
+});
