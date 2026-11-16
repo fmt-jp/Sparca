@@ -176,6 +176,11 @@ export interface EditorState {
   restoreMode: 'ask' | 'auto';
   /** Snap dragged objects' centers to the canvas's center lines and show a guide there. */
   smartGuides: boolean;
+  /**
+   * 画面の説明 (2026-11-16, user request): show the explanations of how things work in the panels
+   * and dialogs (on at first). Off leaves the facts — sizes, counts, targets — and the warnings.
+   */
+  explanations: boolean;
   /** Align multiple objects to the canvas instead of to each other. */
   alignToCanvas: boolean;
   /** Edge setting of the marquee / lasso tools. */
@@ -253,6 +258,7 @@ export class EditorStore {
       rulers: true,
       rulerOrigin: 'corner',
       smartGuides: true,
+      explanations: true,
       imagePlacement: 'ask',
       restoreMode: 'ask',
       selectionEdge: DEFAULT_SELECTION_EDGE,

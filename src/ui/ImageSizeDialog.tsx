@@ -112,11 +112,11 @@ export function ImageSizeDialog({ imageId, onClose }: { imageId: string; onClose
           ))}
         </select>
       </Field>
-      <div className="hint">{METHOD_LABELS[method].use}</div>
+      <div className="hint explain">{METHOD_LABELS[method].use}</div>
       <Toggle checked={fitCanvas} onChange={setFitCanvas}>
         キャンバスサイズも画像に合わせる
       </Toggle>
-      <div className="hint">
+      <div className="hint explain">
         {fitCanvas
           ? `キャンバスを ${width} × ${height} px にし、画像を左上に合わせます（他のオブジェクトも画像と一緒に移動、拡大縮小はしません）。`
           : `キャンバスは ${doc.width} × ${doc.height} px のままです。`}

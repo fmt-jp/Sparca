@@ -54,7 +54,8 @@ export function PropertiesPanel() {
       <>
         <div className="prop-section">
           <span className="hint">
-            {toolDef(tool)?.label ?? ''}：{TOOL_HINT[tool] ?? 'オブジェクトを選択するとプロパティを編集できます。'}
+            {toolName(toolDef(tool)?.label ?? '')}
+            <span className="explain">{toolNote(toolDef(tool)?.label ?? '')}：{TOOL_HINT[tool] ?? 'オブジェクトを選択するとプロパティを編集できます。'}</span>
           </span>
         </div>
         {tool === 'select' && !editingMask && <DocumentSection />}
@@ -116,6 +117,10 @@ export function PropertiesPanel() {
     </section>
   );
 }
+
+/** A tool's label without its note in （…） (e.g. 「ブラシツール」), and the note itself. */
+const toolName = (label: string) => label.replace(/（[^]*）$/, '');
+const toolNote = (label: string) => label.slice(toolName(label).length);
 
 const TOOL_HINT: Partial<Record<string, string>> = {
   select: 'クリックで選択、Shift+クリックで追加選択、ドラッグで範囲内を選択。ハンドルで拡大縮小・回転（Shift で比率固定・15°刻み、Alt で中心から）。',
@@ -407,7 +412,7 @@ function ShapeSection({ o }: { o: ShapeObject }) {
                 onCommit={(a) => setShape({ head: headForTipAngle(a, o.box.width, o.box.height) }, '先端の角度の変更')}
               />
             </Field>
-            <span className="hint">向きは「回転」で変更できます（0° = 右向き）。</span>
+            <span className="hint explain">向きは「回転」で変更できます（0° = 右向き）。</span>
           </>
         )}
         {g.kind === 'arrow' && (
@@ -485,7 +490,7 @@ function TextPathSection({ o }: { o: TextObject }) {
       <button type="button" onClick={() => detachTextFromPath(editor)}>
         パスから外す
       </button>
-      <span className="hint">揃え（左・中・右）は、開始位置にテキストのどこを合わせるかになります。改行は空白として並びます。</span>
+      <span className="hint explain">揃え（左・中・右）は、開始位置にテキストのどこを合わせるかになります。改行は空白として並びます。</span>
     </div>
   );
 }
@@ -559,7 +564,7 @@ function ToolDefaultsSection({ category }: { category: ToolCategory }) {
           onChange={(patch) => editor.setToolDefaults(category, patch)}
         />
       )}
-      {category === 'pen' && <span className="hint">塗りは閉じたパスに使われます。</span>}
+      {category === 'pen' && <span className="hint explain">塗りは閉じたパスに使われます。</span>}
     </div>
   );
 }
@@ -751,7 +756,7 @@ function StrokeToolSection({ tool }: { tool: StrokeTool }) {
         </span>
       )}
       {selActive && <span className="hint" data-testid="stroke-in-selection">範囲選択中：選択範囲の内側だけに{strength ? 'かかります' : '描きます'}（Esc で解除）。</span>}
-      <span className="hint">{where}{retouch ? '加工は' : '描いた線は'}画像の編集情報として残り（元の画素はそのまま）、取り消しや「部分加工」の「最後の1件を削除」で戻せます。</span>
+      <span className="hint explain">{where}{retouch ? '加工は' : '描いた線は'}画像の編集情報として残り（元の画素はそのまま）、取り消しや「部分加工」の「最後の1件を削除」で戻せます。</span>
     </div>
   );
 }
@@ -768,7 +773,7 @@ function WandSection() {
       <Toggle checked={wand.contiguous} onChange={(contiguous) => set({ contiguous })}>
         隣接する範囲のみ
       </Toggle>
-      <span className="hint">クリックした所と似た色の範囲を選択します（画面に見えているとおりの色で判定）。許容値を大きくすると広く選ばれます。Shift+クリックで範囲を追加。</span>
+      <span className="hint explain">クリックした所と似た色の範囲を選択します（画面に見えているとおりの色で判定）。許容値を大きくすると広く選ばれます。Shift+クリックで範囲を追加。</span>
     </div>
   );
 }
@@ -782,7 +787,7 @@ function GradientToolSection() {
   ] as const;
   return (
     <div className="prop-section" data-testid="gradient-tool-panel">
-      <span className="hint">選択中のオブジェクトの上をドラッグすると、始点から終点へグラデーションが付きます（Shift で 45° 刻み）。単色の塗りは、その色から白への線形グラデーションになります。</span>
+      <span className="hint explain">選択中のオブジェクトの上をドラッグすると、始点から終点へグラデーションが付きます（Shift で 45° 刻み）。単色の塗りは、その色から白への線形グラデーションになります。</span>
       <div className="radio-row" role="radiogroup" aria-label="グラデーションの適用先">
         {options.map((o) => (
           <label key={o.value}>
@@ -790,7 +795,7 @@ function GradientToolSection() {
           </label>
         ))}
       </div>
-      <span className="hint">テキストは文字色、ラインと開いたパスは線、画像とグループはマスクに付きます。</span>
+      <span className="hint explain">テキストは文字色、ラインと開いたパスは線、画像とグループはマスクに付きます。</span>
     </div>
   );
 }
@@ -800,7 +805,7 @@ function EyedropperSection() {
   const picked = useEditor((s) => s.pickedColor);
   return (
     <div className="prop-section" data-testid="eyedropper-panel">
-      <span className="hint">キャンバス上をクリックして色を取得し、選択中の図形・テキストに適用します。</span>
+      <span className="hint explain">キャンバス上をクリックして色を取得し、選択中の図形・テキストに適用します。</span>
       <div className="radio-row" role="radiogroup" aria-label="図形への適用先">
         <label>
           <input type="radio" checked={target === 'fill'} onChange={() => editor.set({ eyedropperTarget: 'fill' })} /> 塗り
@@ -902,7 +907,7 @@ function CropSection() {
           </button>
         </>
       ) : (
-        <span className="hint">
+        <span className="hint explain">
           {crop.target === 'document'
             ? 'ドラッグでキャンバスの切り抜き範囲を指定します。'
             : 'ドラッグで画像の切り抜き範囲を指定します（他のオブジェクトやキャンバスは変わりません）。'}
@@ -1084,7 +1089,7 @@ function MaskSection({ o }: { o: SceneObject }) {
       <button type="button" onClick={() => removeMask(editor)}>
         マスクを削除
       </button>
-      <span className="hint">
+      <span className="hint explain">
         マスクの中身（{mask.children.length} 個）の白い所は見え、黒い所は透けます（灰色は半透明）。何もない所は{mask.background === 'white' ? '白（見える）' : '黒（透ける）'}。
       </span>
     </div>
@@ -1141,7 +1146,7 @@ function MaskEditSection({ owner }: { owner: SceneObject }) {
           <span className="hint">（まだありません）</span>
         )}
       </span>
-      <span className="hint">
+      <span className="hint explain">
         {selection.length
           ? '選択中の中身の色・形は下で変更できます。'
           : '中身を選ぶ（上のボタンか、キャンバスでクリック）と、色・グラデーション・形を変更できます。'}

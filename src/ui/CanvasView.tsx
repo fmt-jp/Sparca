@@ -1889,7 +1889,7 @@ function MaskEditFrame({ o, zoom, empty }: { o: SceneObject; zoom: number; empty
         </text>
       </g>
       {empty && (
-        <g className="mask-empty-hint" data-testid="mask-empty-hint" transform={`translate(${b.x + 8 * k} ${b.y + 8 * k}) scale(${k})`}>
+        <g className="mask-empty-hint explain" data-testid="mask-empty-hint" transform={`translate(${b.x + 8 * k} ${b.y + 8 * k}) scale(${k})`}>
           <rect width={hintW} height={EMPTY_MASK_HINT.length * 18 + 8} rx={4} />
           {EMPTY_MASK_HINT.map((t, i) => (
             <text key={i} x={8} y={17 + i * 18}>
