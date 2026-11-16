@@ -8,10 +8,13 @@ export interface PanelSizes {
   /** Temporarily hidden to give the canvas more room (sizes are kept for when shown again). */
   layersHidden: boolean;
   propsHidden: boolean;
+  /** ライブラリ under the layers: its height and whether it is folded to its header. */
+  libraryHeight: number;
+  libraryCollapsed: boolean;
 }
 
-const DEFAULTS: PanelSizes = { layersWidth: 260, propsHeight: 190, layersHidden: false, propsHidden: false };
-export const LIMITS = { layersWidth: [180, 520], propsHeight: [80, 520] } as const;
+const DEFAULTS: PanelSizes = { layersWidth: 260, propsHeight: 190, layersHidden: false, propsHidden: false, libraryHeight: 280, libraryCollapsed: false };
+export const LIMITS = { layersWidth: [180, 520], propsHeight: [80, 520], libraryHeight: [110, 900] } as const;
 
 function load(): PanelSizes {
   try {
@@ -30,6 +33,7 @@ export function setPanelSizes(p: Partial<PanelSizes>): void {
   const next = { ...current, ...p };
   next.layersWidth = Math.min(LIMITS.layersWidth[1], Math.max(LIMITS.layersWidth[0], next.layersWidth));
   next.propsHeight = Math.min(LIMITS.propsHeight[1], Math.max(LIMITS.propsHeight[0], next.propsHeight));
+  next.libraryHeight = Math.min(LIMITS.libraryHeight[1], Math.max(LIMITS.libraryHeight[0], next.libraryHeight));
   current = next;
   try {
     localStorage.setItem(KEY, JSON.stringify(next));

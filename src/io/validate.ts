@@ -6,7 +6,8 @@ import { defaultPipeline } from '../model/factory';
 import { PATTERN_MOTIFS, PATTERN_SIZE, PATTERN_SLANT } from '../model/pattern';
 import { gradientRect } from '../model/mask';
 import { effectsMargin } from '../render/effects';
-import type { Box, Effect, EffectKind, Gradient, PatternMotif } from '../model/types';
+import type { Box, Effect, EffectKind, Gradient, PatternMotif, StrokeCap, StrokeJoin, StrokeStyle } from '../model/types';
+import { LIBRARY_FORMAT, MAX_NAME_LENGTH, type LibraryItem } from '../model/library';
 import type { SparcaDocument } from '../model/types';
 import { MAX_DIMENSION } from '../model/types';
 
@@ -418,4 +419,57 @@ function mergeDefaults<T extends object>(defaults: T, value: unknown): T {
     out[k] = isObj(d) && isObj(v) ? { ...d, ...v } : v;
   }
   return out as T;
+}
+
+/**
+ * A library file (.hnbfx, ライブラリ 2026-11-16): `{ format: 'hanabi-library', version: 1, items }`.
+ * Each item's effects, fill and stroke are checked as in a document (missing effect settings get
+ * their defaults); anything wrong rejects the whole file with the reason.
+ */
+export function validateLibrary(raw: unknown): { ok: true; items: LibraryItem[] } | { ok: false; error: string } {
+  try {
+    if (!isObj(raw) || raw.format !== LIBRARY_FORMAT) throw new Invalid('HANABI のライブラリファイルではありません');
+    if (raw.version !== 1) throw new Invalid(`対応していないバージョンです（${String(raw.version)}）`);
+    const items = arr(raw, 'items', 'library').map((v, i) => checkLibraryItem(v, `items[${i}]`));
+    return { ok: true, items };
+  } catch (e) {
+    if (e instanceof Invalid) return { ok: false, error: e.message };
+    throw e;
+  }
+}
+
+const HEX = /^#[0-9a-f]{6}$/i;
+
+export function checkLibraryItem(v: unknown, where: string): LibraryItem {
+  if (!isObj(v)) throw new Invalid(`${where} が正しくありません`);
+  const name = str(v, 'name', where).trim();
+  if (!name || name.length > MAX_NAME_LENGTH) throw new Invalid(`${where}.name が正しくありません`);
+  const item: LibraryItem = { id: typeof v.id === 'string' && v.id ? v.id : `lib-${Math.random().toString(36).slice(2)}`, name };
+  if (v.effects !== undefined) {
+    if (!Array.isArray(v.effects)) throw new Invalid(`${where}.effects が正しくありません`);
+    item.effects = checkEffects(v.effects, `${where}.effects`) as Effect[];
+  }
+  if (v.fill !== undefined) {
+    checkFill(v.fill, `${where}.fill`, true);
+    if (typeof v.fill === 'string' && !HEX.test(v.fill)) throw new Invalid(`${where}.fill が正しくありません`);
+    item.fill = v.fill as LibraryItem['fill'];
+  }
+  if (v.stroke !== undefined) {
+    const s = v.stroke;
+    if (!isObj(s)) throw new Invalid(`${where}.stroke が正しくありません`);
+    checkFill(s.paint, `${where}.stroke.paint`, true, false);
+    if (typeof s.paint === 'string' && !HEX.test(s.paint)) throw new Invalid(`${where}.stroke.paint が正しくありません`);
+    const width = num(s, 'width', `${where}.stroke`);
+    if (width < 0 || width > 1000) throw new Invalid(`${where}.stroke.width が範囲外です`);
+    checkPaint({ fill: null, stroke: s.paint, strokeWidth: width, strokeStyle: s.style, strokeCap: s.cap, strokeJoin: s.join }, `${where}.stroke`);
+    item.stroke = {
+      paint: s.paint as NonNullable<LibraryItem['stroke']>['paint'],
+      width,
+      ...(s.style !== undefined ? { style: s.style as StrokeStyle } : {}),
+      ...(s.cap !== undefined ? { cap: s.cap as StrokeCap } : {}),
+      ...(s.join !== undefined ? { join: s.join as StrokeJoin } : {}),
+    };
+  }
+  if (!item.effects && item.fill === undefined && !item.stroke) throw new Invalid(`${where} に登録された設定がありません`);
+  return item;
 }

@@ -21,6 +21,8 @@ import type { Box, Id, Paint, PathNode, PathObject, Point, SceneObject, ShapeGeo
 import { commitStroke, RETOUCH_TOOLS, STROKE_TOOLS } from '../store/paintActions';
 import { magicWand } from '../store/wandActions';
 import { snapResize, snapToGuides, type GuideLine } from '../model/smartGuides';
+import { applyTo, libraryItems } from '../store/library';
+import { LIBRARY_MIME } from './LibraryPanel';
 import type { PaintCategory } from '../model/toolDefaults';
 import { DocumentSvg } from '../render/DocumentSvg';
 import { imageCache } from '../render/imageCache';
@@ -1311,6 +1313,22 @@ export function CanvasView() {
 
   function onDrop(e: React.DragEvent) {
     e.preventDefault();
+    // A library item dropped on an object: applied to it (to the whole selection if it is part of it).
+    const libId = e.dataTransfer.getData(LIBRARY_MIME);
+    if (libId) {
+      const item = libraryItems().find((i) => i.id === libId);
+      const hit = hitObject(document.elementFromPoint(e.clientX, e.clientY));
+      if (!item) return;
+      if (!hit) {
+        editor.notify('error', 'ライブラリはオブジェクトの上にドロップしてください。');
+        return;
+      }
+      const sel = editor.getState().selection;
+      const ids = sel.includes(hit) ? sel : [hit];
+      applyTo(editor, ids, item, e.shiftKey);
+      editor.select(ids);
+      return;
+    }
     const files = [...e.dataTransfer.files].filter((f) => f.type.startsWith('image/') || hasImageExtension(f.name));
     if (files.length) void placeImageFiles(editor, files);
     else if (e.dataTransfer.files.length) editor.notify('error', 'ドロップされたファイルは画像ではありません。');

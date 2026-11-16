@@ -30,6 +30,7 @@ import { PreferencesDialog } from './PreferencesDialog';
 import { AddMaskDialog } from './AddMaskDialog';
 import { ImageSizeDialog } from './ImageSizeDialog';
 import { LayersPanel } from './LayersPanel';
+import { LibraryPanel } from './LibraryPanel';
 import { MenuBar, zoomIn, zoomOut, zoomToFit } from './MenuBar';
 import { MosaicSelectionDialog } from './MosaicSelectionDialog';
 import { GrowSelectionDialog } from './GrowSelectionDialog';
@@ -121,7 +122,28 @@ export function App() {
       <MenuBar onNew={() => openDialog({ kind: 'new' })} />
       <Toolbar />
       <CanvasView />
-      {!sizes.layersHidden && <LayersPanel />}
+      {!sizes.layersHidden && (
+        <div className="right-column">
+          <LayersPanel />
+          {!sizes.libraryCollapsed && (
+            <div
+              className="splitter-library"
+              role="separator"
+              aria-orientation="horizontal"
+              aria-label="ライブラリの高さ"
+              onPointerDown={(e) => {
+                const h0 = sizes.libraryHeight;
+                // Leave the layers at least 120 px.
+                const column = (e.currentTarget.parentElement?.clientHeight ?? 800) - 120;
+                startSplitterDrag(e, (_dx, dy) => setSizes({ libraryHeight: Math.min(column, h0 - dy) }));
+              }}
+            />
+          )}
+          <div className="library-slot" style={sizes.libraryCollapsed ? undefined : { height: sizes.libraryHeight }}>
+            <LibraryPanel collapsed={sizes.libraryCollapsed} onToggle={() => setSizes({ libraryCollapsed: !sizes.libraryCollapsed })} />
+          </div>
+        </div>
+      )}
       {!sizes.propsHidden && <PropertiesPanel />}
       {/* Tabs on the panel edges: hide a panel to give the canvas more room, or bring it back. */}
       <button
