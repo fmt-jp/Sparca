@@ -6,6 +6,8 @@ import { GRID_SIZE_LIMITS, type ImagePlacement } from '../store/editor';
 import { ColorInput, Field, NumberInput, Toggle } from './controls';
 import { Dialog } from './Dialog';
 import { editor, useEditor } from './useEditor';
+import { hasFileSystemAccess } from '../io/files';
+import { RECENT_LIMIT } from '../store/recentFiles';
 
 function Radios<T extends string>({ label, value, options, onChange }: { label: string; value: T; options: [T, ReactNode][]; onChange: (v: T) => void }) {
   return (
@@ -24,6 +26,7 @@ export function PreferencesDialog({ onClose }: { onClose: () => void }) {
   const rulerOrigin = useEditor((s) => s.rulerOrigin);
   const smartGuides = useEditor((s) => s.smartGuides);
   const explanations = useEditor((s) => s.explanations);
+  const recentLimit = useEditor((s) => s.recentLimit);
   const imagePlacement = useEditor((s) => s.imagePlacement);
   const restoreMode = useEditor((s) => s.restoreMode);
   return (
@@ -91,6 +94,24 @@ export function PreferencesDialog({ onClose }: { onClose: () => void }) {
           onChange={(v) => editor.set({ imagePlacement: v })}
         />
       </Field>
+      <h3 className="prefs-heading">最近使ったファイル</h3>
+      <Field label="覚えておく数">
+        <NumberInput
+          label="最近使ったファイルの数"
+          value={recentLimit}
+          min={RECENT_LIMIT.min}
+          max={RECENT_LIMIT.max}
+          suffix="件"
+          onCommit={(v) => editor.set({ recentLimit: Math.round(v) })}
+        />
+      </Field>
+      <div className="hint">
+        {hasFileSystemAccess() ? (
+          <span className="explain">「ファイル」→「最近使ったファイル」に、保存したり開いたりしたファイルをこの数だけ新しい順に出します（0 で記録しない）。</span>
+        ) : (
+          'このブラウザではファイルの場所を覚えられないため、最近使ったファイルは使えません（Chrome・Edge で使えます）。'
+        )}
+      </div>
       <h3 className="prefs-heading">自動保存</h3>
       <Field label="前回の作業が残っていたら">
         <Radios<'ask' | 'auto'>

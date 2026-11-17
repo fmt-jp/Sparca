@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react';
+import { RECENT_LIMIT, trimRecent } from '../store/recentFiles';
 import { imageCache } from '../render/imageCache';
 import { editLineAsPath } from '../store/pathActions';
 import { sanitizeToolDefaults } from '../model/toolDefaults';
@@ -31,6 +32,7 @@ const RULERS_KEY = 'sparca.rulers';
 const RULER_ORIGIN_KEY = 'sparca.rulerOrigin';
 const SMART_GUIDES_KEY = 'sparca.smartGuides';
 const EXPLANATIONS_KEY = 'sparca.explanations';
+const RECENT_LIMIT_KEY = 'sparca.recentLimit';
 const IMAGE_PLACEMENT_KEY = 'sparca.imagePlacement';
 const RESTORE_MODE_KEY = 'sparca.restoreMode';
 try {
@@ -42,6 +44,8 @@ try {
   if (typeof guides === 'boolean') editor.set({ smartGuides: guides });
   const explain = JSON.parse(localStorage.getItem(EXPLANATIONS_KEY) ?? 'null') as unknown;
   if (typeof explain === 'boolean') editor.set({ explanations: explain });
+  const recent = JSON.parse(localStorage.getItem(RECENT_LIMIT_KEY) ?? 'null') as unknown;
+  if (typeof recent === 'number' && Number.isInteger(recent) && recent >= RECENT_LIMIT.min && recent <= RECENT_LIMIT.max) editor.set({ recentLimit: recent });
   const placement = localStorage.getItem(IMAGE_PLACEMENT_KEY);
   if (placement === 'ask' || placement === 'original' || placement === 'fit') editor.set({ imagePlacement: placement });
   const restore = localStorage.getItem(RESTORE_MODE_KEY);
@@ -53,6 +57,7 @@ let lastRulers = editor.getState().rulers;
 let lastOrigin = editor.getState().rulerOrigin;
 let lastGuides = editor.getState().smartGuides;
 let lastExplain = editor.getState().explanations;
+let lastRecent = editor.getState().recentLimit;
 // The explanations are hidden by a class on the page, so dialogs (shown outside the app) follow too.
 const showExplanations = (on: boolean) => {
   if (typeof document !== 'undefined') document.documentElement.classList.toggle('no-explain', !on);
@@ -61,8 +66,9 @@ showExplanations(lastExplain);
 let lastPlacement = editor.getState().imagePlacement;
 let lastRestore = editor.getState().restoreMode;
 editor.subscribe(() => {
-  const { rulers, rulerOrigin, smartGuides, explanations, imagePlacement, restoreMode } = editor.getState();
+  const { rulers, rulerOrigin, smartGuides, explanations, imagePlacement, restoreMode, recentLimit } = editor.getState();
   if (
+    recentLimit === lastRecent &&
     rulers === lastRulers &&
     rulerOrigin === lastOrigin &&
     smartGuides === lastGuides &&
@@ -72,6 +78,9 @@ editor.subscribe(() => {
   )
     return;
   if (explanations !== lastExplain) showExplanations(explanations);
+  // A lower limit drops the oldest entries at once.
+  if (recentLimit < lastRecent) void trimRecent(recentLimit);
+  lastRecent = recentLimit;
   lastExplain = explanations;
   lastRestore = restoreMode;
   lastRulers = rulers;
@@ -83,6 +92,7 @@ editor.subscribe(() => {
     localStorage.setItem(RULER_ORIGIN_KEY, rulerOrigin);
     localStorage.setItem(SMART_GUIDES_KEY, JSON.stringify(smartGuides));
     localStorage.setItem(EXPLANATIONS_KEY, JSON.stringify(explanations));
+    localStorage.setItem(RECENT_LIMIT_KEY, JSON.stringify(recentLimit));
     localStorage.setItem(IMAGE_PLACEMENT_KEY, imagePlacement);
     localStorage.setItem(RESTORE_MODE_KEY, restoreMode);
   } catch {

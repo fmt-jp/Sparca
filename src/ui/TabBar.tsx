@@ -1,5 +1,6 @@
 // Open documents as tabs above the canvas.
 import { openFile } from '../store/actions';
+import type { FileSystemFileHandleLike } from '../io/files';
 import { openDialog } from './dialogs';
 import { editor, useEditor } from './useEditor';
 
@@ -22,8 +23,19 @@ export function TabBar() {
       onDrop={(e) => {
         // Files dropped on the tab bar open in new tabs (on the canvas they are placed instead).
         e.preventDefault();
+        // Their handles too where the browser gives them (Chrome, Edge): 保存 then writes back to
+        // a project, and 最近使ったファイル can open them again. Asked for now, before the event ends.
+        type WithHandle = DataTransferItem & { getAsFileSystemHandle?: () => Promise<{ kind: string } | null> };
+        const handles = [...e.dataTransfer.items]
+          .filter((i) => i.kind === 'file')
+          .map((i) => ((i as WithHandle).getAsFileSystemHandle ? (i as WithHandle).getAsFileSystemHandle!().catch(() => null) : Promise.resolve(null)));
+        const files = [...e.dataTransfer.files];
         void (async () => {
-          for (const f of [...e.dataTransfer.files]) await openFile(editor, f);
+          const hs = await Promise.all(handles);
+          for (const [i, f] of files.entries()) {
+            const h = hs[i];
+            await openFile(editor, f, h && h.kind === 'file' ? (h as unknown as FileSystemFileHandleLike) : null);
+          }
         })();
       }}
     >
