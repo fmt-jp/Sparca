@@ -1,8 +1,11 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { hasFileSystemAccess } from '../io/files';
+import { clearRecent, recentEntries, subscribeRecent, type RecentEntry } from '../store/recentFiles';
 import {
   alignSelection,
   arrangeSelection,
   chooseAndOpenProject,
+  openRecent,
   chooseAndPlaceImage,
   deleteSelection,
   duplicateSelection,
@@ -41,6 +44,29 @@ export interface MenuItem {
 }
 
 const mod = /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘' : 'Ctrl+';
+
+const when = (t: number) => {
+  const d = new Date(t);
+  const p2 = (n: number) => String(n).padStart(2, '0');
+  return `${d.getMonth() + 1}/${d.getDate()} ${p2(d.getHours())}:${p2(d.getMinutes())}`;
+};
+
+/** ファイル → 最近使ったファイル: newest first, then 履歴を消去. */
+function recentMenu(list: RecentEntry[], limit: number): MenuItem[] {
+  if (!hasFileSystemAccess()) return [{ label: 'このブラウザでは使えません（Chrome・Edge で使えます）', disabled: true }];
+  if (limit <= 0) return [{ label: '記録しない設定です（環境設定で数を指定）', disabled: true }];
+  if (!list.length) return [{ label: '（まだありません）', disabled: true }];
+  return [
+    ...list.map((e) => ({ label: e.name, shortcut: when(e.time), action: () => void openRecent(editor, e) })),
+    { separator: true, label: '' },
+    {
+      label: '履歴を消去',
+      action: () => {
+        if (window.confirm('最近使ったファイルの一覧を消去しますか？（ファイルそのものは消えません）')) void clearRecent();
+      },
+    },
+  ];
+}
 
 export function zoomIn() {
   const z = editor.getState().zoom;
@@ -81,6 +107,8 @@ export function MenuBar({ onNew }: { onNew: () => void }) {
   const grid = useEditor((s) => s.grid);
   const rulers = useEditor((s) => s.rulers);
   const explanations = useEditor((s) => s.explanations);
+  const recent = useSyncExternalStore(subscribeRecent, recentEntries);
+  const recentLimit = useEditor((s) => s.recentLimit);
   const alignToCanvas = useEditor((s) => s.alignToCanvas);
   const [panels] = usePanelSizes();
   const image = selectedImage(editor);
@@ -95,6 +123,7 @@ export function MenuBar({ onNew }: { onNew: () => void }) {
         // No shortcut: browsers reserve Ctrl+N for a new window.
         { label: '新規…', action: onNew },
         { label: '開く…（.hnb／編集できる PNG／PNG・JPEG・GIF・BMP）', shortcut: `${mod}O`, action: () => void chooseAndOpenProject(editor) },
+        { label: '最近使ったファイル', children: recentMenu(recent, recentLimit) },
         { separator: true, label: '' },
         { label: '保存', shortcut: `${mod}S`, action: () => void saveProject(editor) },
         { label: '名前を付けて保存…', shortcut: `${mod}Shift+S`, action: () => void saveProject(editor, true) },

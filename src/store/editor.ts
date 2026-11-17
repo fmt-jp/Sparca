@@ -176,6 +176,8 @@ export interface EditorState {
   restoreMode: 'ask' | 'auto';
   /** Snap dragged objects' centers to the canvas's center lines and show a guide there. */
   smartGuides: boolean;
+  /** How many files 最近使ったファイル keeps (0 = none; 環境設定, per browser). */
+  recentLimit: number;
   /**
    * 画面の説明 (2026-11-16, user request): show the explanations of how things work in the panels
    * and dialogs (on at first). Off leaves the facts — sizes, counts, targets — and the warnings.
@@ -258,6 +260,7 @@ export class EditorStore {
       rulers: true,
       rulerOrigin: 'corner',
       smartGuides: true,
+      recentLimit: 10,
       explanations: true,
       imagePlacement: 'ask',
       restoreMode: 'ask',

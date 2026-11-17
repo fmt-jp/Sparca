@@ -16,7 +16,9 @@ import { IDENTITY_TRANSFORM, unionBounds } from '../model/geometry';
 import { cloneWithNewIds, findObject, isEffectivelyLocked, walkObjects } from '../model/tree';
 import type { Background, SceneObject, SparcaDocument } from '../model/types';
 import { IMAGE_ACCEPT, stripImageExtension } from '../io/imageFormats';
-import { hasFileSystemAccess, isAbort, pickFiles, pickSaveFile, saveBlob } from '../io/files';
+import { hasFileSystemAccess, isAbort, pickFiles, pickOpenFiles, pickSaveFile, saveBlob, type FileSystemFileHandleLike } from '../io/files';
+import { IMAGE_FORMATS } from '../io/imageFormats';
+import { ensureReadable, recordRecent, removeRecent, type RecentEntry } from './recentFiles';
 import { EDITABLE_PNG_EXTENSION, EditablePngError, embedProject, extractProject, isEditablePngName, isPng } from '../io/editablePng';
 import { exportImage, ExportError } from '../io/export';
 import { newMask, settleMask } from '../model/mask';
@@ -247,6 +249,7 @@ export async function saveProject(ed: EditorStore, saveAs = false, format?: Save
     }
     const handle = await saveBlob(blob, name, asPng ? PNG_TYPE : HNB_TYPE, target);
     if (handle === undefined) return false;
+    void recordRecent(handle, ed.getState().recentLimit);
     // The user may have switched tabs while saving: only mark the saved document.
     if (ed.getState().doc === doc) ed.markSaved(handle ? handle.name : name, handle);
     else ed.notify('info', `「${fileName}」を保存しました。保存後の変更は未保存です。`);
@@ -268,12 +271,17 @@ export async function saveProject(ed: EditorStore, saveAs = false, format?: Save
   }
 }
 
-export async function openProjectFile(ed: EditorStore, file: File): Promise<void> {
+/**
+ * Open a project in a new tab. With its handle (opened through the browser's file dialog or
+ * 最近使ったファイル), 保存 writes back to that file.
+ */
+export async function openProjectFile(ed: EditorStore, file: File, handle: FileSystemFileHandleLike | null = null): Promise<void> {
   try {
     ed.set({ busy: '読み込み中…' });
     const { doc, assets: blobs } = await readProject(await file.arrayBuffer());
     for (const [id, blob] of blobs) assets.put(doc.assets[id], blob);
-    ed.openDocument(doc, file.name);
+    ed.openDocument(doc, file.name, handle);
+    void recordRecent(handle, ed.getState().recentLimit);
   } catch (e) {
     ed.notify('error', e instanceof ProjectError ? e.message : `「${file.name}」を開けませんでした: ${describeError(e)}`);
   } finally {
@@ -286,7 +294,7 @@ export async function openProjectFile(ed: EditorStore, file: File): Promise<void
  * The image becomes an image object at (0, 0) on a transparent canvas, so PNG/GIF
  * transparency is preserved.
  */
-export async function openImageFile(ed: EditorStore, file: File): Promise<void> {
+export async function openImageFile(ed: EditorStore, file: File, handle: FileSystemFileHandleLike | null = null): Promise<void> {
   try {
     ed.set({ busy: `「${file.name}」を読み込み中…` });
     const meta = await importImageFile(file, file.name);
@@ -296,6 +304,8 @@ export async function openImageFile(ed: EditorStore, file: File): Promise<void> 
     doc.layers[0].children.push(img);
     ed.openDocument(doc, stripImageExtension(file.name));
     ed.select([img.id]);
+    // Remembered for 最近使ったファイル; saving makes a new project (the image file is not written).
+    void recordRecent(handle, ed.getState().recentLimit);
   } catch (e) {
     ed.notify('error', e instanceof ImageLoadError ? e.message : `「${file.name}」を開けませんでした: ${describeError(e)}`);
   } finally {
@@ -321,15 +331,48 @@ async function isProjectFile(file: File): Promise<boolean> {
 }
 
 /** Open one file in a new tab: a .hnb project, or a PNG / JPEG / GIF / BMP image. */
-export async function openFile(ed: EditorStore, file: File): Promise<void> {
-  if (await isProjectFile(file)) await openProjectFile(ed, file);
-  else await openImageFile(ed, file);
+export async function openFile(ed: EditorStore, file: File, handle: FileSystemFileHandleLike | null = null): Promise<void> {
+  if (await isProjectFile(file)) await openProjectFile(ed, file, handle);
+  else await openImageFile(ed, file, handle);
 }
+
+const OPEN_TYPES = [
+  {
+    description: 'HANABI プロジェクト・画像',
+    accept: {
+      [PROJECT_MIME]: [PROJECT_EXTENSION],
+      ...Object.fromEntries(IMAGE_FORMATS.map((f) => [f.mime, f.extensions])),
+    },
+  },
+];
 
 /** File → 開く: one or more files, each in its own tab. */
 export async function chooseAndOpenProject(ed: EditorStore): Promise<void> {
-  const files = await pickFiles(`${PROJECT_EXTENSION},${PROJECT_MIME},${IMAGE_ACCEPT}`, true);
-  for (const file of files) await openFile(ed, file);
+  try {
+    const picked = await pickOpenFiles(OPEN_TYPES, `${PROJECT_EXTENSION},${PROJECT_MIME},${IMAGE_ACCEPT}`, true);
+    for (const { file, handle } of picked) await openFile(ed, file, handle);
+  } catch (e) {
+    ed.notify('error', `ファイルを開けませんでした: ${describeError(e)}`);
+  }
+}
+
+/** ファイル → 最近使ったファイル: open it as it is now (the browser may ask to allow reading it). */
+export async function openRecent(ed: EditorStore, entry: RecentEntry): Promise<void> {
+  try {
+    if (!(await ensureReadable(entry.handle))) {
+      ed.notify('error', `「${entry.name}」を読む許可がないため開けませんでした。`);
+      return;
+    }
+    const file = await entry.handle.getFile();
+    await openFile(ed, file, entry.handle);
+  } catch (e) {
+    if (e instanceof DOMException && (e.name === 'NotFoundError' || e.name === 'NotReadableError')) {
+      ed.notify('error', `「${entry.name}」が見つかりません（移動・削除・名前の変更をした可能性があります）。履歴から外しました。`);
+      void removeRecent(entry.id);
+      return;
+    }
+    ed.notify('error', `「${entry.name}」を開けませんでした: ${describeError(e)}`);
+  }
 }
 
 export function describeError(e: unknown): string {

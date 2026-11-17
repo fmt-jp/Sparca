@@ -99,3 +99,25 @@ export function pickFiles(accept: string, multiple = false): Promise<File[]> {
     input.click();
   });
 }
+
+/**
+ * Choose files to open, with their handles where the browser has the File System Access API
+ * (so they can be saved over and opened again from 最近使ったファイル); otherwise through a file
+ * input (handle null). Empty when cancelled.
+ */
+export async function pickOpenFiles(types: FilePickerType[], accept: string, multiple = false): Promise<{ file: File; handle: FileSystemFileHandleLike | null }[]> {
+  const open = fsWindow().showOpenFilePicker;
+  if (typeof open === 'function') {
+    let handles: FileSystemFileHandleLike[];
+    try {
+      handles = await open({ types, multiple });
+    } catch (e) {
+      if (isAbort(e)) return [];
+      // An accept list the browser refuses (TypeError): any file instead.
+      if (!(e instanceof TypeError)) throw e;
+      handles = await open({ multiple });
+    }
+    return Promise.all(handles.map(async (handle) => ({ file: await handle.getFile(), handle })));
+  }
+  return (await pickFiles(accept, multiple)).map((file) => ({ file, handle: null }));
+}
