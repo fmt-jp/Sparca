@@ -12,7 +12,8 @@ import {
   updateObject,
 } from '../model/commands';
 import type { Id, Layer, SceneObject } from '../model/types';
-import { newLayer } from '../store/actions';
+import { findObject, isEffectivelyLocked } from '../model/tree';
+import { deleteSelection, newLayer } from '../store/actions';
 import { ICON, SmallIcon } from './icons';
 import { editor, useEditor } from './useEditor';
 
@@ -46,6 +47,10 @@ export function LayersPanel() {
   const doc = useEditor((s) => s.doc);
   const activeLayerId = useEditor((s) => s.activeLayerId);
   const selection = useEditor((s) => s.selection);
+  const deletableObjects = selection.filter((id) => {
+    const loc = findObject(doc, id);
+    return loc && !isEffectivelyLocked(loc);
+  }).length;
   const [collapsed, setCollapsed] = useState<Set<Id>>(new Set());
   const [drag, setDrag] = useState<DragItem | null>(null);
   const [dropTarget, setDropTarget] = useState<DropPos | null>(null);
@@ -110,10 +115,21 @@ export function LayersPanel() {
           </button>
           <button
             type="button"
-            title="レイヤーを削除"
-            aria-label="レイヤーを削除"
-            disabled={doc.layers.length <= 1}
+            title={
+              selection.length
+                ? deletableObjects
+                  ? `選択中のオブジェクトを削除（${deletableObjects} 個）`
+                  : '選択中のオブジェクトはロックされているため削除できません'
+                : 'レイヤーを削除'
+            }
+            aria-label={selection.length ? '選択中のオブジェクトを削除' : 'レイヤーを削除'}
+            disabled={selection.length ? !deletableObjects : doc.layers.length <= 1}
             onClick={() => {
+              // Objects selected: they go (as Delete does); otherwise the active layer.
+              if (selection.length) {
+                deleteSelection(editor);
+                return;
+              }
               const layer = doc.layers.find((l) => l.id === activeLayerId);
               if (!layer) return;
               if (layer.children.length && !window.confirm(`レイヤー「${layer.name}」と中のオブジェクト ${layer.children.length} 個を削除しますか？`)) return;
