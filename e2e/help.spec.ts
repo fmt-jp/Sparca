@@ -15,6 +15,8 @@ test('ヘルプ → 操作ガイド shows the basics by topic', async ({ page })
   // Version (package.json) and build date (Japan time) next to the logo.
   const version = (JSON.parse(readFileSync('package.json', 'utf8')) as { version: string }).version;
   await expect(dialog.getByTestId('app-version')).toHaveText(new RegExp(`^HANABI ${version.replace(/\./g, '\\.')}（\\d{4}-\\d{2}-\\d{2} 版）$`));
+  // Copyright at the bottom (shown whatever the section).
+  await expect(dialog.getByTestId('copyright')).toHaveText('© 2026 FMT');
   // The HANABI logo heads the introduction.
   const logo = dialog.getByRole('img', { name: '花火 HANABI' });
   await expect(logo).toBeVisible();
