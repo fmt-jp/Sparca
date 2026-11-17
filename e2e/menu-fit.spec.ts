@@ -29,3 +29,31 @@ for (const height of [620, 420, 300]) {
     expect(await page.evaluate(() => (window as unknown as { __sparca: { getState(): { alignToCanvas: boolean } } }).__sparca.getState().alignToCanvas)).toBe(true);
   });
 }
+
+test('Esc closes the open menu (submenu too) and leaves the selection alone', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto('/');
+  const c = (await page.getByTestId('canvas').boundingBox())!;
+  await page.keyboard.press('r');
+  await page.mouse.move(c.x + 100, c.y + 100);
+  await page.mouse.down();
+  await page.mouse.move(c.x + 200, c.y + 200, { steps: 3 });
+  await page.mouse.up();
+  const selected = () => page.evaluate(() => (window as unknown as { __sparca: { getState(): { selection: string[] } } }).__sparca.getState().selection.length);
+  expect(await selected()).toBe(1);
+
+  await page.getByRole('button', { name: 'ファイル', exact: true }).click();
+  await page.getByRole('menuitem', { name: '最近使ったファイル' }).hover();
+  await expect(page.locator('.menubar-sub')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('menuitem')).toHaveCount(0);
+  expect(await selected()).toBe(1);
+  // The next click on the menu button opens it again (not left half-open).
+  await page.getByRole('button', { name: '編集', exact: true }).click();
+  await expect(page.getByRole('menuitem', { name: /環境設定/ })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('menuitem')).toHaveCount(0);
+  // With no menu open, Esc works as before (drops the selection).
+  await page.keyboard.press('Escape');
+  await expect.poll(selected).toBe(0);
+});
