@@ -98,8 +98,19 @@ export function MenuBar({ onNew }: { onNew: () => void }) {
     const close = (e: PointerEvent) => {
       if (!ref.current?.contains(e.target as Node)) setOpen(null);
     };
+    // Esc closes the menu (and only that: the canvas does not also drop its selection).
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      e.preventDefault();
+      e.stopPropagation();
+      setOpen(null);
+    };
     window.addEventListener('pointerdown', close);
-    return () => window.removeEventListener('pointerdown', close);
+    window.addEventListener('keydown', onKey, true);
+    return () => {
+      window.removeEventListener('pointerdown', close);
+      window.removeEventListener('keydown', onKey, true);
+    };
   }, [open]);
 
   const hasSel = selection.length > 0;
