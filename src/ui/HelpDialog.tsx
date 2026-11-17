@@ -320,9 +320,14 @@ export function HelpDialog({ section, onClose }: { section?: string; onClose: ()
       className="help-dialog"
       onClose={onClose}
       footer={
-        <button type="button" className="primary" onClick={onClose}>
-          閉じる
-        </button>
+        <>
+          <small className="help-copyright" data-testid="copyright">
+            © 2026 FMT
+          </small>
+          <button type="button" className="primary" onClick={onClose}>
+            閉じる
+          </button>
+        </>
       }
     >
       <div className="help-layout">
