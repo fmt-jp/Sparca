@@ -3,7 +3,6 @@
 import { useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { createEffect, EFFECT_GROUPS, effectLabel } from '../model/effects';
-import { updateObject } from '../model/commands';
 import type { Effect, EffectKind, Id, SceneObject } from '../model/types';
 import { CurveEditor } from './CurveEditor';
 import { Dialog } from './Dialog';
@@ -11,6 +10,8 @@ import { ColorPicker } from './ColorPicker';
 import { ContextMenu } from './ContextMenu';
 import { PopupSliderInput } from './controls';
 import { editor } from './useEditor';
+import { findObject } from '../model/tree';
+import { setAllEffects } from '../model/multiEdit';
 
 type NumParam = { key: string; label: string; min: number; max: number; sliderMin?: number; sliderMax?: number; suffix?: string; step?: number; precision?: number; percent?: boolean };
 type Param =
@@ -85,11 +86,26 @@ export function effectNames(effects: Effect[]): string[] {
   });
 }
 
-function setEffects(id: Id, effects: Effect[], label: string, key?: string) {
-  editor.edit(label, (d) => updateObject(d, id, { effects } as Partial<SceneObject>), key ? `${key}:${id}` : null);
+function setEffectsOf(ids: Id[], effects: Effect[], label: string, key?: string) {
+  editor.edit(
+    label,
+    (d) => {
+      for (const id of ids) {
+        const loc = findObject(d, id);
+        if (loc && loc.object.type !== 'group') setAllEffects(loc.object, effects);
+      }
+    },
+    key ? `${key}:${ids.join(',')}` : null,
+  );
 }
 
-export function EffectsPanel({ o }: { o: Exclude<SceneObject, { type: 'group' }> }) {
+/**
+ * The effects of an object, or (with `targets`) of several objects whose effects are the same
+ * (2026-11-18): shown from `o`, every change goes to all of them.
+ */
+export function EffectsPanel({ o, targets }: { o: Exclude<SceneObject, { type: 'group' }>; targets?: Id[] }) {
+  const ids = targets ?? [o.id];
+  const setEffects = (_id: Id, list: Effect[], label: string, key?: string) => setEffectsOf(ids, list, label, key);
   const effects = o.effects;
   const names = effectNames(effects);
   const [open, setOpen] = useState<Set<string>>(new Set());

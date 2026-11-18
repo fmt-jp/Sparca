@@ -2,7 +2,7 @@
 import { transformObjects, updateObject } from '../model/commands';
 import { boxCenter, unionBounds } from '../model/geometry';
 import { findObject, isEffectivelyLocked } from '../model/tree';
-import type { ColorAdjust, LocalEdit, SceneObject, ShapeObject, TextObject, ImageObject, PathObject, Id, Box, Paint, Stroke, StrokeCap, StrokeJoin, StrokeStyle, TextPathOrientation, StrokeTool } from '../model/types';
+import type { ColorAdjust, Fill, LocalEdit, SceneObject, ShapeObject, TextObject, ImageObject, PathObject, Id, Box, Paint, Stroke, StrokeCap, StrokeJoin, StrokeStyle, TextPathOrientation, StrokeTool } from '../model/types';
 import { detachTextFromPath, setTextPath } from '../store/textPathActions';
 import { pipelineOutputSize } from '../engine/pipeline';
 import { METHOD_LABELS } from '../engine/resample';
@@ -27,6 +27,9 @@ import { useState } from 'react';
 import { toolDef } from './tools';
 import { CATEGORY_LABELS, toolCategory, type TextStyle, type ToolCategory } from '../model/toolDefaults';
 import { SmallIcon } from './icons';
+import { appendEffect, applyPaint, effectsMixed, fillOf, isLineLike, isMixed, isPainted, selectionLeaves, setAllEffects, type Leaf } from '../model/multiEdit';
+import { ContextMenu } from './ContextMenu';
+import { createEffect, EFFECT_GROUPS, effectLabel } from '../model/effects';
 
 
 function set(id: Id, patch: Partial<SceneObject>, label: string, key?: string) {
@@ -82,6 +85,7 @@ export function PropertiesPanel() {
     content = (
       <>
         <MultiSection ids={locs.map((l) => l.object.id)} objects={locs.map((l) => l.object)} />
+        <MultiStyleSections ids={locs.map((l) => l.object.id)} />
         {group && !group.maskOwner && (
           <fieldset disabled={isEffectivelyLocked(group)} className="prop-fieldset">
             <MaskSection o={group.object} />
@@ -245,8 +249,16 @@ export function PaintFields({
   showCap,
   size,
   onChange,
+  mixed,
+  showFill = true,
+  showStroke = true,
 }: {
   paint: Paint;
+  /** Several objects: which settings differ among them (shown as 混在). */
+  mixed?: Partial<Record<keyof Paint, boolean>>;
+  /** Several objects: only the settings some of them have. */
+  showFill?: boolean;
+  showStroke?: boolean;
   /** Open lines have no fill and always a stroke. */
   lineLike: boolean;
   /** Offer the end style (lines and open paths; closed outlines have no ends). */
@@ -257,8 +269,8 @@ export function PaintFields({
 }) {
   return (
     <>
-      {!lineLike && (
-        <Field label="塗り" group wide={isGradient(paint.fill) || isPattern(paint.fill)}>
+      {!lineLike && showFill && (
+        <Field label="塗り" group mixed={mixed?.fill} wide={isGradient(paint.fill) || isPattern(paint.fill)}>
           <FillInput label="塗り" allowNone allowPattern value={paint.fill} size={size} onChange={(fill, l, k) => {
               editor.set({ gradientTarget: 'fill' });
               onChange({ fill }, l, k);
@@ -266,7 +278,9 @@ export function PaintFields({
           />
         </Field>
       )}
-      <Field label="線" group wide={isGradient(paint.stroke)}>
+      {showStroke && (
+        <>
+      <Field label="線" group mixed={mixed?.stroke} wide={isGradient(paint.stroke)}>
         <FillInput
           label="線"
           allowNone={!lineLike}
@@ -281,7 +295,7 @@ export function PaintFields({
           }}
         />
       </Field>
-      <Field label="線幅" group>
+      <Field label="線幅" group mixed={mixed?.strokeWidth}>
         <PopupSliderInput
           label="線幅"
           value={paint.strokeWidth}
@@ -294,7 +308,7 @@ export function PaintFields({
           onChange={(strokeWidth) => onChange({ strokeWidth }, '線幅の変更', 'strokeWidth')}
         />
       </Field>
-      <Field label="線種">
+      <Field label="線種" mixed={mixed?.strokeStyle}>
         <select aria-label="線種" value={paint.strokeStyle ?? 'solid'} onChange={(e) => onChange({ strokeStyle: e.target.value as StrokeStyle }, '線種の変更')}>
           {STROKE_STYLES.map((st) => (
             <option key={st.value} value={st.value}>
@@ -304,7 +318,7 @@ export function PaintFields({
         </select>
       </Field>
       {showCap && (
-        <Field label="先端">
+        <Field label="先端" mixed={mixed?.strokeCap}>
           <select aria-label="線の先端" value={paint.strokeCap ?? 'round'} onChange={(e) => onChange({ strokeCap: e.target.value as StrokeCap }, '線の先端の変更')}>
             {STROKE_CAPS.map((c) => (
               <option key={c.value} value={c.value}>
@@ -314,7 +328,7 @@ export function PaintFields({
           </select>
         </Field>
       )}
-      <Field label="角">
+      <Field label="角" mixed={mixed?.strokeJoin}>
         <select aria-label="線の角" value={paint.strokeJoin ?? 'round'} onChange={(e) => onChange({ strokeJoin: e.target.value as StrokeJoin }, '線の角の変更')}>
           {STROKE_JOINS.map((c) => (
             <option key={c.value} value={c.value}>
@@ -323,6 +337,8 @@ export function PaintFields({
           ))}
         </select>
       </Field>
+        </>
+      )}
     </>
   );
 }
@@ -1201,6 +1217,130 @@ function MultiSection({ ids, objects }: { ids: Id[]; objects: SceneObject[] }) {
             onChange={(v) => set(objects[0].id, { opacity: v / 100 }, '不透明度の変更', 'opacity')}
           />
         </Field>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Fill, stroke and effects of several objects at once (2026-11-18): what the selection reaches
+ * (the content of groups, not locked objects). A setting that differs among them shows the first
+ * one's value marked 混在; changing it sets it on all (one undo step). Effects that differ can be
+ * added to all, removed from all, or made the same as the first object's.
+ */
+function MultiStyleSections({ ids }: { ids: Id[] }) {
+  const doc = useEditor((s) => s.doc);
+  const leaves = selectionLeaves(doc, ids);
+  if (!leaves.length) return null;
+  const leafIds = leaves.map((o) => o.id);
+  const painted = leaves.filter(isPainted);
+  const fillables = leaves.filter((o) => fillOf(o) !== undefined);
+  const first = painted[0];
+  const fills = fillables.map((o) => fillOf(o));
+  const paint: Paint = {
+    fill: (fills[0] ?? null) as Fill | null,
+    stroke: first?.stroke ?? null,
+    strokeWidth: first?.strokeWidth ?? 0,
+    strokeStyle: first?.strokeStyle,
+    strokeCap: first?.strokeCap,
+    strokeJoin: first?.strokeJoin,
+  };
+  const mixed = {
+    fill: isMixed(fills),
+    stroke: isMixed(painted.map((o) => o.stroke)),
+    strokeWidth: isMixed(painted.map((o) => o.strokeWidth)),
+    strokeStyle: isMixed(painted.map((o) => o.strokeStyle ?? 'solid')),
+    strokeCap: isMixed(painted.map((o) => o.strokeCap ?? 'round')),
+    strokeJoin: isMixed(painted.map((o) => o.strokeJoin ?? 'round')),
+  };
+  const apply = (patch: Partial<Paint>, label: string, key?: string) =>
+    editor.edit(
+      label,
+      (d) => {
+        for (const id of leafIds) {
+          const loc = findObject(d, id);
+          // A stroke color given together with a width (for objects without a stroke) keeps the
+          // widths of those that already have one.
+          if (loc && loc.object.type !== 'group') applyPaint(loc.object, patch, 'stroke' in patch && patch.strokeWidth !== undefined);
+        }
+      },
+      key ? `${key}:${leafIds.join(',')}` : null,
+    );
+  return (
+    <>
+      {(fillables.length > 0 || painted.length > 0) && (
+        <div className="prop-section" role="group" aria-label="まとめて設定">
+          <PaintFields
+            paint={paint}
+            mixed={mixed}
+            lineLike={fillables.length === 0}
+            showFill={fillables.length > 0}
+            showStroke={painted.length > 0}
+            showCap={painted.some(isLineLike)}
+            size={(first ?? leaves[0]).box}
+            onChange={apply}
+          />
+        </div>
+      )}
+      {effectsMixed(leaves) ? <MixedEffects leafIds={leafIds} first={leaves[0]} /> : <EffectsPanel o={leaves[0]} targets={leafIds} />}
+    </>
+  );
+}
+
+/** Effects that differ among the selected objects: add one to all, remove all, or copy the first's. */
+function MixedEffects({ leafIds, first }: { leafIds: Id[]; first: Leaf }) {
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+  const each = (label: string, fn: (o: Leaf) => void) =>
+    editor.edit(label, (d) => {
+      for (const id of leafIds) {
+        const loc = findObject(d, id);
+        if (loc && loc.object.type !== 'group') fn(loc.object);
+      }
+    });
+  return (
+    <div className="prop-section effects" role="group" aria-label="エフェクト">
+      <div className="effects-head">
+        <span className="section-title">エフェクト</span>
+        <span className="mixed-badge" title="選んだオブジェクトでエフェクトが違います">
+          混在
+        </span>
+        <button
+          type="button"
+          aria-label="エフェクトを追加"
+          aria-haspopup="menu"
+          title="選んだすべてのオブジェクトの後ろに追加"
+          onClick={(e) => {
+            const r = e.currentTarget.getBoundingClientRect();
+            setMenu({ x: r.left, y: r.bottom + 2 });
+          }}
+        >
+          ＋ 追加
+        </button>
+        <button type="button" onClick={() => each('エフェクトをすべて削除', (o) => setAllEffects(o, []))}>
+          すべて削除
+        </button>
+        <button type="button" title={`「${first.name}」のエフェクトをすべてに設定`} onClick={() => each('エフェクトをそろえる', (o) => setAllEffects(o, first.effects))}>
+          先頭のオブジェクトにそろえる
+        </button>
+        <span className="hint explain">オブジェクトごとにエフェクトが違います。追加はすべての後ろに付き、そろえると一覧で編集できます。</span>
+      </div>
+      {menu && (
+        <ContextMenu
+          x={menu.x}
+          y={menu.y}
+          label="エフェクトの種類"
+          onClose={() => setMenu(null)}
+          items={EFFECT_GROUPS.map((g) => ({
+            label: g.label,
+            children: g.kinds.map((k) => ({
+              label: k.label,
+              action: () => {
+                const e = createEffect(k.kind);
+                each(`${effectLabel(k.kind)}の追加`, (o) => appendEffect(o, e));
+              },
+            })),
+          }))}
+        />
       )}
     </div>
   );
