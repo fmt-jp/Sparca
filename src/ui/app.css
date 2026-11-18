@@ -708,6 +708,16 @@ kbd {
 .hint {
   color: var(--text-dim);
 }
+/* A field whose value differs among the selected objects. */
+.mixed-badge {
+  margin-left: 4px;
+  padding: 0 4px;
+  border-radius: 3px;
+  font-size: 10px;
+  background: #5a4a1f;
+  color: #f0c060;
+  vertical-align: 1px;
+}
 /* 画面の説明 off (環境設定 / 表示 menu): the explanations go; facts and warnings stay. */
 .no-explain .explain {
   display: none !important;
@@ -1478,6 +1488,12 @@ kbd {
   display: flex;
   align-items: center;
   gap: 10px;
+}
+.effects-head > button,
+.effects-head > .section-title,
+.effects-head > .mixed-badge {
+  white-space: nowrap;
+  flex: none;
 }
 .section-title {
   font-weight: 600;

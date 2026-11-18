@@ -7,19 +7,33 @@ import { editor } from './useEditor';
  * Labelled form row. Use `group` for rows of buttons: a <label> would make the first
  * button take the whole row's text as its name and react to clicks on the label text.
  */
-export function Field({ label, children, wide, group }: { label: string; children: ReactNode; wide?: boolean; group?: boolean }) {
-  const cls = `field${wide ? ' wide' : ''}`;
+/**
+ * A labelled field. `mixed` (several objects selected whose values differ) shows 混在 next to the
+ * label; the field shows the first object's value, and a change applies to all of them.
+ */
+export function Field({ label, children, wide, group, mixed }: { label: string; children: ReactNode; wide?: boolean; group?: boolean; mixed?: boolean }) {
+  const cls = `field${wide ? ' wide' : ''}${mixed ? ' mixed' : ''}`;
+  const head = (
+    <span className="field-label">
+      {label}
+      {mixed && (
+        <span className="mixed-badge" title="選んだオブジェクトで値が違います（変えるとすべてにそろいます）">
+          混在
+        </span>
+      )}
+    </span>
+  );
   if (group) {
     return (
       <div className={cls} role="group" aria-label={label}>
-        <span className="field-label">{label}</span>
+        {head}
         {children}
       </div>
     );
   }
   return (
     <label className={cls}>
-      <span className="field-label">{label}</span>
+      {head}
       {children}
     </label>
   );
