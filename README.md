@@ -35,6 +35,8 @@ npm run preview    # ビルド結果の確認
 `OPEN_DEPLOY_KEY` がないときは、以前のシークレット `OPEN_REPO_TOKEN`（`fmt-jp/open` に「Contents: Read and write」の fine-grained トークン）があればそれを使い、どちらもなければスキップする。どちらを使ったかは実行結果の概要に表示される。デプロイキーは期限がないため、不要になったら `fmt-jp/open` の Deploy keys から削除する。
 ビルドは相対パス（`base: './'`）なので、`https://<owner>.github.io/<repo>/` のようなサブパスでも動作します。
 
+別の Web サイトに置く手順と、PC のローカル（Windows・Linux）で動かす手順は [`docs/deploy.md`](docs/deploy.md) にまとめています。
+
 公開し直すとサーバー上のファイルはすべて新しいものに置き換わるため、更新前から開いているページは、必要になったときに読み込む分割ファイル（描画・書き出し用の `rasterize`、`svgExport`、フォント名の `fontNames`、画像処理の Worker）を取得できなくなる。これを避けるため、起動直後に分割ファイルをすべて読み込み、Worker も起動しておく（`src/lazy.ts`）。それでも読み込めなかった場合は「アプリが更新されたため…保存してから再読み込みしてください」と表示する（`e2e/app-update.spec.ts`）。
 
 ## バージョン
